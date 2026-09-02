@@ -86,7 +86,8 @@ def parse_tools(root):
         check = get("Check")
         if not check: continue
         inst = re.search(r"^- Install: (.+)$", section, re.M)
-        tools.append((title, check, inst.group(1).strip() if inst else "see tools.md", get("Skill install"), get("Skill folder")))
+        install = inst.group(1).strip().strip("`") if inst else "see tools.md"
+        tools.append((title, check, install, get("Skill install"), get("Skill folder")))
     return tools
 
 def run_ok(cmd):
@@ -134,7 +135,8 @@ def main():
                 print(f"  missing {title}. install: {inst}"); continue
         line = f"  ok {title}"
         if skill_cmd and skill_folder:
-            present = all(os.path.isdir(os.path.join(a.dest or dest_for(ag), skill_folder)) for ag in agents)
+            shared = os.path.join(os.path.expanduser("~/.agents/skills"), skill_folder)
+            present = all(os.path.isdir(os.path.join(a.dest or dest_for(ag), skill_folder)) or os.path.isdir(shared) for ag in agents)
             if present: line += ", skill present"
             elif a.apply:
                 ok = subprocess.run(skill_cmd, shell=True, capture_output=True).returncode == 0

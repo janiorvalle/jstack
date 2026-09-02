@@ -23,7 +23,7 @@ After any task, ask "how do I prove this actually works?" Then do that.
 
 ## Use it like a person would
 
-Passing tests are the floor. Actually use what you built the way a user would. Click through the flow in a real browser. Run the CLI with real arguments. Hit the endpoint with a real request. Use whatever browser tooling your harness gives you. Drive it for real before you call it done.
+Passing tests are the floor. Actually use what you built the way a user would. Click through the flow in a real browser with agent-browser. Run the CLI with real arguments. Hit the endpoint with a real request. Drive it for real before you call it done.
 
 For web UIs, walk the flow a second time keyboard-only. Tab reaches every control in a sensible order, focus is always visible, Enter and Space activate, Escape dismisses, nothing traps focus. If a keyboard user can't finish, the flow isn't done.
 

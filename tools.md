@@ -59,8 +59,15 @@ Token usage and spend across your coding agents, plus transcript search. Not par
 - Skill install: `tokenomnom install-skill`
 - Skill folder: `tokenomnom`
 
-## Browser tooling
+## agent-browser
 
-Whatever your harness gives you for driving a real browser. Needed to use a web UI the way a person would and to capture screenshots for evidence. Not a specific tool. Claude Code has a Chrome extension, Codex has a browser skill, others vary.
+Drives a real browser from the command line. This is how an agent uses a web UI the way a person would and captures the screenshots the flow requires. Required, whichever harness you're in.
 
-- Check: try to open a page. If you can't, say so before claiming a UI change is verified.
+- Repo: https://github.com/vercel-labs/agent-browser
+- Check: `command -v agent-browser`
+- Install: `npm install -g agent-browser && agent-browser install`
+- Skill install: `npx -y skills add vercel-labs/agent-browser --skill agent-browser -g -y -a claude-code -a codex --copy`
+- Skill folder: `agent-browser`
+- The skill lands in the harness skills folder and in `~/.agents/skills`, which Codex also reads.
+
+Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not part of this stack, and it stays wherever Codex put it.
