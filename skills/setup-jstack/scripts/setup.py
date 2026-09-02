@@ -90,6 +90,33 @@ def parse_tools(root):
         tools.append((title, check, install, get("Skill install"), get("Skill folder")))
     return tools
 
+def aws_profiles():
+    path = os.path.expanduser("~/.aws/config")
+    if not os.path.isfile(path): return []
+    names = [m.group(1) for m in re.finditer(r"^\s*\[\s*(?:profile\s+)?([^\]]+?)\s*\]\s*$", open(path).read(), re.M)]
+    return sorted(set(names))
+
+def ensure_ecs_health_config(apply):
+    """Create ~/.config/jstack/ecs-health.json from ~/.aws/config, or add new profiles to it. Never touches existing entries."""
+    path = os.path.expanduser("~/.config/jstack/ecs-health.json")
+    current = aws_profiles()
+    if not current:
+        print("  ecs-health: no ~/.aws/config, nothing to do"); return
+    config = json.load(open(path)) if os.path.isfile(path) else {"profiles": [], "environments": {"prod": ["prod", "production"], "dev": ["dev", "test", "staging"]}}
+    known = {p["name"] for p in config.get("profiles", [])}
+    added = [n for n in current if n not in known]
+    gone = sorted(known - set(current))
+    for n in added: config.setdefault("profiles", []).append({"name": n, "group": ""})
+    verb = "would create" if not os.path.isfile(path) else "would update"
+    if apply and (added or not os.path.isfile(path)):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        json.dump(config, open(path, "w"), indent=2); open(path, "a").write("\n")
+        verb = "created" if not known else "updated"
+    print(f"  ecs-health: {verb} {path}, {len(added)} new profile(s){', ' + ', '.join(added) if added else ''}")
+    if gone: print(f"  ecs-health: {len(gone)} profile(s) in the config but not in ~/.aws/config: {', '.join(gone)}")
+    untagged = [p["name"] for p in config.get("profiles", []) if not p.get("group") and not p.get("skip")]
+    if untagged: print(f"  ecs-health: {len(untagged)} untagged profile(s), set group or skip in the file")
+
 def run_ok(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True).returncode == 0
 
@@ -143,6 +170,9 @@ def main():
                 line += f", skill {'installed' if ok else 'install FAILED'} via {skill_cmd}"
             else: line += f", skill missing, would run: {skill_cmd}"
         print(line)
+
+    print("\nconfigs:")
+    ensure_ecs_health_config(a.apply)
 
     hooks = os.path.join(root, ".githooks")
     if os.path.isdir(hooks) and os.path.isdir(os.path.join(root, ".git")):
