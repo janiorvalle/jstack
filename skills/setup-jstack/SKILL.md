@@ -13,8 +13,9 @@ One command on a fresh machine. Everything the flow needs ends up installed, or 
 2. **Vendor skills.** Fetches each entry in `vendor.json` from its repo at its pinned commit and installs it the same way. These are third-party skills the stack depends on but doesn't rewrite.
 3. **Tools.** For each tool in `tools.md`, runs its check. Missing tools get listed with their install line. Nothing gets installed unless you say so, or the session was already given permission to set things up.
 4. **Tool skills.** For each tool that's present, runs its skill install command if the skill isn't in the folder yet. The tool owns that skill and keeps it current.
-5. **Hooks.** If you're in the jstack checkout, points git at `.githooks/`.
-6. **Report.** What changed, what was backed up, what's missing, and a reminder to restart the harness.
+5. **Configs.** Some skills keep a config file under `~/.config/jstack/` that lists things already on the machine. Setup creates each one if it's missing and adds new entries on later runs without touching what you've tagged. Today that's `ecs-health.json`, built from the profiles in `~/.aws/config`. The report says what was added and what's still untagged.
+6. **Hooks.** If you're in the jstack checkout, points git at `.githooks/`.
+7. **Report.** What changed, what was backed up, what's missing, and a reminder to restart the harness.
 
 ## Defaults
 
@@ -40,4 +41,4 @@ One section in `tools.md` with a check line, an install line, and a skill instal
 
 ## Report
 
-Source, target and destination, skills installed or updated, vendor skills fetched, backup location, tools missing with install lines, tool skills installed, whether a restart is needed.
+Source, target and destination, skills installed or updated, vendor skills fetched, backup location, tools missing with install lines, tool skills installed, config files created or updated and what's untagged, whether a restart is needed.
