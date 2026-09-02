@@ -15,10 +15,10 @@ The opinions are the point. A human stays in the merge seat. Every claim ships w
 ```sh
 git clone https://github.com/janiorvalle/jstack
 cd jstack
-python3 skills/sync/scripts/sync.py --agent auto --apply
+python3 skills/setup-jstack/scripts/setup.py --agent auto --apply
 ```
 
-`--agent auto` picks the harness you're running in. `--agent both` installs into Codex and Claude Code. Without `--apply` it's a dry run. It never deletes a skill it doesn't own, and it backs up anything it overwrites. At the end it lists any tool from `tools.md` that isn't installed.
+`--agent auto` picks the harness you're running in. `--agent both` installs into Codex and Claude Code. Without `--apply` it's a dry run. It never deletes a skill it doesn't own, and it backs up anything it overwrites. It also fetches the vendored third-party skills from `vendor.json`, checks every tool in `tools.md`, and installs each tool's own skill. Add `--install-tools` to have it install missing tools too.
 
 Restart your harness afterward so the skills load.
 
@@ -28,6 +28,7 @@ Restart your harness afterward so the skills load.
 - `skills/*/` with `kind: principle` in the frontmatter are the principles. One rule each.
 - The rest are workflows. `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.
 - `tools.md` names the tools the flow expects to find installed and how to get them.
+- `vendor.json` pins the third-party skills the stack depends on, fetched at setup time, never committed here.
 - `decisions.md` is the record of choices made while building this, so nobody relitigates them.
 
 ## Development

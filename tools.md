@@ -4,7 +4,7 @@ jstack expects a few tools on the machine. Each one ships its own skill, which t
 
 If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. Then read the skill the tool installed and follow it.
 
-The `sync` skill runs every check below at the end of an install and reports what's missing.
+`setup-jstack` runs every check below, installs each tool's own skill when the tool is present, and reports what's missing. The `Skill install` and `Skill folder` lines are what it parses.
 
 ## git and gh
 
@@ -20,7 +20,9 @@ Where tasks live. Claim before you touch project files, record the files you exp
 **Quest** (current)
 - Repo: https://github.com/janiorvalle/quest
 - Check: `command -v quest`
-- Install: see the repo README
+- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/quest/main/install.sh | sh`
+- Skill install: `quest skill install`
+- Skill folder: `quest`
 
 **Linear** (coming)
 - Not yet wired up. When it is, this section gets its check and its skill.
@@ -31,8 +33,10 @@ The independent code review gate. Reviews the current diff on a different model 
 
 - Repo: https://github.com/janiorvalle/roast
 - Check: `command -v roast`
-- Install: see the repo README
-- Skill: installs `roast` into your skills folder. Follow it for the scope fence and the loop.
+- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/roast/main/install.sh | sh`
+- Skill install: `roast install-skill --force`
+- Skill folder: `roast`
+- The skill covers the scope fence and the loop until well done. roast also installs it on its own the first time it runs in a repo.
 
 ## bgr
 
@@ -40,8 +44,20 @@ Turns a PR, commit, or diff into a review walkthrough. The HTML output is attach
 
 - Repo: https://github.com/janiorvalle/better-git-review
 - Check: `command -v bgr`
-- Install: see the repo README
-- Skill: installs `bgr` into your skills folder. Use `--format json --out <path>` from an agent, `--yes` on anything that might stage, never the interactive picker.
+- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/better-git-review/main/install.sh | sh`
+- Skill install: `bgr install-skill`
+- Skill folder: `bgr`
+- From an agent, use `--format json --out <path>`, pass `--yes` on anything that might stage, and never run the interactive picker or `bgr configure`.
+
+## tokenomnom
+
+Token usage and spend across your coding agents, plus transcript search. Not part of the flow, but the tools group ships it.
+
+- Repo: https://github.com/janiorvalle/tokenomnom
+- Check: `command -v tokenomnom`
+- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/tokenomnom/main/install.sh | sh`
+- Skill install: `tokenomnom install-skill`
+- Skill folder: `tokenomnom`
 
 ## Browser tooling
 
