@@ -1,5 +1,9 @@
 # jstack
 
+<p align="center">
+  <img src="assets/hero.png" alt="jstack. how I work, stacked." width="840">
+</p>
+
 How I work with coding agents, written down as skills.
 
 One flow from claiming a task to turning it in with proof. Twenty-four principles, each a single rule with a test. Sixteen workflows for the parts that need steps. A mode skill that ties it together. Every file is written to be read by an agent in Claude Code, Codex, Cursor, or anything else that loads skills from a folder.
