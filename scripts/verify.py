@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""The fast gate for this repo. Runs in CI as the Verify check and in the pre-commit hook.
+
+Checks every skill's frontmatter, that the mode's index matches the description
+lines, and that no file carries an em dash or a harness name where it shouldn't.
+"""
+import os, re, sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SKILLS = os.path.join(ROOT, "skills")
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import importlib
+build_index = importlib.import_module("build-index")
+
+HARNESS = re.compile(r"\b(Claude Code|Claude|Cursor|Codex|Agent tool|subagent_type|generalPurpose)\b")
+HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/sync/SKILL.md", "skills/sync/scripts/sync.py"}
+SELF = "scripts/verify.py"
+
+problems = []
+
+def check_frontmatter(name, path):
+    text = open(path).read()
+    if not text.startswith("---\n"):
+        problems.append(f"{path}: no frontmatter"); return
+    head = text.split("---\n", 2)[1]
+    m = re.search(r"^name:\s*(\S+)\s*$", head, re.M)
+    if not m:
+        problems.append(f"{path}: no name line")
+    elif m.group(1) != name:
+        problems.append(f"{path}: name is {m.group(1)}, folder is {name}")
+    if not re.search(r"^description:\s*\S", head, re.M):
+        problems.append(f"{path}: no description line")
+    k = re.search(r"^kind:\s*(\S+)\s*$", head, re.M)
+    if k and k.group(1) != "principle":
+        problems.append(f"{path}: kind must be principle or absent, got {k.group(1)}")
+
+def check_text(rel, path):
+    if rel == SELF:
+        return
+    text = open(path).read()
+    for i, line in enumerate(text.splitlines(), 1):
+        if "—" in line:
+            problems.append(f"{rel}:{i}: em dash")
+        if rel not in HARNESS_ALLOWED and HARNESS.search(line):
+            problems.append(f"{rel}:{i}: harness name: {line.strip()[:80]}")
+
+def main():
+    for name in sorted(os.listdir(SKILLS)):
+        skill = os.path.join(SKILLS, name, "SKILL.md")
+        if os.path.isdir(os.path.join(SKILLS, name)) and not os.path.isfile(skill):
+            problems.append(f"skills/{name}: no SKILL.md")
+        elif os.path.isfile(skill):
+            check_frontmatter(name, skill)
+    for dirpath, _, files in os.walk(ROOT):
+        if "/.git" in dirpath or "__pycache__" in dirpath:
+            continue
+        for f in files:
+            if f.endswith((".md", ".py")):
+                path = os.path.join(dirpath, f)
+                check_text(os.path.relpath(path, ROOT), path)
+    mode = open(build_index.MODE).read()
+    start, end = "<!-- index:start -->", "<!-- index:end -->"
+    current = mode.split(start, 1)[1].split(end, 1)[0].strip()
+    if current != build_index.build().strip():
+        problems.append("skills/jstack-mode/SKILL.md: index is stale, run make index")
+    if problems:
+        print("\n".join(problems)); sys.exit(1)
+    print("verify: ok")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,4 @@
+title = "jstack gitleaks configuration"
+
+[extend]
+useDefault = true
