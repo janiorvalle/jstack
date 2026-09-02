@@ -102,7 +102,7 @@ def ensure_ecs_health_config(apply):
     current = aws_profiles()
     if not current:
         print("  ecs-health: no ~/.aws/config, nothing to do"); return
-    config = json.load(open(path)) if os.path.isfile(path) else {"profiles": []}
+    config = json.load(open(path)) if os.path.isfile(path) else {"profiles": [], "environments": {"prod": ["prod", "production"], "dev": ["dev", "test", "staging"]}}
     known = {p["name"] for p in config.get("profiles", [])}
     added = [n for n in current if n not in known]
     gone = sorted(known - set(current))

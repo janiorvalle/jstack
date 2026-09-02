@@ -24,8 +24,6 @@ CONFIG_PATH = Path.home() / ".config" / "jstack" / "ecs-health.json"
 AWS_CONFIG_PATH = Path.home() / ".aws" / "config"
 PRODUCTION_RE = re.compile(r"(^|[-_/])prod(uction)?($|[-_/])|production", re.I)
 ROLLBACK_RE = re.compile(r"rollback|roll back|rolled back|rolling back", re.I)
-PROD_ENVS = {"prod", "production"}
-DEV_ENVS = {"dev", "test", "demo", "staging", "uiux", "trial", "s2s", "batest", "customer", "anon"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--environments",
         nargs="*",
-        help="Specific service environment prefixes to scan, such as training, config, support, or production.",
+        help="Specific service environment prefixes to scan. An environment is the part of the service name before its first hyphen.",
     )
     parser.add_argument("--include-skipped", action="store_true", help="Include profiles marked skip in the config.")
     parser.add_argument("--service-regex", help="Only scan services whose name matches this regex.")
@@ -99,8 +97,8 @@ def normalized_environment_filters(environments: list[str] | None) -> set[str]:
 
 
 def service_matches_scope(cluster_name: str, service_name: str, args: argparse.Namespace) -> bool:
-    prod_envs = set(getattr(args, "prod_envs", PROD_ENVS))
-    dev_envs = set(getattr(args, "dev_envs", DEV_ENVS))
+    prod_envs = set(args.prod_envs)
+    dev_envs = set(args.dev_envs)
     env = environment_name(service_name)
     explicit_envs = normalized_environment_filters(args.environments)
     if explicit_envs:
@@ -161,8 +159,12 @@ def load_config(path: str) -> dict[str, Any]:
 
 def load_accounts(args: argparse.Namespace) -> list[dict[str, str]]:
     config = load_config(args.config)
-    args.prod_envs = set(config.get("environments", {}).get("prod", sorted(PROD_ENVS)))
-    args.dev_envs = set(config.get("environments", {}).get("dev", sorted(DEV_ENVS)))
+    environments = config.get("environments", {})
+    args.prod_envs = set(environments.get("prod", []))
+    args.dev_envs = set(environments.get("dev", []))
+    if ("dev" in (args.scope or []) and not args.dev_envs) or ("prod" in (args.scope or []) and not args.prod_envs):
+        print(f"The environments block in {args.config} is empty. List which service prefixes count as prod and dev there, then rerun.", file=sys.stderr)
+        raise SystemExit(1)
     requested = set(args.profiles or [])
     groups = set(args.group or [])
     accounts: list[dict[str, str]] = []

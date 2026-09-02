@@ -21,21 +21,21 @@ A read-only sweep of ECS Fargate services across your AWS profiles. It reports t
   ],
   "environments": {
     "prod": ["prod", "production"],
-    "dev": ["dev", "test", "demo", "staging", "trial"]
+    "dev": ["dev", "test", "staging"]
   }
 }
 ```
 
-`skip` keeps a profile out of every scan unless it's named with `--profiles`. `group` lets you scan a slice with `--group customer`. `environments` overrides the default lists of which service prefixes count as prod and which as dev. With no config file at all, every profile in `~/.aws/config` gets scanned, ungrouped.
+`skip` keeps a profile out of every scan unless it's named with `--profiles`. `group` lets you scan a slice with `--group customer`. `environments` is the only place that says which service prefixes count as prod and which as dev. There are no built-in lists. `--scope prod` and `--scope dev` refuse to run until it's filled in. `--scope nonprod` and `--scope all` work without it. With no config file at all, every profile in `~/.aws/config` gets scanned, ungrouped.
 
-An environment is the part of a service name before its first hyphen. `training-research` is in `training`.
+An environment is the part of a service name before its first hyphen. `staging-api` is in `staging`.
 
 ## Scope
 
 Work out the scope from the request before running. If it's stated, don't ask:
 
 - One profile: `--profiles acme`
-- One profile and environment: `--profiles acme --environments training`
+- One profile and environment: `--profiles acme --environments staging`
 - All non-production: `--scope nonprod` (the default)
 - All production: `--scope prod`
 - Everything: `--scope all`
@@ -49,7 +49,7 @@ If the scope isn't stated, ask one question: a specific profile or environment, 
 
 ```bash
 python3 scripts/ecs_health.py --scope nonprod
-python3 scripts/ecs_health.py --profiles acme --environments training --service-regex '^training-research$'
+python3 scripts/ecs_health.py --profiles acme --environments staging --service-regex '^staging-api$'
 python3 scripts/ecs_health.py --group customer --scope prod --json /tmp/ecs-health.json
 ```
 
@@ -69,7 +69,7 @@ Current state, any of:
 - a retained failed deployment
 - unhealthy or missing ALB target health when the service has a target group
 
-Rollback events: anything in the retained ECS event history matching `rollback`, `roll back`, `rolled back`, or `rolling back`. The last one matters. ECS writes `(service training-research) rolling back to deployment ecs-svc/...`.
+Rollback events: anything in the retained ECS event history matching `rollback`, `roll back`, `rolled back`, or `rolling back`. The last one matters. ECS writes `(service staging-api) rolling back to deployment ecs-svc/...`.
 
 Fargate and Fargate Spot services only. Everything else is skipped.
 
