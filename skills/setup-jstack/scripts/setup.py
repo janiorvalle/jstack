@@ -86,7 +86,8 @@ def parse_tools(root):
         check = get("Check")
         if not check: continue
         inst = re.search(r"^- Install: (.+)$", section, re.M)
-        tools.append((title, check, inst.group(1).strip() if inst else "see tools.md", get("Skill install"), get("Skill folder")))
+        install = inst.group(1).strip().strip("`") if inst else "see tools.md"
+        tools.append((title, check, install, get("Skill install"), get("Skill folder")))
     return tools
 
 def run_ok(cmd):
