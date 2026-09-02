@@ -13,6 +13,9 @@ import importlib
 build_index = importlib.import_module("build-index")
 
 HARNESS = re.compile(r"\b(Claude Code|Claude|Cursor|Codex|Agent tool|subagent_type|generalPurpose)\b")
+# Work identifiers that must never appear in this repo. The generic procedure lives
+# here; anything customer- or employer-specific belongs in a private skills folder.
+DENY = re.compile(r"(?i)\b(streamlyne|ekualiti|fundfit|kuali|janior-devbox|100\.57\.65\.112|Documents/github)\b")
 HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/setup-jstack/SKILL.md", "skills/setup-jstack/scripts/setup.py"}
 SELF = "scripts/verify.py"
 
@@ -43,6 +46,8 @@ def check_text(rel, path):
             problems.append(f"{rel}:{i}: em dash")
         if rel not in HARNESS_ALLOWED and HARNESS.search(line):
             problems.append(f"{rel}:{i}: harness name: {line.strip()[:80]}")
+        if DENY.search(line):
+            problems.append(f"{rel}:{i}: work identifier: {line.strip()[:80]}")
 
 def main():
     for name in sorted(os.listdir(SKILLS)):
@@ -55,7 +60,7 @@ def main():
         if "/.git" in dirpath or "__pycache__" in dirpath:
             continue
         for f in files:
-            if f.endswith((".md", ".py")):
+            if f.endswith((".md", ".py", ".sh", ".json")):
                 path = os.path.join(dirpath, f)
                 check_text(os.path.relpath(path, ROOT), path)
     mode = open(build_index.MODE).read()
