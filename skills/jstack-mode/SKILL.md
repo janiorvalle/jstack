@@ -43,7 +43,7 @@ Execution proceeds. Scope gets confirmed. Observable questions get run instead o
 
 Send bulk to subagents and keep summaries in the main thread. Hand them file pointers, not pasted context. You own every subagent's result. Read the diff, write your own summary. `keep-context-lean`.
 
-Nothing in this stack names a harness. Spawn subagents, search the code, drive the browser with whatever your harness gives you.
+Nothing in this stack names a harness. Spawn subagents and search the code with whatever your harness gives you. The browser is agent-browser, which `tools.md` lists and `setup-jstack` installs.
 
 ## Writing
 
