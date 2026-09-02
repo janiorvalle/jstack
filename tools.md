@@ -59,13 +59,6 @@ Token usage and spend across your coding agents, plus transcript search. Not par
 - Skill install: `tokenomnom install-skill`
 - Skill folder: `tokenomnom`
 
-## aws
-
-The AWS CLI. `ecs-health` and anything else that talks to AWS goes through it with your existing profiles.
-
-- Check: `command -v aws`
-- Install: `brew install awscli`
-
 ## agent-browser
 
 Drives a real browser from the command line. This is how an agent uses a web UI the way a person would and captures the screenshots the flow requires. Required, whichever harness you're in.
