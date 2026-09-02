@@ -13,7 +13,7 @@ import importlib
 build_index = importlib.import_module("build-index")
 
 HARNESS = re.compile(r"\b(Claude Code|Claude|Cursor|Codex|Agent tool|subagent_type|generalPurpose)\b")
-HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/sync/SKILL.md", "skills/sync/scripts/sync.py"}
+HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/setup-jstack/SKILL.md", "skills/setup-jstack/scripts/setup.py"}
 SELF = "scripts/verify.py"
 
 problems = []

@@ -1,4 +1,4 @@
-.PHONY: verify index install-hooks sync
+.PHONY: verify index install-hooks setup
 
 verify:
 	python3 scripts/verify.py
@@ -11,5 +11,5 @@ install-hooks:
 	git config core.hooksPath .githooks
 	@echo "Installed the pre-commit hook: gitleaks, then scripts/verify.py."
 
-sync:
-	python3 skills/sync/scripts/sync.py --agent auto
+setup:
+	python3 skills/setup-jstack/scripts/setup.py --agent auto
