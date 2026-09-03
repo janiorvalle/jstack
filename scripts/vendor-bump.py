@@ -27,18 +27,11 @@ def github(url):
     return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60).read()
 
 def upstream_head(entry):
-    """The last commit on the default branch that touched the skill folder or its license file."""
-    folder = last_commit(entry["repo"], entry["path"])
-    if not folder:
+    """The last commit on the default branch that touched the skill folder."""
+    commits = json.loads(github(f"https://api.github.com/repos/{entry['repo']}/commits?path={entry['path']}&per_page=1"))
+    if not commits:
         sys.exit(f"ERROR {entry['name']}: no commit on {entry['repo']} touches {entry['path']}. Upstream moved or removed the folder. Fix the path in vendor.json, or drop the entry and the skill.")
-    license = last_commit(entry["repo"], entry["license_file"])
-    if not license:
-        sys.exit(f"ERROR {entry['name']}: no commit on {entry['repo']} touches {entry['license_file']}. Fix license_file in vendor.json.")
-    return max(folder, license, key=lambda c: c["commit"]["committer"]["date"])["sha"]
-
-def last_commit(repo, path):
-    commits = json.loads(github(f"https://api.github.com/repos/{repo}/commits?path={path}&per_page=1"))
-    return commits[0] if commits else None
+    return commits[0]["sha"]
 
 def copy_from_upstream(entry, ref):
     """Replace skills/<name> with the upstream folder at ref, license file alongside. Returns whether any file changed."""
