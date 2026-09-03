@@ -17,7 +17,9 @@ const Doc = "https://github.com/janiorvalle/jstack/blob/main/tools.md"
 // command that prints the installed version and Repo is the tool's GitHub
 // page; both are empty for tools setup never updates, such as git. Command
 // is empty for a prerequisite, a section with no Install line: Install then
-// names its section of Doc, the only thing setup can offer for it.
+// names its section of Doc, the only thing setup can offer for it. Pin is
+// the version the Install line installs when it names one, as "v1.2.3", so
+// setup compares against it instead of asking a registry; moving it is a PR.
 type Tool struct {
 	Title        string
 	Check        string
@@ -25,6 +27,7 @@ type Tool struct {
 	Repo         string
 	Install      string
 	Command      string
+	Pin          string
 	SkillInstall string
 	SkillFolder  string
 }
@@ -35,6 +38,7 @@ var (
 	repoLine         = regexp.MustCompile(`(?m)^- Repo: (\S+)$`)
 	versionToken     = regexp.MustCompile(`v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?`)
 	installLine      = regexp.MustCompile(`(?m)^- Install: (.+)$`)
+	npmPin           = regexp.MustCompile(`^npm install -g [^@\s]+@(\S+)`)
 	skillInstallLine = regexp.MustCompile("(?m)^- Skill install: `([^`]+)`")
 	skillFolderLine  = regexp.MustCompile("(?m)^- Skill folder: `([^`]+)`")
 	backtickSpan     = regexp.MustCompile("`([^`]+)`")
@@ -63,6 +67,7 @@ func Parse(markdown string) []Tool {
 			Repo:         first(repoLine, section),
 			Install:      install,
 			Command:      command,
+			Pin:          pinFrom(command),
 			SkillInstall: first(skillInstallLine, section),
 			SkillFolder:  first(skillFolderLine, section),
 		})
@@ -84,6 +89,16 @@ func commandFrom(line string) string {
 		steps = append(steps, match[1])
 	}
 	return strings.Join(steps, " && ")
+}
+
+// pinFrom reads the version an "npm install -g name@1.2.3" line pins. Any
+// other install line, or an npm tag such as @latest, pins nothing.
+func pinFrom(command string) string {
+	match := npmPin.FindStringSubmatch(command)
+	if match == nil {
+		return ""
+	}
+	return ParseVersion(match[1])
 }
 
 // ParseVersion picks the version out of what a tool's Version command
