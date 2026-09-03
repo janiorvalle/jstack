@@ -90,6 +90,28 @@ def parse_tools(root):
         tools.append((title, check, install, get("Skill install"), get("Skill folder")))
     return tools
 
+INSTRUCTIONS = {"claude": "~/.claude/CLAUDE.md", "codex": "~/.codex/AGENTS.md"}
+START, END = "<!-- jstack:start -->", "<!-- jstack:end -->"
+
+def install_instructions(root, agent, apply):
+    """Put AGENTS.md into the harness's user-level instructions file as a marked block.
+    Replaces the block on later runs, never touches anything outside the markers."""
+    src = os.path.join(root, "AGENTS.md")
+    if not os.path.isfile(src): return
+    block = f"{START}\n{open(src).read().rstrip()}\n{END}\n"
+    path = os.path.expanduser(INSTRUCTIONS[agent])
+    current = open(path).read() if os.path.isfile(path) else ""
+    if START in current and END in current:
+        head, rest = current.split(START, 1); _, tail = rest.split(END, 1)
+        updated = head + block.rstrip("\n") + tail
+        verb = "left as is" if updated == current else ("updated" if apply else "would update")
+    else:
+        updated = (current.rstrip("\n") + "\n\n" if current.strip() else "") + block
+        verb = "added" if apply else "would add"
+    if apply and updated != current:
+        os.makedirs(os.path.dirname(path), exist_ok=True); open(path, "w").write(updated)
+    print(f"  {agent}: {verb} the jstack block in {INSTRUCTIONS[agent]}")
+
 def run_ok(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True).returncode == 0
 
@@ -122,6 +144,10 @@ def main():
             print(f"  applied. backup: {backup or 'none needed'}")
             groups, _ = plan(sources, dest, a.skill)
             print(f"  remaining drift: {', '.join(groups['new'] + groups['changed']) or 'none'}")
+
+    print("\ninstructions:")
+    for agent in agents:
+        install_instructions(root, agent, a.apply)
 
     print("\ntools:")
     for title, check, inst, skill_cmd, skill_folder in parse_tools(root):

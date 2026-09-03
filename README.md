@@ -24,6 +24,7 @@ Restart your harness afterward so the skills load.
 
 ## What's in it
 
+- `AGENTS.md` is the letter. Who's who, what we're doing, and the two or three rules that matter before you've read anything else. Setup installs it into your harness's user-level instructions file so the mode is always on.
 - `skills/jstack-mode/` is the front door. The flow, the rules, and an index of every skill, generated from their description lines.
 - `skills/*/` with `kind: principle` in the frontmatter are the principles. One rule each.
 - The rest are workflows. `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.
