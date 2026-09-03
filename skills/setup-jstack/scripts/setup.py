@@ -96,25 +96,44 @@ INSTRUCTIONS = {"claude": "~/.claude/CLAUDE.md", "codex": "~/.codex/AGENTS.md", 
 CURSOR_FRONTMATTER = "---\ndescription: jstack, how the human you work for works\nalwaysApply: true\n---\n\n"
 START, END = "<!-- jstack:start -->", "<!-- jstack:end -->"
 
-def install_instructions(root, agent, apply):
+def install_instructions(root, agent, apply, keep_existing, stamp):
     """Put AGENTS.md into the harness's user-level instructions file as a marked block.
-    Replaces the block on later runs, never touches anything outside the markers."""
+
+    Default: the file becomes the block, and whatever was there is backed up next to it.
+    This is an opinionated stack, and two letters side by side is the drift it exists to prevent.
+    --keep-instructions appends the block instead and leaves the rest of the file alone.
+    On later runs only the text between the markers changes."""
     src = os.path.join(root, "AGENTS.md")
     if not os.path.isfile(src): return
+    lead = CURSOR_FRONTMATTER if agent == "cursor" else ""
     block = f"{START}\n{open(src).read().rstrip()}\n{END}\n"
     path = os.path.expanduser(INSTRUCTIONS[agent])
     current = open(path).read() if os.path.isfile(path) else ""
+    backup = None
     if START in current and END in current:
         head, rest = current.split(START, 1); _, tail = rest.split(END, 1)
-        updated = head + block.rstrip("\n") + tail
-        verb = "left as is" if updated == current else ("updated" if apply else "would update")
-    else:
-        lead = CURSOR_FRONTMATTER if agent == "cursor" and not current.strip() else ""
-        updated = lead + (current.rstrip("\n") + "\n\n" if current.strip() else "") + block
+        outside = (head + tail).strip()
+        if outside and not keep_existing and outside != CURSOR_FRONTMATTER.strip():
+            updated = lead + block; backup = f"{path}.bak-{stamp}"
+            verb = "replaced, old file backed up" if apply else "would replace and back up the old file"
+        else:
+            updated = head + block.rstrip("\n") + tail
+            verb = "left as is" if updated == current else ("updated" if apply else "would update")
+    elif current.strip() and keep_existing:
+        updated = current.rstrip("\n") + "\n\n" + block
         verb = "added" if apply else "would add"
+    elif current.strip():
+        updated = lead + block; backup = f"{path}.bak-{stamp}"
+        verb = "replaced, old file backed up" if apply else "would replace and back up the old file"
+    else:
+        updated = lead + block
+        verb = "created" if apply else "would create"
     if apply and updated != current:
-        os.makedirs(os.path.dirname(path), exist_ok=True); open(path, "w").write(updated)
-    print(f"  {agent}: {verb} the jstack block in {INSTRUCTIONS[agent]}")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if backup: shutil.copy2(path, backup)
+        open(path, "w").write(updated)
+    where = f" ({backup})" if backup and apply else ""
+    print(f"  {agent}: {verb} {INSTRUCTIONS[agent]}{where}")
 
 def run_ok(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True).returncode == 0
@@ -124,6 +143,7 @@ def main():
     p.add_argument("--agent", default="auto", choices=["auto", "codex", "claude", "cursor", "both", "all"])
     p.add_argument("--repo"); p.add_argument("--dest"); p.add_argument("--skill", action="append")
     p.add_argument("--apply", action="store_true"); p.add_argument("--install-tools", action="store_true")
+    p.add_argument("--keep-instructions", action="store_true", help="append the letter to an existing instructions file instead of replacing it")
     a = p.parse_args()
     root = repo_root(a.repo); src_skills = os.path.join(root, "skills")
     if not os.path.isdir(src_skills): sys.exit(f"ERROR no skills/ under {root}. Pass --repo or set JSTACK_REPO.")
@@ -151,7 +171,7 @@ def main():
 
     print("\ninstructions:")
     for agent in agents:
-        install_instructions(root, agent, a.apply)
+        install_instructions(root, agent, a.apply, a.keep_instructions, stamp)
 
     print("\ntools:")
     for title, check, inst, skill_cmd, skill_folder in parse_tools(root):
