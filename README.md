@@ -13,16 +13,35 @@ The opinions are the point. A human stays in the merge seat. Every claim ships w
 ## Install
 
 ```sh
-git clone https://github.com/janiorvalle/jstack
-cd jstack
-python3 skills/setup-jstack/scripts/setup.py --agent auto --apply
+curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh
 ```
 
-`--agent auto` picks the harness you're running in. `--agent both` installs into Codex and Claude Code, `--agent all` adds Cursor. Without `--apply` it's a dry run. It never deletes a skill it doesn't own, and it backs up anything it overwrites. It also checks every tool in `tools.md` and installs each tool's own skill. Add `--install-tools` to have it install missing tools too.
+That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup finds the coding agents on the machine, shows what it would do, and asks which ones to install into. Then it copies the skills, puts the letter in each harness's instructions file, and offers to install the tools the flow needs. It never touches a skill it doesn't own, and everything it overwrites is backed up under `~/.jstack/backup/`.
 
-It also makes your harness's user-level instructions file the letter, backing up whatever was there. Pass `--keep-instructions` to append instead.
+Run `jstack setup` again any time. It remembers the harnesses you picked. `jstack upgrade` fetches the newest release and reruns setup.
 
-Restart your harness afterward so the skills load.
+Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing:
+
+```sh
+jstack setup --harness claude,codex --yes   # or --harness all
+```
+
+Add `--install-tools` to install the missing tools without asking. Add `--keep-instructions` to append the letter to an instructions file that has other content instead of replacing it.
+
+## Use it
+
+Restart your harness so the skills load. Then start any multi-step task with `/jstack-mode`, or just say "work the jstack way". The letter is in your instructions file, so the mode is on in every session.
+
+## Tools
+
+The flow leans on four tools, and `jstack setup` offers each one that's missing:
+
+- **quest**, the work tracker. Claim before touching files, attach evidence at turn-in.
+- **roast**, the independent review gate. A different model reviews the diff until it says well done.
+- **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
+- **agent-browser**, a real browser from the command line, for using what you built like a person would.
+
+Each tool ships its own skill and installs it. `tools.md` has the check and install lines setup runs.
 
 ## What's in it
 
@@ -32,14 +51,16 @@ Restart your harness afterward so the skills load.
 - The rest are workflows. `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.
 - `tools.md` names the tools the flow expects to find installed and how to get them.
 - `vendor.json` pins the third-party skills that live in `skills/`. A skill lives in this repo when jstack doesn't control the tool that owns it, so a change to the skill text goes through a reviewed PR. `scripts/vendor-bump.py` copies each one in at its pinned commit, and a weekly workflow opens a bump PR when upstream moves. Our own tools (quest, roast, bgr, tokenomnom) keep shipping their skill with the binary.
+- `cmd/jstack` and `internal/` are the binary. The skills, the letter, `tools.md`, and `vendor.json` are embedded at build time, so setup runs from anywhere.
 - `decisions.md` is the record of choices made while building this, so nobody relitigates them.
 
 ## Development
 
 ```sh
 make install-hooks   # gitleaks plus the verify script on every commit
-make verify          # what CI runs
-make index           # rebuild the mode's skill index after changing a description
+make verify          # what CI runs: gofmt, build, vet, test, then the skill checks
+make index           # rebuild the letter's workflows table after changing a description
+make setup           # go run ./cmd/jstack setup, with this checkout's skills embedded
 ```
 
 See `CONTRIBUTING.md` for the shape of a skill and the CLA.
