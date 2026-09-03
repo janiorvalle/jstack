@@ -237,6 +237,36 @@ func TestBackupKeepsSymlinksAndFileModes(t *testing.T) {
 	}
 }
 
+func TestSymlinkedSkillFolderIsBackedUpAsALink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need a privilege on windows")
+	}
+	dest := t.TempDir()
+	elsewhere := filepath.Join(t.TempDir(), "dotfiles", "voice")
+	write(t, filepath.Join(elsewhere, "SKILL.md"), "voice v1\n")
+	if err := os.Symlink(elsewhere, filepath.Join(dest, "voice")); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(t.TempDir(), "backup", "claude", "skills")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(source(), dest, plan, backup); err != nil {
+		t.Fatal(err)
+	}
+	if link, err := os.Readlink(filepath.Join(backup, "voice")); err != nil || link != elsewhere {
+		t.Fatalf("backup voice = %q, %v; want a link to %q", link, err, elsewhere)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dest, "voice", "SKILL.md")); string(got) != "voice v2\n" {
+		t.Fatalf("installed voice = %q", got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(elsewhere, "SKILL.md")); string(got) != "voice v1\n" {
+		t.Fatalf("the linked folder was touched: %q", got)
+	}
+	assertNoWorkFolders(t, dest)
+}
+
 func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")

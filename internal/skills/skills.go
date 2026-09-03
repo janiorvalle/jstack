@@ -134,6 +134,9 @@ func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) err
 		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot move skill %q aside to %q: %w; the installed copy is untouched, fix the permissions and rerun", name, retired, err)
 	}
 	backup := filepath.Join(backupDir, name)
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w", backupDir, err))
+	}
 	if err := copyTree(retired, backup); err != nil {
 		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot copy skill %q into %q: %w", name, backup, err))
 	}
