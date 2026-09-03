@@ -24,6 +24,17 @@ const toolsFixture = "# Tools\n\n" +
 	"## roast\n\n- Repo: https://github.com/x/roast\n- Check: `check-roast`\n- Version: `version-roast`\n- Install: `curl roast | sh`\n- Skill install: `roast install-skill`\n- Skill folder: `roast`\n\n" +
 	"## prose only\n\nno check line\n"
 
+const pinnedInstall = "npm install -g browser@0.36.0 && browser install"
+
+// pinnedFixture adds a tool whose install line pins a version, the way
+// agent-browser is pinned in tools.md.
+func pinnedFixture() fstest.MapFS {
+	files := fixture()
+	files["tools.md"] = &fstest.MapFile{Data: []byte(toolsFixture +
+		"\n## browser\n\n- Repo: https://github.com/x/browser\n- Check: `check-browser`\n- Version: `version-browser`\n- Install: `" + pinnedInstall + "`\n")}
+	return files
+}
+
 func fixture() fstest.MapFS {
 	return fstest.MapFS{
 		"skills/voice/SKILL.md": {Data: []byte("voice v2\n")},
@@ -75,6 +86,9 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 		if !f.stuck {
 			f.versions["version-roast"] = "roast 1.1.0"
 		}
+	}
+	if command == pinnedInstall && !f.stuck {
+		f.versions["version-browser"] = "browser 0.36.0"
 	}
 	if output, ok := f.versions[command]; ok {
 		fmt.Fprintln(out, output)
@@ -349,6 +363,66 @@ func TestOutdatedToolIsReportedWithBothVersionsAndTheRerunHint(t *testing.T) {
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast" {
 		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestPinnedToolIsComparedWithThePinNotTheRegistry(t *testing.T) {
+	for installed, expected := range map[string]string{
+		"0.27.0": "outdated browser 0.27.0, pinned 0.36.0. update: " + pinnedInstall,
+		"0.36.0": "ok browser 0.36.0",
+		"0.37.0": "ahead browser 0.37.0, pinned 0.36.0. update: " + pinnedInstall,
+		"":       "outdated browser version unknown, pinned 0.36.0. update: " + pinnedInstall,
+	} {
+		home := homeWithClaude(t)
+		shell := withRoast("1.1.0")
+		shell.present["check-browser"] = true
+		shell.versions["version-browser"] = "browser " + installed
+		opts, out := options(t, home, shell, "")
+		opts.Files = pinnedFixture()
+		if err := Run(context.Background(), opts); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), expected+"\n") {
+			t.Errorf("installed %s: output missing %q:\n%s", installed, expected, out.String())
+		}
+	}
+}
+
+func TestUpdateOfAPinnedToolAheadOfThePinInstallsThePin(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.1.0")
+	shell.present["check-browser"] = true
+	shell.versions["version-browser"] = "browser 0.37.0"
+	opts, out := options(t, home, shell, "")
+	opts.Files = pinnedFixture()
+	opts.Yes = true
+	opts.UpdateTools = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"updating browser 0.37.0 to 0.36.0: " + pinnedInstall, "updated browser 0.36.0"} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("output missing %q:\n%s", expected, out.String())
+		}
+	}
+}
+
+func TestUpdateOfAPinnedToolThatStillPrintsNoVersionIsAnError(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.1.0")
+	shell.present["check-browser"] = true
+	shell.versions["version-browser"] = "usage: browser [command]"
+	shell.stuck = true
+	opts, out := options(t, home, shell, "")
+	opts.Files = pinnedFixture()
+	opts.Yes = true
+	opts.UpdateTools = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "browser: `"+pinnedInstall+"` ran, but `version-browser` prints no version, so the pinned 0.36.0 can't be confirmed") {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(out.String(), "updating browser version unknown to 0.36.0: "+pinnedInstall) || !strings.Contains(out.String(), "FAILED browser: updated, but `version-browser` prints no version") {
+		t.Fatalf("output:\n%s", out.String())
 	}
 }
 

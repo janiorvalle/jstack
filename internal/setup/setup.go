@@ -75,8 +75,19 @@ type toolStatus struct {
 	install      bool
 }
 
+// outdated is true when the installed version is behind the latest. A pinned
+// tool is outdated at anything but the pin, ahead or unknown included: the
+// pin is the version that was reviewed, and its install line puts it back.
+// A pinned tool with no Version line has latest "" and installed "", so it
+// is never outdated, the same as any tool setup can't read a version from.
 func (status toolStatus) outdated() bool {
-	return status.present && tools.Outdated(status.installed, status.latest)
+	if !status.present {
+		return false
+	}
+	if status.tool.Pin != "" {
+		return status.installed != status.latest
+	}
+	return tools.Outdated(status.installed, status.latest)
 }
 
 // actionable is true when setup has a line it could run for this tool.
@@ -254,11 +265,17 @@ func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string
 
 // lookupLatest asks each source at the same time, so a network that drops
 // packets costs one timeout, not one per tool. Missing tools are looked up
-// too: after an install the report compares what landed against it.
+// too: after an install the report compares what landed against it. A
+// pinned tool's latest is its pin, no lookup: the registry may be further
+// along, but the pin is what the install line installs.
 func lookupLatest(ctx context.Context, opts Options, statuses []toolStatus) {
 	var wait sync.WaitGroup
 	for index := range statuses {
 		if statuses[index].tool.Version == "" {
+			continue
+		}
+		if pin := statuses[index].tool.Pin; pin != "" {
+			statuses[index].latest = pin
 			continue
 		}
 		wait.Add(1)
@@ -409,7 +426,7 @@ func toolState(status toolStatus) string {
 	case !status.present:
 		return fmt.Sprintf("missing %s. install: %s", status.tool.Title, status.tool.Install)
 	case status.outdated():
-		return fmt.Sprintf("outdated %s %s, latest %s. update: %s", status.tool.Title, tools.Display(status.installed), tools.Display(status.latest), status.tool.Install)
+		return fmt.Sprintf("%s %s %s, %s %s. update: %s", offset(status), status.tool.Title, installedLabel(status), reference(status), tools.Display(status.latest), status.tool.Install)
 	case status.tool.Version == "":
 		return "ok " + status.tool.Title
 	case status.installed == "":
@@ -418,6 +435,32 @@ func toolState(status toolStatus) string {
 		return fmt.Sprintf("ok %s %s, latest unknown", status.tool.Title, tools.Display(status.installed))
 	}
 	return fmt.Sprintf("ok %s %s", status.tool.Title, tools.Display(status.installed))
+}
+
+// offset says which way the installed version is off: ahead when a pinned
+// tool is past its pin, outdated when behind it or unreadable.
+func offset(status toolStatus) string {
+	if tools.Outdated(status.latest, status.installed) {
+		return "ahead"
+	}
+	return "outdated"
+}
+
+// installedLabel is the installed version as the tool prints it, or the words
+// for a pinned tool whose version command printed none.
+func installedLabel(status toolStatus) string {
+	if status.installed == "" {
+		return "version unknown"
+	}
+	return tools.Display(status.installed)
+}
+
+// reference names what the installed version was compared with.
+func reference(status toolStatus) string {
+	if status.tool.Pin != "" {
+		return "pinned"
+	}
+	return "latest"
 }
 
 func printRerun(out io.Writer, opts Options, picked []harness.Harness, current plan) {
@@ -497,7 +540,7 @@ func askTools(ask *prompt.Prompt, opts Options, current plan) error {
 		}
 		question := fmt.Sprintf("\nInstall %s? (%s)", status.tool.Title, status.tool.Command)
 		if status.present {
-			question = fmt.Sprintf("\nUpdate %s %s to %s? (%s)", status.tool.Title, tools.Display(status.installed), tools.Display(status.latest), status.tool.Command)
+			question = fmt.Sprintf("\nUpdate %s %s to %s? (%s)", status.tool.Title, installedLabel(*status), tools.Display(status.latest), status.tool.Command)
 		}
 		agreed, err := ask.Confirm(question, false)
 		if err != nil {
@@ -676,7 +719,7 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	tool := status.tool
 	verb, done := "installing "+tool.Title, "installed"
 	if status.present {
-		verb, done = fmt.Sprintf("updating %s %s to %s", tool.Title, tools.Display(status.installed), tools.Display(status.latest)), "updated"
+		verb, done = fmt.Sprintf("updating %s %s to %s", tool.Title, installedLabel(*status), tools.Display(status.latest)), "updated"
 	}
 	fmt.Fprintf(out, "  %s: %s\n", verb, tool.Command)
 	if err := opts.Shell(ctx, tool.Command, out); err != nil {
@@ -689,9 +732,13 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	}
 	status.present = true
 	status.installed = installedVersion(ctx, opts, tool)
+	if status.outdated() && status.installed == "" {
+		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` prints no version\n", tool.Title, done, tool.Version)
+		return fmt.Errorf("%s: `%s` ran, but `%s` prints no version, so the pinned %s can't be confirmed; run it by hand and fix what it prints, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.latest))
+	}
 	if status.outdated() {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
-		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the latest is %s; an older %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.installed), tools.Display(status.latest), tool.Title)
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the %s is %s; another %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.installed), reference(*status), tools.Display(status.latest), tool.Title)
 	}
 	if status.installed == "" {
 		fmt.Fprintf(out, "  %s %s\n", done, tool.Title)

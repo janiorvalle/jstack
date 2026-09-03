@@ -64,7 +64,7 @@ One entry in `vendor.json`: repo, path inside it, pinned commit, license, and wh
 
 ## Adding a tool
 
-One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. Leave the `Install` line out for a prerequisite setup should check but never install, and list how to get it as prose instead; setup then reports it missing with a link to that section. Add a `Version` line with the command that prints the installed version and a `Repo` line with the GitHub page when setup should offer updates; the latest version is read from that repo's releases, or from the npm registry when the install line is `npm install -g`. The binary parses those lines. Keep the format. The next release carries the new tool.
+One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. Leave the `Install` line out for a prerequisite setup should check but never install, and list how to get it as prose instead; setup then reports it missing with a link to that section. Add a `Version` line with the command that prints the installed version and a `Repo` line with the GitHub page when setup should offer updates; the latest version is read from that repo's releases, or from the npm registry when the install line is `npm install -g`. Pin the package, `npm install -g name@1.2.3`, when the tool carries text agents execute, as agent-browser does; setup then treats the pin as the latest, offers the install line to any machine not at the pin, and the weekly vendor-bump workflow opens a PR when npm moves past it. The binary parses those lines. Keep the format. The next release carries the new tool.
 
 ## Developing the binary
 

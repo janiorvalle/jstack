@@ -20,13 +20,16 @@ jobs:
       contents: read # checkout
     outputs:
       skills: ${{ steps.list.outputs.skills }}
+      tools: ${{ steps.list.outputs.tools }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Read vendor.json
+      - name: Read vendor.json and the pins in tools.md
         id: list
-        run: echo "skills=$(jq -c '[.skills[].name]' vendor.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "skills=$(jq -c '[.skills[].name]' vendor.json)" >> "$GITHUB_OUTPUT"
+          echo "tools=$(python3 scripts/tool-bump.py list)" >> "$GITHUB_OUTPUT"
 
   bump:
     name: Bump ${{ matrix.skill }}
@@ -81,6 +84,61 @@ jobs:
           head="vendor/$BASE/$SKILL"
           git checkout -B "$head"
           git add -A "skills/$SKILL" vendor.json
+          git commit -m "$title"
+          git push --force origin "$head"
+          number=$(gh pr list --head "$head" --base "$BASE" --state open --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "$title" --body "$body"
+          else
+            gh pr create --head "$head" --base "$BASE" --title "$title" --body "$body"
+          fi
+
+  pin:
+    name: Bump the ${{ matrix.tool }} CLI pin
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the vendor/<base>/tools/<tool> branch
+      pull-requests: write # open or update the bump PR
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: ${{ fromJSON(needs.list.outputs.tools) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Move the pin to npm's latest
+        id: bump
+        env:
+          TOOL: ${{ matrix.tool }}
+        run: |
+          python3 scripts/tool-bump.py bump "$TOOL" | tee "$RUNNER_TEMP/bump.json"
+          echo "changed=$(jq -r .changed "$RUNNER_TEMP/bump.json")" >> "$GITHUB_OUTPUT"
+      - name: Open or update the PR
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ matrix.tool }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          old=$(jq -r .old "$RUNNER_TEMP/bump.json")
+          new=$(jq -r .new "$RUNNER_TEMP/bump.json")
+          repo=$(jq -r .repo "$RUNNER_TEMP/bump.json")
+          title="chore(vendor): bump the $TOOL CLI to $new"
+          body="npm published $TOOL $new and \`tools.md\` pins $old. This moves the install line to $new. The CLI carries the skill text agents run, so read the release before merging.
+
+          npm: https://www.npmjs.com/package/$TOOL/v/$new
+          Release: $repo/releases/tag/v$new
+
+          Opened by the vendor-bump workflow. CI doesn't run on PRs the workflow token opens, so run \`make verify\` before merging."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+          head="vendor/$BASE/tools/$TOOL"
+          git checkout -B "$head"
+          git add tools.md
           git commit -m "$title"
           git push --force origin "$head"
           number=$(gh pr list --head "$head" --base "$BASE" --state open --json number --jq '.[0].number')

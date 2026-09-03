@@ -50,6 +50,20 @@ func TestPrerequisiteLinksToItsOwnHeading(t *testing.T) {
 	}
 }
 
+func TestParseReadsThePinFromAnNpmInstallLine(t *testing.T) {
+	for line, want := range map[string]string{
+		"`npm install -g agent-browser@0.36.0 && agent-browser install`": "v0.36.0",
+		"`npm install -g agent-browser && agent-browser install`":        "",
+		"`npm install -g agent-browser@latest`":                          "",
+		"`curl -fsSL https://x/install.sh | sh`":                         "",
+	} {
+		parsed := Parse("## t\n\n- Check: `command -v t`\n- Install: " + line + "\n")
+		if got := parsed[0].Pin; got != want {
+			t.Errorf("Pin for %s = %q, want %q", line, got, want)
+		}
+	}
+}
+
 func TestParseEmptyText(t *testing.T) {
 	if got := Parse(""); len(got) != 0 {
 		t.Fatalf("parsed %+v", got)
