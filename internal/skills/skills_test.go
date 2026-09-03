@@ -151,3 +151,36 @@ func TestApplyWithNothingChangedMakesNoBackup(t *testing.T) {
 		t.Fatalf("backup folder exists: %v", err)
 	}
 }
+
+func TestApplyFailureLeavesEachSkillWholeAndNoStaging(t *testing.T) {
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	backup := filepath.Join(t.TempDir(), "backup")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dest, "why", "mine.md"), "appeared after the plan\n")
+	err = Apply(source(), dest, plan, backup)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), `"why"`) {
+		t.Fatalf("err = %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dest, "voice", "SKILL.md")); string(got) != "voice v1\n" {
+		t.Fatalf("voice changed although the run stopped on why: %q", got)
+	}
+	if _, err := os.Stat(backup); !os.IsNotExist(err) {
+		t.Fatalf("a backup was made although nothing was swapped: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dest, "why", "mine.md")); string(got) != "appeared after the plan\n" {
+		t.Fatalf("why was touched: %q", got)
+	}
+	entries, err := os.ReadDir(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".jstack-staging-") {
+			t.Fatalf("staging folder left behind: %s", entry.Name())
+		}
+	}
+}

@@ -85,24 +85,50 @@ func PlanFor(source fs.FS, dest string) (Plan, error) {
 	return plan, nil
 }
 
-// Apply copies the new and changed skills into dest. A changed skill is moved
-// to backupDir first, so nothing the machine had is lost.
+// Apply puts the new and changed skills into dest one skill at a time. Each
+// one is staged beside its destination first, then swapped in, so a copy that
+// fails leaves that skill as it was and every earlier skill fully replaced.
+// A changed skill is moved to backupDir before the swap.
 func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
 	}
+	changed := map[string]bool{}
 	for _, name := range plan.Changed {
+		changed[name] = true
+	}
+	for _, name := range append(append([]string{}, plan.New...), plan.Changed...) {
+		if err := swapIn(source, dest, name, changed[name], backupDir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) error {
+	staged := filepath.Join(dest, ".jstack-staging-"+name)
+	final := filepath.Join(dest, name)
+	_ = os.RemoveAll(staged)
+	defer os.RemoveAll(staged)
+	if err := copyDir(source, name, staged); err != nil {
+		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot write skill %q into %q: %w; the installed copy is untouched, fix the permissions or free space and rerun", name, dest, err)
+	}
+	backup := filepath.Join(backupDir, name)
+	if replace {
 		if err := os.MkdirAll(backupDir, 0o755); err != nil {
 			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w; make it writable and rerun", backupDir, err)
 		}
-		if err := os.Rename(filepath.Join(dest, name), filepath.Join(backupDir, name)); err != nil {
-			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot move %q into %q: %w; nothing was copied yet, fix the permissions and rerun", filepath.Join(dest, name), backupDir, err)
+		if err := os.Rename(final, backup); err != nil {
+			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot move %q into %q: %w; the installed copy is untouched, fix the permissions and rerun", final, backupDir, err)
 		}
 	}
-	for _, name := range append(append([]string{}, plan.New...), plan.Changed...) {
-		if err := copyDir(source, name, filepath.Join(dest, name)); err != nil {
-			return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot write skill %q into %q: %w; the previous copy is in %q, fix the permissions and rerun", name, dest, err, backupDir)
+	if err := os.Rename(staged, final); err != nil {
+		if replace {
+			if restoreErr := os.Rename(backup, final); restoreErr != nil {
+				return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place: %w, and restoring it failed too: %v; copy %q back to %q by hand", name, err, restoreErr, backup, final)
+			}
 		}
+		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w; the installed copy is back as it was, fix the permissions and rerun", name, final, err)
 	}
 	return nil
 }
