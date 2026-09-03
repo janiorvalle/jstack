@@ -159,7 +159,9 @@ func restore(retired, final string, cause error) error {
 }
 
 // copyTree copies an installed skill as it is on disk: symlinks stay
-// symlinks and files keep their modes, so the backup can be put back whole.
+// symlinks and files and folders keep their modes, so the backup can be put
+// back whole. Folders always get owner write and search so their contents
+// can land in them.
 func copyTree(source, target string) error {
 	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -173,7 +175,7 @@ func copyTree(source, target string) error {
 		}
 		switch {
 		case entry.IsDir():
-			return os.MkdirAll(destination, 0o755)
+			return os.MkdirAll(destination, info.Mode().Perm()|0o700)
 		case info.Mode()&os.ModeSymlink != 0:
 			link, err := os.Readlink(path)
 			if err != nil {

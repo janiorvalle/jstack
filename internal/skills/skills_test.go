@@ -216,6 +216,10 @@ func TestBackupKeepsSymlinksAndFileModes(t *testing.T) {
 	if err := os.Symlink("SKILL.md", filepath.Join(dest, "voice", "link.md")); err != nil {
 		t.Fatal(err)
 	}
+	write(t, filepath.Join(dest, "voice", "private", "notes.md"), "mine\n")
+	if err := os.Chmod(filepath.Join(dest, "voice", "private"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	backup := filepath.Join(t.TempDir(), "backup")
 	plan, err := PlanFor(source(), dest)
 	if err != nil {
@@ -231,9 +235,14 @@ func TestBackupKeepsSymlinksAndFileModes(t *testing.T) {
 	if link, _ := os.Readlink(filepath.Join(backup, "voice", "link.md")); link != "SKILL.md" {
 		t.Fatalf("link.md points at %q", link)
 	}
-	info, err = os.Stat(filepath.Join(backup, "voice", "run"))
-	if err != nil || info.Mode().Perm() != 0o700 {
-		t.Fatalf("run mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	for path, want := range map[string]os.FileMode{
+		filepath.Join(backup, "voice", "run"):     0o700,
+		filepath.Join(backup, "voice", "private"): 0o700,
+	} {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != want {
+			t.Fatalf("%s mode = %v, %v; want %o", path, info.Mode().Perm(), err, want)
+		}
 	}
 }
 
