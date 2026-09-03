@@ -203,6 +203,40 @@ func TestApplyBacksUpAChangedSkillAcrossFilesystems(t *testing.T) {
 	assertNoWorkFolders(t, dest)
 }
 
+func TestBackupKeepsSymlinksAndFileModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need a privilege on windows")
+	}
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	write(t, filepath.Join(dest, "voice", "run"), "no shebang, made runnable by hand\n")
+	if err := os.Chmod(filepath.Join(dest, "voice", "run"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("SKILL.md", filepath.Join(dest, "voice", "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(t.TempDir(), "backup")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(source(), dest, plan, backup); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(filepath.Join(backup, "voice", "link.md"))
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link.md in the backup = %v, %v; want a symlink", info, err)
+	}
+	if link, _ := os.Readlink(filepath.Join(backup, "voice", "link.md")); link != "SKILL.md" {
+		t.Fatalf("link.md points at %q", link)
+	}
+	info, err = os.Stat(filepath.Join(backup, "voice", "run"))
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("run mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	}
+}
+
 func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")

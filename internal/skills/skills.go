@@ -110,8 +110,9 @@ func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
 var rename = os.Rename
 
 // swapIn only ever renames inside dest. The backup folder can sit on another
-// filesystem, where a rename fails with EXDEV, so the backup is a copy and the
-// old folder is retired beside its replacement until the swap has succeeded.
+// filesystem, where a rename fails with EXDEV, so the old folder is retired
+// beside its replacement first, copied from there into the backup, and only
+// removed once the swap has succeeded.
 func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) error {
 	staged, err := os.MkdirTemp(dest, ".jstack-staging-"+name+"-")
 	if err != nil {
@@ -128,34 +129,61 @@ func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) err
 		}
 		return nil
 	}
-	if err := backUp(dest, name, backupDir); err != nil {
-		return err
-	}
 	retired := filepath.Join(dest, ".jstack-retired-"+name+"-"+strconv.Itoa(os.Getpid()))
 	if err := rename(final, retired); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot move skill %q aside to %q: %w; the installed copy is untouched, fix the permissions and rerun", name, retired, err)
 	}
+	backup := filepath.Join(backupDir, name)
+	if err := copyTree(retired, backup); err != nil {
+		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot copy skill %q into %q: %w", name, backup, err))
+	}
 	if err := rename(staged, final); err != nil {
-		if restoreErr := rename(retired, final); restoreErr != nil {
-			return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place: %w, and restoring it failed too: %v; move %q back to %q by hand", name, err, restoreErr, retired, final)
-		}
-		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w; the installed copy is back as it was, fix the permissions and rerun", name, final, err)
+		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w", name, final, err))
 	}
 	if err := os.RemoveAll(retired); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-CLEANUP] cannot remove the retired copy of skill %q at %q: %w; the new skill is in place and the old one is backed up in %q, delete that folder by hand", name, retired, err, backupDir)
+		return fmt.Errorf("[JSTACK-SKILLS-CLEANUP] cannot remove the retired copy of skill %q at %q: %w; the new skill is in place and the old one is backed up in %q, delete that folder by hand", name, retired, err, backup)
 	}
 	return nil
 }
 
-func backUp(dest, name, backupDir string) error {
-	backup := filepath.Join(backupDir, name)
-	if err := os.MkdirAll(backup, 0o755); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w; make it writable and rerun", backup, err)
+// restore puts the retired folder back where it was and finishes the error
+// message with what state the skill is in.
+func restore(retired, final string, cause error) error {
+	if err := rename(retired, final); err != nil {
+		return fmt.Errorf("%w, and restoring it failed too: %v; move %q back to %q by hand", cause, err, retired, final)
 	}
-	if err := copyDir(os.DirFS(dest), name, backup); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot copy %q into %q: %w; the installed copy is untouched, fix the permissions and rerun", filepath.Join(dest, name), backup, err)
-	}
-	return nil
+	return fmt.Errorf("%w; the installed copy is back as it was, fix the permissions and rerun", cause)
+}
+
+// copyTree copies an installed skill as it is on disk: symlinks stay
+// symlinks and files keep their modes, so the backup can be put back whole.
+func copyTree(source, target string) error {
+	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, _ := filepath.Rel(source, path)
+		destination := filepath.Join(target, relative)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case entry.IsDir():
+			return os.MkdirAll(destination, 0o755)
+		case info.Mode()&os.ModeSymlink != 0:
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, destination)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(destination, content, info.Mode().Perm())
+	})
 }
 
 func dirSame(source fs.FS, name, target string) (bool, error) {
