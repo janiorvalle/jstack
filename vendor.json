@@ -1,12 +1,20 @@
 {
   "skills": [
     {
+      "name": "agent-browser",
+      "repo": "vercel-labs/agent-browser",
+      "path": "skills/agent-browser",
+      "ref": "021d9255e543d2f1ab66b87f338d85c3d7a910be",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE"
+    },
+    {
       "name": "typescript-best-practices",
       "repo": "cursor/plugins",
       "path": "pstack/skills/typescript-best-practices",
-      "ref": "efa2a531985e0a8084d36ff3cf87233be8a9f34b",
+      "ref": "23a56e2dac2efd54788056db8eced26e371d7b5e",
       "license": "MIT",
-      "harness": ["claude", "codex"]
+      "license_file": "pstack/LICENSE"
     }
   ]
 }

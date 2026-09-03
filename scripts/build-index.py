@@ -5,11 +5,15 @@ Run after adding, renaming, or re-describing any skill. The table lives between
 <!-- index:start --> and <!-- index:end --> and is never edited by hand. Principles
 are stated in the letter by hand, so only workflows are generated.
 """
-import os, re, sys
+import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS = os.path.join(ROOT, "skills")
 MODE = os.path.join(ROOT, "AGENTS.md")
+
+def vendored():
+    """Names of the third-party skills pinned in vendor.json. Their text is upstream's, not ours."""
+    return {entry["name"] for entry in json.load(open(os.path.join(ROOT, "vendor.json")))["skills"]}
 
 def description(path):
     text = open(path).read()
@@ -20,8 +24,9 @@ def description(path):
 
 def build():
     principles, workflows = [], []
+    skip = vendored() | {"jstack-mode"}
     for name in sorted(os.listdir(SKILLS)):
-        if name == "jstack-mode":
+        if name in skip:
             continue
         skill = os.path.join(SKILLS, name, "SKILL.md")
         if not os.path.isfile(skill):

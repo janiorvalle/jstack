@@ -4,11 +4,11 @@
   setup.py [--agent auto|codex|claude|both] [--repo PATH] [--dest PATH]
            [--skill NAME ...] [--apply] [--install-tools]
 
-Dry run by default. Steps: jstack skills, vendored skills, tool checks,
-tool-owned skills, git hooks, report. Overwritten skills are backed up to
+Dry run by default. Steps: skills, instructions, tool checks, tool-owned
+skills, git hooks, report. Overwritten skills are backed up to
 <dest>/.jstack-backup/<timestamp>/.
 """
-import argparse, filecmp, io, json, os, re, shutil, subprocess, sys, tarfile, urllib.request
+import argparse, filecmp, os, re, shutil, subprocess, sys
 from datetime import datetime
 
 def repo_root(explicit):
@@ -53,29 +53,6 @@ def apply(sources, dest, groups, stamp):
     for n in groups["new"] + groups["changed"]:
         shutil.copytree(sources[n], os.path.join(dest, n))
     return backup if groups["changed"] else None
-
-def fetch_vendor(root, agent, cache):
-    """Download each vendor.json entry for this harness into cache. Returns {name: dir}."""
-    path = os.path.join(root, "vendor.json")
-    if not os.path.isfile(path): return {}
-    out = {}
-    for entry in json.load(open(path))["skills"]:
-        if agent not in entry["harness"]: continue
-        name, repo, sub, ref = entry["name"], entry["repo"], entry["path"].strip("/"), entry["ref"]
-        target = os.path.join(cache, f"{name}-{ref[:12]}")
-        if not os.path.isdir(target):
-            url = f"https://codeload.github.com/{repo}/tar.gz/{ref}"
-            data = urllib.request.urlopen(url, timeout=60).read()
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-                members = [m for m in tar.getmembers() if "/" in m.name and m.name.split("/", 1)[1].startswith(sub + "/")]
-                if not members: sys.exit(f"ERROR vendor {name}: {sub} not found in {repo}@{ref[:12]}")
-                for m in members:
-                    rel = m.name.split("/", 1)[1][len(sub) + 1:]
-                    if not rel or m.isdir(): continue
-                    dst = os.path.join(target, rel); os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    with open(dst, "wb") as f: f.write(tar.extractfile(m).read())
-        out[name] = target
-    return out
 
 def parse_tools(root):
     """Sections of tools.md that carry a check line. Returns [(title, check, install, skill_install, skill_folder)]."""
@@ -148,20 +125,15 @@ def main():
     root = repo_root(a.repo); src_skills = os.path.join(root, "skills")
     if not os.path.isdir(src_skills): sys.exit(f"ERROR no skills/ under {root}. Pass --repo or set JSTACK_REPO.")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    cache = os.path.join(os.path.expanduser("~/.cache/jstack/vendor"))
-    os.makedirs(cache, exist_ok=True)
     agents = {"both": ["codex", "claude"], "all": ["codex", "claude", "cursor"]}.get(a.agent) or [detect_agent() if a.agent == "auto" else a.agent]
-    own = {n: os.path.join(src_skills, n) for n in os.listdir(src_skills) if os.path.isfile(os.path.join(src_skills, n, "SKILL.md"))}
+    sources = {n: os.path.join(src_skills, n) for n in os.listdir(src_skills) if os.path.isfile(os.path.join(src_skills, n, "SKILL.md"))}
 
     for agent in agents:
         dest = a.dest or dest_for(agent)
         os.makedirs(dest, exist_ok=True)
-        vendor = fetch_vendor(root, agent, cache)
-        sources = {**own, **vendor}
         groups, local_only = plan(sources, dest, a.skill)
         print(f"\n[{agent}] {dest}")
         for k in ("new", "changed", "same"): print(f"  {k:8} {', '.join(groups[k]) or '-'}")
-        print(f"  {'vendor':8} {', '.join(sorted(vendor)) or '-'}")
         print(f"  {'local':8} {', '.join(local_only) or '-'} (untouched)")
         if a.apply and (groups["new"] or groups["changed"]):
             backup = apply(sources, dest, groups, stamp)

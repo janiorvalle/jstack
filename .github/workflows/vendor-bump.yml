@@ -1,0 +1,91 @@
+name: Vendor bump
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: vendor-bump-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  list:
+    name: List vendored skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+    outputs:
+      skills: ${{ steps.list.outputs.skills }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read vendor.json
+        id: list
+        run: echo "skills=$(jq -c '[.skills[].name]' vendor.json)" >> "$GITHUB_OUTPUT"
+
+  bump:
+    name: Bump ${{ matrix.skill }}
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the vendor/<base>/<skill> branch
+      pull-requests: write # open or update the bump PR
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJSON(needs.list.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Copy the skill at its upstream head
+        id: bump
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SKILL: ${{ matrix.skill }}
+        run: |
+          python3 scripts/vendor-bump.py bump "$SKILL" | tee "$RUNNER_TEMP/bump.json"
+          echo "changed=$(jq -r .changed "$RUNNER_TEMP/bump.json")" >> "$GITHUB_OUTPUT"
+      - name: Open or update the PR
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SKILL: ${{ matrix.skill }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          old=$(jq -r .old "$RUNNER_TEMP/bump.json")
+          new=$(jq -r .new "$RUNNER_TEMP/bump.json")
+          repo=$(jq -r .repo "$RUNNER_TEMP/bump.json")
+          folder=$(jq -r .path "$RUNNER_TEMP/bump.json")
+          title="chore(vendor): bump $SKILL to ${new:0:7}"
+          if [ "$old" = "$new" ]; then
+            title="chore(vendor): restore $SKILL at ${new:0:7}"
+            body="The committed copy of \`skills/$SKILL\` had drifted from \`$folder\` in $repo at the pinned commit. This puts the verbatim copy back."
+          else
+            body="Upstream moved \`$folder\` in $repo. This is that folder copied verbatim at the new commit, plus the pin in \`vendor.json\`.
+
+          Commits: https://github.com/$repo/compare/$old...$new"
+          fi
+          body="$body
+
+          Opened by the vendor-bump workflow. CI doesn't run on PRs the workflow token opens, so run \`make verify\` before merging."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+          head="vendor/$BASE/$SKILL"
+          git checkout -B "$head"
+          git add -A "skills/$SKILL" vendor.json
+          git commit -m "$title"
+          git push --force origin "$head"
+          number=$(gh pr list --head "$head" --base "$BASE" --state open --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "$title" --body "$body"
+          else
+            gh pr create --head "$head" --base "$BASE" --title "$title" --body "$body"
+          fi
