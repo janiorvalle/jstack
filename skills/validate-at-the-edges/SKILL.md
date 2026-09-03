@@ -11,6 +11,8 @@ Check data once, where it comes in. Inside, trust the types. Business logic live
 
 Validation scattered through the code is noise, it repeats itself, and it makes you feel safe without being safe. Validate once at the edge and the inside gets to be simple.
 
+The vendored `typescript-best-practices` skill calls this principle `boundary-discipline`. When it points you there, this is the file.
+
 ## Where the edges are
 
 CLI arguments. Config files. User input. Network requests. External APIs. Files on disk. Anything you didn't produce yourself in this process.

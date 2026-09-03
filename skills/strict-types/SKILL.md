@@ -11,6 +11,8 @@ The type checker is the one reviewer that never gets tired. Use it to rule out i
 
 This applies to any typed language. For TypeScript, the `typescript-best-practices` skill and its `references/patterns.md` cover the syntax for each pattern below.
 
+That skill is upstream text, vendored as is, and it calls this principle `type-system-discipline`. When it tells you to apply type-system-discipline first, this is the file. Its pointer to `boundary-discipline` means `validate-at-the-edges`.
+
 ## Never `any`
 
 `any` is a promise that a person will catch what the compiler no longer can. Nobody keeps that promise. Model the real shape. If the shape is genuinely unknown, say `unknown` and narrow it. Reaching for `any` to make an error go away is hiding a defect, not fixing one.
