@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/janiorvalle/jstack/internal/harness"
@@ -25,18 +27,23 @@ import (
 // means exit status zero.
 type Shell func(ctx context.Context, command string, output io.Writer) error
 
+// Latest finds the newest published version of a tool, as "v1.2.3".
+type Latest func(ctx context.Context, tool tools.Tool) (string, error)
+
 // Options is everything Run needs from the outside world.
 type Options struct {
 	Files            fs.FS
 	Home             string
 	Harness          string
 	InstallTools     bool
+	UpdateTools      bool
 	KeepInstructions bool
 	Yes              bool
 	Interactive      bool
 	Stdin            io.Reader
 	Stdout           io.Writer
 	Shell            Shell
+	Latest           Latest
 	Now              func() time.Time
 }
 
@@ -54,11 +61,26 @@ type harnessPlan struct {
 	letter       letter.Change
 }
 
+// toolStatus is one tool as found on the machine. installed and latest are
+// "v1.2.3" or "" when unknown; a tool with no Version line never has either.
+// install is the agreed action: an install when missing, an update when
+// outdated.
 type toolStatus struct {
 	tool         tools.Tool
 	present      bool
+	installed    string
+	latest       string
 	skillPresent bool
 	install      bool
+}
+
+func (status toolStatus) outdated() bool {
+	return status.present && tools.Outdated(status.installed, status.latest)
+}
+
+// actionable is true when setup has a line it could run for this tool.
+func (status toolStatus) actionable() bool {
+	return status.tool.Command != "" && (!status.present || status.outdated())
 }
 
 type plan struct {
@@ -130,7 +152,7 @@ func Run(ctx context.Context, opts Options) error {
 	} else {
 		for index := range current.tools {
 			status := &current.tools[index]
-			status.install = !status.present && opts.InstallTools && status.tool.Command != ""
+			status.install = agreedByFlag(opts, *status)
 		}
 	}
 	if len(picked) == 0 {
@@ -206,10 +228,56 @@ func buildPlan(ctx context.Context, opts Options, embedded assets, picked []harn
 	}
 	current := plan{harnesses: harnessPlans}
 	for _, tool := range embedded.tools {
-		current.tools = append(current.tools, toolStatus{tool: tool, present: opts.Shell(ctx, tool.Check, io.Discard) == nil})
+		status := toolStatus{tool: tool, present: opts.Shell(ctx, tool.Check, io.Discard) == nil}
+		if status.present {
+			status.installed = installedVersion(ctx, opts, tool)
+		}
+		current.tools = append(current.tools, status)
 	}
+	lookupLatest(ctx, opts, current.tools)
 	markSkillPresence(opts.Home, picked, current.tools)
 	return current, nil
+}
+
+func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string {
+	if tool.Version == "" {
+		return ""
+	}
+	var output bytes.Buffer
+	if err := opts.Shell(ctx, tool.Version, &output); err != nil {
+		return ""
+	}
+	return tools.ParseVersion(output.String())
+}
+
+// lookupLatest asks each source at the same time, so a network that drops
+// packets costs one timeout, not one per tool. Missing tools are looked up
+// too: after an install the report compares what landed against it.
+func lookupLatest(ctx context.Context, opts Options, statuses []toolStatus) {
+	var wait sync.WaitGroup
+	for index := range statuses {
+		if statuses[index].tool.Version == "" {
+			continue
+		}
+		wait.Add(1)
+		go func(status *toolStatus) {
+			defer wait.Done()
+			if latest, err := opts.Latest(ctx, status.tool); err == nil {
+				status.latest = latest
+			}
+		}(&statuses[index])
+	}
+	wait.Wait()
+}
+
+func agreedByFlag(opts Options, status toolStatus) bool {
+	if !status.actionable() {
+		return false
+	}
+	if status.present {
+		return opts.UpdateTools
+	}
+	return opts.InstallTools
 }
 
 // replan redoes the harness half after a new pick. The tool checks already ran
@@ -318,17 +386,33 @@ func letterIntent(outcome letter.Outcome) string {
 }
 
 func toolIntent(status toolStatus) string {
-	if !status.present {
-		return fmt.Sprintf("missing %s. install: %s", status.tool.Title, status.tool.Install)
-	}
-	line := "ok " + status.tool.Title
-	if status.tool.SkillInstall == "" || status.tool.SkillFolder == "" {
+	line := toolState(status)
+	if !status.present || status.tool.SkillInstall == "" || status.tool.SkillFolder == "" {
 		return line
 	}
 	if status.skillPresent {
 		return line + ", skill present"
 	}
 	return line + ", skill missing, would run: " + status.tool.SkillInstall
+}
+
+// toolState names one of the three states, missing, outdated, or current,
+// with the versions that decided it. Latest unknown is current with a note:
+// setup never blocks on a lookup.
+func toolState(status toolStatus) string {
+	switch {
+	case !status.present:
+		return fmt.Sprintf("missing %s. install: %s", status.tool.Title, status.tool.Install)
+	case status.outdated():
+		return fmt.Sprintf("outdated %s %s, latest %s. update: %s", status.tool.Title, tools.Display(status.installed), tools.Display(status.latest), status.tool.Install)
+	case status.tool.Version == "":
+		return "ok " + status.tool.Title
+	case status.installed == "":
+		return "ok " + status.tool.Title + ", version unknown"
+	case status.latest == "":
+		return fmt.Sprintf("ok %s %s, latest unknown", status.tool.Title, tools.Display(status.installed))
+	}
+	return fmt.Sprintf("ok %s %s", status.tool.Title, tools.Display(status.installed))
 }
 
 func printRerun(out io.Writer, opts Options, picked []harness.Harness, current plan) {
@@ -341,15 +425,29 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 	if opts.InstallTools {
 		line += " --install-tools"
 	}
+	if opts.UpdateTools {
+		line += " --update-tools"
+	}
 	if opts.KeepInstructions {
 		line += " --keep-instructions"
 	}
 	fmt.Fprintf(out, "  %s\n", line)
+	missing, outdated := false, false
 	for _, status := range current.tools {
-		if !opts.InstallTools && !status.present && status.tool.Command != "" {
-			fmt.Fprintln(out, "  add --install-tools to also install the missing tools")
-			break
+		if !status.actionable() {
+			continue
 		}
+		if status.present {
+			outdated = true
+		} else {
+			missing = true
+		}
+	}
+	if missing && !opts.InstallTools {
+		fmt.Fprintln(out, "  add --install-tools to also install the missing tools")
+	}
+	if outdated && !opts.UpdateTools {
+		fmt.Fprintln(out, "  add --update-tools to also update the outdated tools")
 	}
 	for _, entry := range current.harnesses {
 		if !opts.KeepInstructions && entry.letter.Outcome == letter.Replace && entry.harness.Lead == "" {
@@ -386,18 +484,22 @@ func askHarnesses(ask *prompt.Prompt, home string, picked []harness.Harness) ([]
 func askTools(ask *prompt.Prompt, opts Options, current plan) error {
 	for index := range current.tools {
 		status := &current.tools[index]
-		if status.present || status.tool.Command == "" {
+		if !status.actionable() {
 			continue
 		}
-		if opts.InstallTools {
+		if agreedByFlag(opts, *status) {
 			status.install = true
 			continue
 		}
-		install, err := ask.Confirm(fmt.Sprintf("\nInstall %s? (%s)", status.tool.Title, status.tool.Command), false)
+		question := fmt.Sprintf("\nInstall %s? (%s)", status.tool.Title, status.tool.Command)
+		if status.present {
+			question = fmt.Sprintf("\nUpdate %s %s to %s? (%s)", status.tool.Title, tools.Display(status.installed), tools.Display(status.latest), status.tool.Command)
+		}
+		agreed, err := ask.Confirm(question, false)
 		if err != nil {
 			return err
 		}
-		status.install = install
+		status.install = agreed
 	}
 	return nil
 }
@@ -535,28 +637,23 @@ func letterPast(outcome letter.Outcome) string {
 }
 
 func applyTool(ctx context.Context, opts Options, status toolStatus, out io.Writer) error {
-	if !status.present {
-		if !status.install {
-			fmt.Fprintf(out, "  missing %s. install: %s\n", status.tool.Title, status.tool.Install)
-			return nil
-		}
-		fmt.Fprintf(out, "  installing %s: %s\n", status.tool.Title, status.tool.Command)
-		if err := opts.Shell(ctx, status.tool.Command, out); err != nil {
-			fmt.Fprintf(out, "  FAILED %s: %v\n", status.tool.Title, err)
-			return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", status.tool.Title, status.tool.Command, err)
-		}
-		if err := opts.Shell(ctx, status.tool.Check, io.Discard); err != nil {
-			fmt.Fprintf(out, "  FAILED %s: installed, but its check still fails\n", status.tool.Title)
-			return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; finish the install line by hand (%s), then rerun jstack setup", status.tool.Title, status.tool.Command, status.tool.Check, status.tool.Install)
-		}
-		fmt.Fprintf(out, "  installed %s\n", status.tool.Title)
+	if !status.present && !status.install {
+		fmt.Fprintf(out, "  %s\n", toolState(status))
+		return nil
 	}
-	line := "  ok " + status.tool.Title
+	if status.install {
+		if err := runInstall(ctx, opts, &status, out); err != nil {
+			return err
+		}
+	}
+	line := "  " + toolState(status)
 	if status.tool.SkillInstall == "" || status.tool.SkillFolder == "" {
 		fmt.Fprintln(out, line)
 		return nil
 	}
-	if status.skillPresent {
+	// A skill ships with its binary, so an update reinstalls it even when a
+	// copy is already there: the old copy describes the old binary.
+	if status.skillPresent && !status.install {
 		fmt.Fprintln(out, line+", skill present")
 		return nil
 	}
@@ -565,6 +662,38 @@ func applyTool(ctx context.Context, opts Options, status toolStatus, out io.Writ
 		return fmt.Errorf("%s: `%s` failed: %v; run it by hand so the tool's skill is in place", status.tool.Title, status.tool.SkillInstall, err)
 	}
 	fmt.Fprintf(out, "%s, skill installed via %s\n", line, status.tool.SkillInstall)
+	return nil
+}
+
+// runInstall runs the tool's install line for a missing or an outdated tool,
+// then reads the check and the version again so the report shows what is
+// on the machine now, not what the plan expected.
+func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Writer) error {
+	tool := status.tool
+	verb, done := "installing "+tool.Title, "installed"
+	if status.present {
+		verb, done = fmt.Sprintf("updating %s %s to %s", tool.Title, tools.Display(status.installed), tools.Display(status.latest)), "updated"
+	}
+	fmt.Fprintf(out, "  %s: %s\n", verb, tool.Command)
+	if err := opts.Shell(ctx, tool.Command, out); err != nil {
+		fmt.Fprintf(out, "  FAILED %s: %v\n", tool.Title, err)
+		return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", tool.Title, tool.Command, err)
+	}
+	if err := opts.Shell(ctx, tool.Check, io.Discard); err != nil {
+		fmt.Fprintf(out, "  FAILED %s: %s, but its check still fails\n", tool.Title, done)
+		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; finish the install line by hand (%s), then rerun jstack setup", tool.Title, tool.Command, tool.Check, tool.Install)
+	}
+	status.present = true
+	status.installed = installedVersion(ctx, opts, tool)
+	if status.outdated() {
+		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the latest is %s; an older %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.installed), tools.Display(status.latest), tool.Title)
+	}
+	if status.installed == "" {
+		fmt.Fprintf(out, "  %s %s\n", done, tool.Title)
+		return nil
+	}
+	fmt.Fprintf(out, "  %s %s %s\n", done, tool.Title, tools.Display(status.installed))
 	return nil
 }
 

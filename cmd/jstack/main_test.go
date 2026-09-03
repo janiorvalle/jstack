@@ -33,11 +33,11 @@ func TestSetupFlagsReachTheRun(t *testing.T) {
 	var captured setup.Options
 	upgraded := false
 	var stdout, stderr bytes.Buffer
-	code := runWith([]string{"setup", "--harness", "claude,codex", "--install-tools", "--keep-instructions", "--yes"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
+	code := runWith([]string{"setup", "--harness", "claude,codex", "--install-tools", "--update-tools", "--keep-instructions", "--yes"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
-	if captured.Harness != "claude,codex" || !captured.InstallTools || !captured.KeepInstructions || !captured.Yes || !captured.Interactive || captured.Home != "/home/test" || captured.Files == nil || captured.Shell == nil {
+	if captured.Harness != "claude,codex" || !captured.InstallTools || !captured.UpdateTools || !captured.KeepInstructions || !captured.Yes || !captured.Interactive || captured.Home != "/home/test" || captured.Files == nil || captured.Shell == nil {
 		t.Fatalf("options = %+v", captured)
 	}
 }
