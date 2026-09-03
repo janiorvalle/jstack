@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,11 +16,12 @@ import (
 	"github.com/janiorvalle/jstack/internal/harness"
 	"github.com/janiorvalle/jstack/internal/letter"
 	"github.com/janiorvalle/jstack/internal/skills"
+	"github.com/janiorvalle/jstack/internal/tools"
 )
 
 const toolsFixture = "# Tools\n\n" +
 	"## git\n\n- Check: `check-git`\n- Install: `brew install git`\n\n" +
-	"## roast\n\n- Check: `check-roast`\n- Install: `curl roast | sh`\n- Skill install: `roast install-skill`\n- Skill folder: `roast`\n\n" +
+	"## roast\n\n- Repo: https://github.com/x/roast\n- Check: `check-roast`\n- Version: `version-roast`\n- Install: `curl roast | sh`\n- Skill install: `roast install-skill`\n- Skill folder: `roast`\n\n" +
 	"## prose only\n\nno check line\n"
 
 func fixture() fstest.MapFS {
@@ -32,13 +34,27 @@ func fixture() fstest.MapFS {
 	}
 }
 
+// fakeShell is the machine and the network: which checks pass, what the
+// version commands print, and what each tool's source says is latest. A tool
+// missing from latest is one whose lookup failed. The roast install line
+// always lands 1.1.0, the way a real install line installs the newest release.
 type fakeShell struct {
 	present  map[string]bool
 	failing  map[string]bool
+	versions map[string]string
+	latest   map[string]string
 	commands []string
 }
 
-func (f *fakeShell) run(_ context.Context, command string, _ io.Writer) error {
+func withRoast(version string) *fakeShell {
+	return &fakeShell{
+		present:  map[string]bool{"check-git": true, "check-roast": true},
+		versions: map[string]string{"version-roast": "roast " + version},
+		latest:   map[string]string{"roast": "v1.1.0"},
+	}
+}
+
+func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error {
 	f.commands = append(f.commands, command)
 	if f.failing[command] {
 		return errors.New("exit status 1")
@@ -47,9 +63,26 @@ func (f *fakeShell) run(_ context.Context, command string, _ io.Writer) error {
 		return errors.New("exit status 1")
 	}
 	if command == "curl roast | sh" {
+		if f.present == nil {
+			f.present = map[string]bool{}
+		}
+		if f.versions == nil {
+			f.versions = map[string]string{}
+		}
 		f.present["check-roast"] = true
+		f.versions["version-roast"] = "roast 1.1.0"
+	}
+	if output, ok := f.versions[command]; ok {
+		fmt.Fprintln(out, output)
 	}
 	return nil
+}
+
+func (f *fakeShell) lookup(_ context.Context, tool tools.Tool) (string, error) {
+	if latest, ok := f.latest[tool.Title]; ok {
+		return latest, nil
+	}
+	return "", errors.New("dial tcp: connection refused")
 }
 
 func write(t *testing.T, path, content string) {
@@ -85,6 +118,7 @@ func options(t *testing.T, home string, shell *fakeShell, stdin string) (Options
 		Stdin:  strings.NewReader(stdin),
 		Stdout: &out,
 		Shell:  shell.run,
+		Latest: shell.lookup,
 		Now:    func() time.Time { return time.Date(2026, 9, 3, 10, 4, 5, 0, time.UTC) },
 	}, &out
 }
@@ -100,7 +134,7 @@ func homeWithClaude(t *testing.T) string {
 
 func TestNoTerminalPrintsPlanAndRerunFlagsAndChangesNothing(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true}}
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
 	opts, out := options(t, home, shell, "")
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -139,7 +173,7 @@ func TestNoTerminalPrintsPlanAndRerunFlagsAndChangesNothing(t *testing.T) {
 
 func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	if err := Run(context.Background(), opts); err != nil {
@@ -167,14 +201,14 @@ func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ]\n}\n" {
 		t.Fatalf("config = %q", got)
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 	for _, expected := range []string{
 		"skills   1 installed, 1 updated in ~/.claude/skills",
 		"backup   ~/.jstack/backup/20260903-100405/claude/skills",
 		"letter   replaced ~/.claude/CLAUDE.md, old file backed up to ~/.jstack/backup/20260903-100405/claude/CLAUDE.md",
-		"ok roast, skill installed via roast install-skill",
+		"ok roast 1.1.0, skill installed via roast install-skill",
 		"restart the harness so the skills load",
 	} {
 		if !strings.Contains(out.String(), expected) {
@@ -188,7 +222,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	shell := withRoast("1.1.0")
 	opts, _ := options(t, home, shell, "")
 	opts.Yes = true
 	if err := Run(context.Background(), opts); err != nil {
@@ -206,7 +240,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 	if strings.Contains(out.String(), "Install into which harnesses?") {
 		t.Fatalf("asked for harnesses again:\n%s", out.String())
 	}
-	for _, expected := range []string{"Apply to Claude Code, Codex? [Y/n]", "skills   up to date in ~/.claude/skills", "letter   up to date in ~/.claude/CLAUDE.md", "ok roast, skill present"} {
+	for _, expected := range []string{"Apply to Claude Code, Codex? [Y/n]", "skills   up to date in ~/.claude/skills", "letter   up to date in ~/.claude/CLAUDE.md", "ok roast 1.1.0, skill present"} {
 		if !strings.Contains(out.String(), expected) {
 			t.Fatalf("output missing %q:\n%s", expected, out.String())
 		}
@@ -218,7 +252,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 
 func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true}}
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
 	opts, out := options(t, home, shell, "3\n\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
@@ -231,8 +265,8 @@ func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 		"OpenCode  ~/.config/opencode/skills",
 		"Install roast? (curl roast | sh) [y/N]",
 		"installing roast: curl roast | sh",
-		"installed roast",
-		"ok roast, skill installed via roast install-skill",
+		"installed roast 1.1.0",
+		"ok roast 1.1.0, skill installed via roast install-skill",
 	} {
 		if !strings.Contains(out.String(), expected) {
 			t.Fatalf("output missing %q:\n%s", expected, out.String())
@@ -244,14 +278,159 @@ func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"claude",`) || !strings.Contains(got, `"opencode"`) {
 		t.Fatalf("config = %q", got)
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestOutdatedToolIsReportedWithBothVersionsAndTheRerunHint(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	opts, out := options(t, home, shell, "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"outdated roast 1.0.0, latest 1.1.0. update: curl roast | sh",
+		"add --update-tools to also update the outdated tools",
+	} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("output missing %q:\n%s", expected, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "add --install-tools") {
+		t.Fatalf("hint to install with nothing missing:\n%s", out.String())
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast" {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestTerminalYesToUpdateRunsTheInstallLineAndReinstallsTheSkill(t *testing.T) {
+	home := homeWithClaude(t)
+	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
+	shell := withRoast("1.0.0")
+	opts, out := options(t, home, shell, "\ny\n")
+	opts.Interactive = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"Update roast 1.0.0 to 1.1.0? (curl roast | sh) [y/N]",
+		"updating roast 1.0.0 to 1.1.0: curl roast | sh",
+		"updated roast 1.1.0",
+		"ok roast 1.1.0, skill installed via roast install-skill",
+	} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("output missing %q:\n%s", expected, out.String())
+		}
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestTerminalNoToUpdateLeavesItOutdated(t *testing.T) {
+	home := homeWithClaude(t)
+	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
+	shell := withRoast("1.0.0")
+	opts, out := options(t, home, shell, "\nn\n")
+	opts.Interactive = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "outdated roast 1.0.0, latest 1.1.0. update: curl roast | sh, skill present") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast" {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestUpdateToolsWithYesUpdatesTheOutdatedTools(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.UpdateTools = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "updated roast 1.1.0") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestInstallToolsAloneDoesNotUpdate(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.InstallTools = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "outdated roast 1.0.0, latest 1.1.0") || strings.Contains(out.String(), "updating") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestLatestLookupFailureReportsUnknownAndStillApplies(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	shell.latest = nil
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.UpdateTools = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "ok roast 1.0.0, latest unknown, skill installed via roast install-skill") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "outdated") || strings.Contains(out.String(), "updating") {
+		t.Fatalf("offered an update with latest unknown:\n%s", out.String())
+	}
+	if !exists(filepath.Join(home, ".jstack", "config.json")) {
+		t.Fatal("setup did not complete")
+	}
+}
+
+func TestVersionCommandWithNoVersionReportsUnknown(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	shell.versions["version-roast"] = "usage: roast [command]"
+	opts, out := options(t, home, shell, "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "ok roast, version unknown, skill missing") || strings.Contains(out.String(), "--update-tools") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestFailedUpdateIsAnErrorAfterTheRestLanded(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	shell.failing = map[string]bool{"curl roast | sh": true}
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.UpdateTools = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-TOOLS") || !strings.Contains(err.Error(), "roast: `curl roast | sh` failed") {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(out.String(), "FAILED roast") || !exists(filepath.Join(home, ".jstack", "config.json")) {
+		t.Fatalf("output:\n%s", out.String())
 	}
 }
 
 func TestTerminalNoToToolKeepsItMissing(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true}}
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
 	opts, out := options(t, home, shell, "\nn\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
@@ -268,7 +447,7 @@ func TestTerminalNoToToolKeepsItMissing(t *testing.T) {
 func TestHarnessFlagOverridesSavedPicks(t *testing.T) {
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"]}`)
-	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	opts.Harness = "pi"
@@ -289,21 +468,21 @@ func TestHarnessFlagOverridesSavedPicks(t *testing.T) {
 
 func TestInstallToolsWithYesInstallsMissingTools(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true}}
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
 	opts, _ := options(t, home, shell, "")
 	opts.Yes = true
 	opts.InstallTools = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
 
 func TestKeepInstructionsAppendsTheLetter(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	opts.KeepInstructions = true
@@ -323,7 +502,7 @@ func TestKeepInstructionsAppendsTheLetter(t *testing.T) {
 
 func TestCursorRuleGetsTheFrontmatter(t *testing.T) {
 	home := t.TempDir()
-	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	shell := withRoast("1.1.0")
 	opts, _ := options(t, home, shell, "")
 	opts.Yes = true
 	opts.Harness = "cursor"
@@ -360,7 +539,7 @@ func TestNothingFoundWithYesChangesNothing(t *testing.T) {
 
 func TestFailedToolInstallIsAnErrorAfterTheRestLanded(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true}, failing: map[string]bool{"curl roast | sh": true}}
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}, failing: map[string]bool{"curl roast | sh": true}}
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	opts.InstallTools = true
@@ -378,7 +557,8 @@ func TestFailedToolInstallIsAnErrorAfterTheRestLanded(t *testing.T) {
 
 func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-roast": true}}
+	shell := withRoast("1.1.0")
+	shell.present["check-git"] = false
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	opts.InstallTools = true
@@ -389,7 +569,7 @@ func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	if !strings.Contains(out.String(), "FAILED git: installed, but its check still fails") {
 		t.Fatalf("output:\n%s", out.String())
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;brew install git;check-git;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;brew install git;check-git;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
@@ -411,7 +591,7 @@ func TestHasSavedPicks(t *testing.T) {
 
 func TestNoTerminalRerunLineCarriesTheFlagsGiven(t *testing.T) {
 	home := homeWithClaude(t)
-	shell := &fakeShell{present: map[string]bool{"check-git": true}}
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
 	opts, out := options(t, home, shell, "")
 	opts.KeepInstructions = true
 	opts.InstallTools = true
@@ -478,7 +658,7 @@ func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, ".codex", "AGENTS.md")
 	write(t, path, letter.Block("old letter"))
-	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	embedded, err := loadAssets(opts.Files)
 	if err != nil {

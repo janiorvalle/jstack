@@ -26,7 +26,7 @@ Without a terminal, setup prints the plan and the exact flags to apply it, and c
 jstack setup --harness claude,codex --yes   # or --harness all
 ```
 
-Add `--install-tools` to install the missing tools without asking. Add `--keep-instructions` to append the letter to an instructions file that has other content instead of replacing it.
+Add `--install-tools` to install the missing tools without asking, and `--update-tools` to update the outdated ones. Add `--keep-instructions` to append the letter to an instructions file that has other content instead of replacing it.
 
 ## Use it
 
@@ -34,14 +34,14 @@ Restart your harness so the skills load. Then start any multi-step task with `/j
 
 ## Tools
 
-The flow leans on four tools, and `jstack setup` offers each one that's missing:
+The flow leans on four tools, and `jstack setup` offers each one that's missing or behind its latest release:
 
 - **quest**, the work tracker. Claim before touching files, attach evidence at turn-in.
 - **roast**, the independent review gate. A different model reviews the diff until it says well done.
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
 - **agent-browser**, a real browser from the command line, for using what you built like a person would.
 
-Each tool ships its own skill and installs it. `tools.md` has the check and install lines setup runs.
+Each tool ships its own skill and installs it. `tools.md` has the check, version, and install lines setup runs.
 
 ## What's in it
 

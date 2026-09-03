@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 	"github.com/janiorvalle/jstack"
 	"github.com/janiorvalle/jstack/internal/prompt"
 	"github.com/janiorvalle/jstack/internal/setup"
+	"github.com/janiorvalle/jstack/internal/tools"
 	"github.com/janiorvalle/jstack/internal/upgrade"
 )
 
@@ -25,12 +27,13 @@ var version = "dev"
 
 const usage = `jstack puts the skills, the letter, and the tools into the coding agents on this machine.
 
-  jstack setup [--harness claude,codex|all] [--install-tools] [--keep-instructions] [--yes]
+  jstack setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
   jstack upgrade
   jstack version
 
 setup prints the plan first. With a terminal it asks which harnesses and which tools, then applies.
 Without one it changes nothing unless --yes is passed. Picks are saved in ~/.jstack/config.json.
+Each tool is missing, outdated, or current; the latest versions come from GitHub and npm.
 `
 
 func main() {
@@ -88,6 +91,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	flags.SetOutput(stderr)
 	harnesses := flags.String("harness", "", "harnesses to install into: a comma-separated list of claude, codex, opencode, cursor, pi, or all")
 	installTools := flags.Bool("install-tools", false, "install the missing tools without asking")
+	updateTools := flags.Bool("update-tools", false, "update the outdated tools without asking")
 	keepInstructions := flags.Bool("keep-instructions", false, "append the letter to an instructions file that has other content instead of replacing it")
 	yes := flags.Bool("yes", false, "apply without asking; without a terminal nothing changes unless this is set")
 	if err := flags.Parse(args); err != nil {
@@ -110,12 +114,14 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		Home:             home,
 		Harness:          *harnesses,
 		InstallTools:     *installTools,
+		UpdateTools:      *updateTools,
 		KeepInstructions: *keepInstructions,
 		Yes:              *yes,
 		Interactive:      deps.interactive(),
 		Stdin:            stdin,
 		Stdout:           stdout,
 		Shell:            runShell,
+		Latest:           tools.Lookup{Client: &http.Client{Timeout: 5 * time.Second}}.Latest,
 		Now:              time.Now,
 	})
 	if errors.Is(err, prompt.ErrQuit) {
