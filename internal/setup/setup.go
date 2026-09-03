@@ -340,7 +340,7 @@ func printRerun(out io.Writer, home string, picked []harness.Harness, current pl
 		}
 	}
 	for _, entry := range current.harnesses {
-		if entry.letter.Outcome == letter.Replace {
+		if entry.letter.Outcome == letter.Replace && entry.harness.Lead == "" {
 			fmt.Fprintf(out, "  add --keep-instructions to append the letter to %s instead of replacing it\n", display(home, entry.harness.InstructionsPath(home)))
 		}
 	}

@@ -400,11 +400,11 @@ func finishWithSetup(ctx context.Context, rerun func(context.Context, string, io
 	return nil
 }
 
-// rerunSetup runs setup on the new binary with the terminal attached, so the
-// saved harness picks apply without asking and any tool prompt still works.
+// rerunSetup applies setup from the new binary. --yes because an upgrade is
+// the apply, with or without a terminal: the picks are saved, and tools are
+// still never installed without --install-tools.
 func rerunSetup(ctx context.Context, executable string, output io.Writer) error {
-	command := exec.CommandContext(ctx, executable, "setup")
-	command.Stdin = os.Stdin
+	command := exec.CommandContext(ctx, executable, "setup", "--yes")
 	command.Stdout = output
 	var stderr bytes.Buffer
 	command.Stderr = &stderr

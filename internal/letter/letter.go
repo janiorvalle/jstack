@@ -40,19 +40,14 @@ func Block(text string) string {
 // lead is text the harness needs at the top of the file, such as frontmatter.
 // This is an opinionated stack, so a file with other content becomes the letter
 // and the old file is backed up, unless keepExisting appends the block instead.
-// A file that already carries the markers only changes between them.
+// Once the markers are in the file, only the text between them changes, so a
+// choice made with keepExisting holds on every later run.
 func Plan(current, text, lead string, keepExisting bool) Change {
 	block := Block(text)
 	startAt := strings.Index(current, Start)
 	endAt := strings.Index(current, End)
 	if startAt >= 0 && endAt > startAt {
-		head := current[:startAt]
-		tail := current[endAt+len(End):]
-		outside := strings.TrimSpace(head + tail)
-		if outside != "" && !keepExisting && outside != strings.TrimSpace(lead) {
-			return Change{Outcome: Replace, Content: lead + block}
-		}
-		updated := head + strings.TrimRight(block, "\n") + tail
+		updated := current[:startAt] + strings.TrimRight(block, "\n") + current[endAt+len(End):]
 		if updated == current {
 			return Change{Outcome: Same, Content: current}
 		}
@@ -61,7 +56,7 @@ func Plan(current, text, lead string, keepExisting bool) Change {
 	if strings.TrimSpace(current) == "" {
 		return Change{Outcome: Create, Content: lead + block}
 	}
-	if keepExisting {
+	if keepExisting && strings.HasPrefix(current, lead) {
 		return Change{Outcome: Append, Content: strings.TrimRight(current, "\n") + "\n\n" + block}
 	}
 	return Change{Outcome: Replace, Content: lead + block}
