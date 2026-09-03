@@ -70,7 +70,7 @@ Drives a real browser from the command line. This is how an agent uses a web UI 
 - Repo: https://github.com/vercel-labs/agent-browser
 - Check: `command -v agent-browser`
 - Version: `agent-browser --version`
-- Install: `npm install -g agent-browser@0.36.0 && agent-browser install`
+- Install: `npm install -g agent-browser@0.35.0 && agent-browser install`
 - Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json`, because jstack doesn't control the tool. `jstack setup` installs it like every other skill. That skill is a stub that runs `agent-browser skills get core`, so the instructions agents follow ship inside the CLI, which is why the install line pins the CLI version and `scripts/tool-bump.py` moves it through a PR.
 
 Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not part of this stack, and it stays wherever Codex put it.
