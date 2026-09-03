@@ -33,7 +33,7 @@ python3 skills/setup-jstack/scripts/setup.py --skill voice --skill how --apply
 
 ## Adding a vendored skill
 
-One entry in `vendor.json`: repo, path inside it, pinned commit, license, and where the license file is. Then `python3 scripts/vendor-bump.py restore <name>` copies the folder into `skills/` at that commit, license file alongside. The weekly vendor-bump workflow opens a PR whenever upstream moves. Never edit a vendored skill's text; the next bump would overwrite it.
+One entry in `vendor.json`: repo, path inside it, pinned commit, license, and where the license file is. The pinned commit is the last upstream commit that touched the folder, not the repo head, or the first bump PR only moves the pin. Then `python3 scripts/vendor-bump.py restore <name>` copies the folder into `skills/` at that commit, license file alongside. The weekly vendor-bump workflow opens a PR whenever upstream moves. Never edit a vendored skill's text; the next bump would overwrite it.
 
 ## Adding a tool
 
