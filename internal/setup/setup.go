@@ -398,9 +398,12 @@ func toolIntent(status toolStatus) string {
 
 // toolState names one of the three states, missing, outdated, or current,
 // with the versions that decided it. Latest unknown is current with a note:
-// setup never blocks on a lookup.
+// setup never blocks on a lookup. A missing prerequisite says so and where
+// to look, since there is no line setup could run for it.
 func toolState(status toolStatus) string {
 	switch {
+	case !status.present && status.tool.Command == "":
+		return fmt.Sprintf("missing %s, a prerequisite setup never installs. get it by hand, %s", status.tool.Title, status.tool.Install)
 	case !status.present:
 		return fmt.Sprintf("missing %s. install: %s", status.tool.Title, status.tool.Install)
 	case status.outdated():

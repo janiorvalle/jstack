@@ -4,14 +4,18 @@ jstack expects a few tools on the machine. Each one ships its own skill, which t
 
 If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. Then read the skill the tool installed and follow it.
 
-`jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. git and gh have no `Version` line, so setup never offers to update them.
+`jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. A section with a `Check` line and no `Install` line is a prerequisite: setup checks for it and points here when it's missing, but never installs or updates it. git and gh are the prerequisites.
 
 ## git and gh
 
-Version control and the PR host CLI. Every flow assumes both.
+Version control and the PR host CLI. Every flow assumes both. Setup checks for them and never installs them: the right command depends on the OS and its package manager, on Linux it needs sudo, and `gh auth login` is a conversation with GitHub that only you can have. Get them by hand, then rerun `jstack setup`.
 
 - Check: `command -v git && command -v gh && gh auth status`
-- Install: `brew install git gh`, then `gh auth login`
+- macOS: `brew install git gh`
+- Debian and Ubuntu: `sudo apt install git gh`
+- Fedora: `sudo dnf install git gh`
+- Anything else: https://github.com/cli/cli#installation covers gh, and git comes from the same package manager
+- Then `gh auth login`
 
 ## The work tracker
 

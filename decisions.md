@@ -66,3 +66,13 @@ Setup used to know two states per tool, missing or present, so a tool that was i
 `tools.md` carries a `Version` line per tool, the command that prints the installed version, in the same parsed format as `Check`. The latest version comes from the GitHub releases API through each section's `Repo` line, and from the npm registry when the install line is `npm install -g`, which today is only agent-browser. That is five requests per run, well inside the sixty an hour GitHub allows without a token, and they run at the same time with a five-second timeout so a dead network costs one wait, not five. A lookup that fails shows "latest unknown" and setup carries on: the network is never a reason not to install skills. git and gh have no `Version` line, because they come from the system package manager and updating them is not setup's job.
 
 Versions are compared with `golang.org/x/mod/semver`, already a dependency for `jstack upgrade`, after adding the leading v the tools leave off when they print.
+
+## git and gh are prerequisites, checked but never installed
+
+Written 2026-09-03, for quest 410.
+
+The git and gh section of `tools.md` installed with `brew install git gh`, so `jstack setup --install-tools` on a Linux box ran a command that doesn't exist there, then reported the check still failing. The quest offered two shapes: one install line per OS that the binary picks by `runtime.GOOS`, or git and gh as a manual step with only the curl-based tools auto-installed. The second one.
+
+git and gh aren't tools the flow installs, they're what the flow stands on. Nothing gets cloned without git, and `gh auth login` is a conversation with GitHub that setup can't have for you. On Linux the right command depends on the distro, apt or dnf or pacman, and every one of them wants sudo; a setup tool running sudo on someone's box unasked is the wrong shape. An OS-switched install line would need a distro switch next, and that's the tell.
+
+The rule: a `tools.md` section with a `Check` line and no `Install` line is a prerequisite. Setup checks for it, reports it as missing with a link to its own heading in `tools.md` on GitHub, and never offers to run anything for it, with or without a terminal. The section lists the ways to get it as prose, one line per platform. The curl-based tools and agent-browser keep their install lines, because those lines are the same on every OS the binary ships for.
