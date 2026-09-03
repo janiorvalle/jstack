@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -17,6 +18,7 @@ func source() fstest.MapFS {
 		"folder/README":   {Data: []byte("no SKILL.md, not a skill\n")},
 		"why/SKILL.md":    {Data: []byte("why\n")},
 		"why/refs/one.md": {Data: []byte("one\n")},
+		"why/scan.sh":     {Data: []byte("#!/bin/sh\necho scan\n")},
 	}
 }
 
@@ -114,6 +116,17 @@ func TestApplyCopiesNewBacksUpChangedAndLeavesLocalAlone(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "voice", "old-only.md")); !os.IsNotExist(err) {
 		t.Fatalf("old-only.md survived in dest: %v", err)
+	}
+	if runtime.GOOS != "windows" {
+		for path, want := range map[string]os.FileMode{
+			filepath.Join(dest, "why", "scan.sh"):  0o755,
+			filepath.Join(dest, "why", "SKILL.md"): 0o644,
+		} {
+			info, err := os.Stat(path)
+			if err != nil || info.Mode().Perm() != want {
+				t.Fatalf("%s mode = %v, %v; want %o", path, info.Mode().Perm(), err, want)
+			}
+		}
 	}
 	after, err := PlanFor(source(), dest)
 	if err != nil {

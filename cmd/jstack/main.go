@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -43,6 +42,7 @@ type dependencies struct {
 	upgrade     func(context.Context, string, io.Writer) error
 	home        func() (string, error)
 	interactive func() bool
+	lookPath    func(string) (string, error)
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -51,6 +51,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		upgrade:     upgrade.Run,
 		home:        os.UserHomeDir,
 		interactive: stdinIsTerminal,
+		lookPath:    exec.LookPath,
 	})
 }
 
@@ -99,6 +100,10 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	home, err := deps.home()
 	if err != nil {
 		fmt.Fprintf(stderr, "jstack: [JSTACK-HOME] cannot find the home directory: %v; set HOME and rerun\n", err)
+		return 1
+	}
+	if _, err := deps.lookPath("sh"); err != nil {
+		fmt.Fprintln(stderr, "jstack: [JSTACK-SHELL] the tool checks in tools.md are POSIX shell lines and no `sh` is on PATH; install one (Git for Windows ships sh.exe in its usr/bin folder) and rerun")
 		return 1
 	}
 	err = deps.setup(ctx, setup.Options{
@@ -154,12 +159,10 @@ func runUpgradeCleanup(ctx context.Context, args []string, stderr io.Writer) int
 	return 0
 }
 
+// runShell runs one tools.md line. Those lines are POSIX shell on every
+// platform, so they always go through sh.
 func runShell(ctx context.Context, command string, output io.Writer) error {
-	shell, flag := "sh", "-c"
-	if runtime.GOOS == "windows" {
-		shell, flag = "cmd", "/C"
-	}
-	process := exec.CommandContext(ctx, shell, flag, command)
+	process := exec.CommandContext(ctx, "sh", "-c", command)
 	process.Stdin = os.Stdin
 	process.Stdout = output
 	process.Stderr = output

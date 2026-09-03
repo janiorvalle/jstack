@@ -137,14 +137,15 @@ func Run(ctx context.Context, opts Options) error {
 		return nil
 	}
 	stamp := opts.Now().Format("20060102-150405")
-	if err := applyPlan(ctx, opts, embedded, current, stamp); err != nil {
+	if err := applyHarnesses(opts, embedded, current, stamp); err != nil {
 		return err
 	}
 	if err := saveConfig(opts.Home, Config{Harnesses: harness.Keys(picked)}); err != nil {
 		return err
 	}
+	toolsErr := applyTools(ctx, opts, current)
 	fmt.Fprintf(out, "\nharness picks saved to %s\nrestart the harness so the skills load.\n", display(opts.Home, configPath(opts.Home)))
-	return nil
+	return toolsErr
 }
 
 func loadAssets(files fs.FS) (assets, error) {
@@ -389,7 +390,7 @@ func askTools(ask *prompt.Prompt, opts Options, current plan) error {
 	return nil
 }
 
-func applyPlan(ctx context.Context, opts Options, embedded assets, current plan, stamp string) error {
+func applyHarnesses(opts Options, embedded assets, current plan, stamp string) error {
 	out := opts.Stdout
 	for _, entry := range current.harnesses {
 		backup := filepath.Join(opts.Home, ".jstack", "backup", stamp, entry.harness.Key)
@@ -401,11 +402,24 @@ func applyPlan(ctx context.Context, opts Options, embedded assets, current plan,
 			return err
 		}
 	}
-	fmt.Fprintln(out, "\ntools")
-	for _, status := range current.tools {
-		applyTool(ctx, opts, status, out)
-	}
 	return nil
+}
+
+// applyTools installs what was agreed and reports every tool. The skills and
+// the letter are already in place, so a tool that fails is reported at the end
+// instead of stopping the run.
+func applyTools(ctx context.Context, opts Options, current plan) error {
+	fmt.Fprintln(opts.Stdout, "\ntools")
+	var failures []error
+	for _, status := range current.tools {
+		if err := applyTool(ctx, opts, status, opts.Stdout); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	return fmt.Errorf("[JSTACK-TOOLS] the skills and the letter are in place, but %d tool step(s) failed:\n%w", len(failures), errors.Join(failures...))
 }
 
 func applySkills(embedded assets, entry harnessPlan, home, backup string, out io.Writer) error {
@@ -461,33 +475,38 @@ func letterPast(outcome letter.Outcome) string {
 	return "updated between the markers in"
 }
 
-func applyTool(ctx context.Context, opts Options, status toolStatus, out io.Writer) {
+func applyTool(ctx context.Context, opts Options, status toolStatus, out io.Writer) error {
 	if !status.present {
 		if !status.install {
 			fmt.Fprintf(out, "  missing %s. install: %s\n", status.tool.Title, status.tool.Install)
-			return
+			return nil
 		}
 		fmt.Fprintf(out, "  installing %s: %s\n", status.tool.Title, status.tool.Command)
 		if err := opts.Shell(ctx, status.tool.Command, out); err != nil {
-			fmt.Fprintf(out, "  FAILED %s: %v. run the install line by hand, then rerun jstack setup\n", status.tool.Title, err)
-			return
+			fmt.Fprintf(out, "  FAILED %s: %v\n", status.tool.Title, err)
+			return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", status.tool.Title, status.tool.Command, err)
+		}
+		if err := opts.Shell(ctx, status.tool.Check, io.Discard); err != nil {
+			fmt.Fprintf(out, "  FAILED %s: installed, but its check still fails\n", status.tool.Title)
+			return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; finish the install line by hand (%s), then rerun jstack setup", status.tool.Title, status.tool.Command, status.tool.Check, status.tool.Install)
 		}
 		fmt.Fprintf(out, "  installed %s\n", status.tool.Title)
 	}
 	line := "  ok " + status.tool.Title
 	if status.tool.SkillInstall == "" || status.tool.SkillFolder == "" {
 		fmt.Fprintln(out, line)
-		return
+		return nil
 	}
 	if status.skillPresent {
 		fmt.Fprintln(out, line+", skill present")
-		return
+		return nil
 	}
 	if err := opts.Shell(ctx, status.tool.SkillInstall, io.Discard); err != nil {
 		fmt.Fprintf(out, "%s, skill install FAILED via %s: %v\n", line, status.tool.SkillInstall, err)
-		return
+		return fmt.Errorf("%s: `%s` failed: %v; run it by hand so the tool's skill is in place", status.tool.Title, status.tool.SkillInstall, err)
 	}
 	fmt.Fprintf(out, "%s, skill installed via %s\n", line, status.tool.SkillInstall)
+	return nil
 }
 
 func copyFile(source, destination string) error {

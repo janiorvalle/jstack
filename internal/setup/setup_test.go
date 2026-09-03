@@ -32,13 +32,20 @@ func fixture() fstest.MapFS {
 
 type fakeShell struct {
 	present  map[string]bool
+	failing  map[string]bool
 	commands []string
 }
 
 func (f *fakeShell) run(_ context.Context, command string, _ io.Writer) error {
 	f.commands = append(f.commands, command)
+	if f.failing[command] {
+		return errors.New("exit status 1")
+	}
 	if strings.HasPrefix(command, "check-") && !f.present[command] {
 		return errors.New("exit status 1")
+	}
+	if command == "curl roast | sh" {
+		f.present["check-roast"] = true
 	}
 	return nil
 }
@@ -235,7 +242,7 @@ func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"claude",`) || !strings.Contains(got, `"opencode"`) {
 		t.Fatalf("config = %q", got)
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
@@ -287,7 +294,7 @@ func TestInstallToolsWithYesInstallsMissingTools(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
@@ -346,5 +353,41 @@ func TestNothingFoundWithYesChangesNothing(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "No harness picked. Nothing changed.") || exists(filepath.Join(home, ".jstack")) {
 		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestFailedToolInstallIsAnErrorAfterTheRestLanded(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, failing: map[string]bool{"curl roast | sh": true}}
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.InstallTools = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-TOOLS") || !strings.Contains(err.Error(), "roast: `curl roast | sh` failed") {
+		t.Fatalf("err = %v", err)
+	}
+	if !exists(filepath.Join(home, ".claude", "skills", "how", "SKILL.md")) || !exists(filepath.Join(home, ".jstack", "config.json")) {
+		t.Fatal("skills or config missing after a tool failure")
+	}
+	if !strings.Contains(out.String(), "FAILED roast") || !strings.Contains(out.String(), "restart the harness") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := &fakeShell{present: map[string]bool{"check-roast": true}}
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.InstallTools = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "git: `brew install git` ran, but the check `check-git` still fails") {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(out.String(), "FAILED git: installed, but its check still fails") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;brew install git;check-git;roast install-skill" {
+		t.Fatalf("commands = %v", shell.commands)
 	}
 }

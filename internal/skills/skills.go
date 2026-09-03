@@ -175,6 +175,15 @@ func copyDir(source fs.FS, name, target string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(destination, content, 0o644)
+		return os.WriteFile(destination, content, fileMode(content))
 	})
+}
+
+// fileMode keeps skill scripts runnable. The embedded tree carries no modes,
+// and a file that starts with a shebang is one the skill tells the agent to run.
+func fileMode(content []byte) os.FileMode {
+	if bytes.HasPrefix(content, []byte("#!")) {
+		return 0o755
+	}
+	return 0o644
 }
