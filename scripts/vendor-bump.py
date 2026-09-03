@@ -7,8 +7,9 @@
 A skill's version is the last upstream commit that touched its folder, not the
 repo head, so an unrelated upstream commit never moves the pin. Both commands
 replace skills/<name> wholesale, so upstream deletions land too, and put the
-upstream license file next to SKILL.md. bump prints one JSON object for the
-workflow to read: name, repo, path, old, new, changed.
+upstream license file next to SKILL.md. bump always copies, so a hand edit to a
+vendored file shows up as a change even when the pin didn't move. It prints one
+JSON object for the workflow to read: name, repo, path, old, new, changed.
 
 Set GITHUB_TOKEN to raise the API rate limit. The vendor-bump workflow does.
 """
@@ -29,29 +30,40 @@ def upstream_head(entry):
     """The last commit on the default branch that touched the skill folder."""
     commits = json.loads(github(f"https://api.github.com/repos/{entry['repo']}/commits?path={entry['path']}&per_page=1"))
     if not commits:
-        sys.exit(f"ERROR {entry['name']}: no commit on {entry['repo']} touches {entry['path']}")
+        sys.exit(f"ERROR {entry['name']}: no commit on {entry['repo']} touches {entry['path']}. Upstream moved or removed the folder. Fix the path in vendor.json, or drop the entry and the skill.")
     return commits[0]["sha"]
 
 def copy_from_upstream(entry, ref):
-    """Replace skills/<name> with the upstream folder at ref, license file alongside."""
+    """Replace skills/<name> with the upstream folder at ref, license file alongside. Returns whether any file changed."""
     tarball = github(f"https://codeload.github.com/{entry['repo']}/tar.gz/{ref}")
     folder = entry["path"].strip("/") + "/"
     target = os.path.join(SKILLS, entry["name"])
-    shutil.rmtree(target, ignore_errors=True)
-    found = False
+    staging = target + ".incoming"
+    shutil.rmtree(staging, ignore_errors=True)
     with tarfile.open(fileobj=io.BytesIO(tarball), mode="r:gz") as tar:
         for member in tar.getmembers():
             inside = member.name.split("/", 1)[1] if "/" in member.name else ""
             if inside == entry["license_file"] and member.isfile():
-                write(os.path.join(target, "LICENSE"), tar.extractfile(member).read(), member.mode)
-            if not inside.startswith(folder) or not member.isfile():
-                continue
-            found = True
-            write(os.path.join(target, inside[len(folder):]), tar.extractfile(member).read(), member.mode)
-    if not found:
-        sys.exit(f"ERROR {entry['name']}: {entry['path']} is not in {entry['repo']} at {ref[:12]}")
-    if not os.path.isfile(os.path.join(target, "LICENSE")):
-        sys.exit(f"ERROR {entry['name']}: {entry['license_file']} is not in {entry['repo']} at {ref[:12]}")
+                write(os.path.join(staging, "LICENSE"), tar.extractfile(member).read(), member.mode)
+            if inside.startswith(folder) and member.isfile():
+                write(os.path.join(staging, inside[len(folder):]), tar.extractfile(member).read(), member.mode)
+    if not os.path.isfile(os.path.join(staging, "SKILL.md")):
+        sys.exit(f"ERROR {entry['name']}: no SKILL.md under {entry['path']} in {entry['repo']} at {ref[:12]}. "
+                 "Upstream moved or removed the folder. Fix the path in vendor.json, or drop the entry and the skill.")
+    if not os.path.isfile(os.path.join(staging, "LICENSE")):
+        sys.exit(f"ERROR {entry['name']}: {entry['license_file']} is not in {entry['repo']} at {ref[:12]}. Fix license_file in vendor.json.")
+    changed = tree(staging) != tree(target)
+    shutil.rmtree(target, ignore_errors=True)
+    os.rename(staging, target)
+    return changed
+
+def tree(folder):
+    files = {}
+    for dirpath, _, names in os.walk(folder):
+        for name in names:
+            path = os.path.join(dirpath, name)
+            files[os.path.relpath(path, folder)] = open(path, "rb").read()
+    return files
 
 def write(path, data, mode):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -72,13 +84,13 @@ def bump(name):
     vendor = load()
     entry = entry_named(vendor, name)
     old, new = entry["ref"], upstream_head(entry)
+    changed = copy_from_upstream(entry, new) or new != old
     if new != old:
-        copy_from_upstream(entry, new)
         entry["ref"] = new
         with open(VENDOR, "w") as f:
             json.dump(vendor, f, indent=2)
             f.write("\n")
-    print(json.dumps({"name": name, "repo": entry["repo"], "path": entry["path"], "old": old, "new": new, "changed": new != old}))
+    print(json.dumps({"name": name, "repo": entry["repo"], "path": entry["path"], "old": old, "new": new, "changed": changed}))
 
 def restore(name):
     entry = entry_named(load(), name)

@@ -64,9 +64,15 @@ jobs:
           repo=$(jq -r .repo "$RUNNER_TEMP/bump.json")
           folder=$(jq -r .path "$RUNNER_TEMP/bump.json")
           title="chore(vendor): bump $SKILL to ${new:0:7}"
-          body="Upstream moved \`$folder\` in $repo. This is that folder copied verbatim at the new commit, plus the pin in \`vendor.json\`.
+          if [ "$old" = "$new" ]; then
+            title="chore(vendor): restore $SKILL at ${new:0:7}"
+            body="The committed copy of \`skills/$SKILL\` had drifted from \`$folder\` in $repo at the pinned commit. This puts the verbatim copy back."
+          else
+            body="Upstream moved \`$folder\` in $repo. This is that folder copied verbatim at the new commit, plus the pin in \`vendor.json\`.
 
-          Commits: https://github.com/$repo/compare/$old...$new
+          Commits: https://github.com/$repo/compare/$old...$new"
+          fi
+          body="$body
 
           Opened by the vendor-bump workflow. CI doesn't run on PRs the workflow token opens, so run \`make verify\` before merging."
           git config user.name "github-actions[bot]"
