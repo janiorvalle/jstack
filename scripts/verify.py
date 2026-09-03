@@ -67,7 +67,7 @@ def main():
     start, end = "<!-- index:start -->", "<!-- index:end -->"
     current = mode.split(start, 1)[1].split(end, 1)[0].strip()
     if current != build_index.build().strip():
-        problems.append("skills/jstack-mode/SKILL.md: index is stale, run make index")
+        problems.append("AGENTS.md: workflows table is stale, run make index")
     if problems:
         print("\n".join(problems)); sys.exit(1)
     print("verify: ok")
