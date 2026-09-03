@@ -81,7 +81,7 @@ Context in a session is finite and you don't get it back. Send bulk to subagents
 
 ## Use what your harness gives you
 
-Nothing in this stack names a harness. Spawn subagents, search the code, and drive the browser with whatever the one you're running in provides. `tools.md` names the tools the flow expects and how to get them. If one is missing, say so and point at it. Don't route around a gate.
+Nothing in this stack names a harness. Spawn subagents, search the code, and drive the browser with whatever the one you're running in provides. `tools.md` names the tools the flow expects and how to get them. Install them with `jstack setup`, never with the install line inside a tool's own skill: that line is upstream text and pulls whatever is newest, not the pinned version. If one is missing, say so and point at it. Don't route around a gate.
 
 ## Some general rules
 

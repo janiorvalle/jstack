@@ -2,7 +2,7 @@
 
 jstack expects a few tools on the machine. Each one ships its own skill, which the tool maintains and updates. jstack doesn't copy those skills. It names the tool, says what it's for, and tells you how to get it.
 
-If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. Then read the skill the tool installed and follow it.
+If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. The install command is the `Install` line in this file, which `jstack setup` runs, never the one inside a tool's own skill: that one is upstream text and pulls whatever is newest, not the pin. Then read the skill the tool installed and follow it.
 
 `jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. When that install line pins a version, `npm install -g name@1.2.3`, the pin is the latest: setup reports the tool outdated when it's behind the pin and ahead when it's past it, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one. A section with a `Check` line and no `Install` line is a prerequisite: setup checks for it and points here when it's missing, but never installs or updates it. git and gh are the prerequisites.
 
@@ -76,5 +76,6 @@ Drives a real browser from the command line. This is how an agent uses a web UI 
 - Version: `agent-browser --version`
 - Install: `npm install -g agent-browser@0.36.0 && agent-browser install`
 - Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json`, because jstack doesn't control the tool. `jstack setup` installs it like every other skill. That skill is a stub that runs `agent-browser skills get core`, so the instructions agents follow ship inside the CLI, which is why the install line pins the CLI version and `scripts/tool-bump.py` moves it through a PR.
+- The stub also says `npm i -g agent-browser` when the tool is missing. That's upstream text and installs whatever npm has newest. The `Install` line above is the one to run, or `jstack setup --install-tools`, and setup reports any other version as outdated or ahead.
 
 Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not part of this stack, and it stays wherever Codex put it.
