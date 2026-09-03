@@ -4,8 +4,8 @@
   vendor-bump.py bump <name>     copy the skill at its upstream head and move the pin, if upstream moved
   vendor-bump.py restore <name>  copy the skill at its pinned ref, for a fresh or suspect checkout
 
-A skill's version is the last upstream commit that touched its folder, not the
-repo head, so an unrelated upstream commit never moves the pin. Both commands
+A skill's version is the last upstream commit that touched its folder or its
+license file, not the repo head, so an unrelated upstream commit never moves the pin. Both commands
 replace skills/<name> wholesale, so upstream deletions land too, and put the
 upstream license file next to SKILL.md. bump always copies, so a hand edit to a
 vendored file shows up as a change even when the pin didn't move. It prints one
@@ -27,11 +27,18 @@ def github(url):
     return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60).read()
 
 def upstream_head(entry):
-    """The last commit on the default branch that touched the skill folder."""
-    commits = json.loads(github(f"https://api.github.com/repos/{entry['repo']}/commits?path={entry['path']}&per_page=1"))
-    if not commits:
+    """The last commit on the default branch that touched the skill folder or its license file."""
+    folder = last_commit(entry["repo"], entry["path"])
+    if not folder:
         sys.exit(f"ERROR {entry['name']}: no commit on {entry['repo']} touches {entry['path']}. Upstream moved or removed the folder. Fix the path in vendor.json, or drop the entry and the skill.")
-    return commits[0]["sha"]
+    license = last_commit(entry["repo"], entry["license_file"])
+    if not license:
+        sys.exit(f"ERROR {entry['name']}: no commit on {entry['repo']} touches {entry['license_file']}. Fix license_file in vendor.json.")
+    return max(folder, license, key=lambda c: c["commit"]["committer"]["date"])["sha"]
+
+def last_commit(repo, path):
+    commits = json.loads(github(f"https://api.github.com/repos/{repo}/commits?path={path}&per_page=1"))
+    return commits[0] if commits else None
 
 def copy_from_upstream(entry, ref):
     """Replace skills/<name> with the upstream folder at ref, license file alongside. Returns whether any file changed."""
