@@ -37,7 +37,7 @@ Restart your harness so the skills load. Then start any multi-step task with `/j
 The flow leans on four tools, and `jstack setup` offers each one that's missing or behind its latest release:
 
 - **quest**, the work tracker. Claim before touching files, attach evidence at turn-in.
-- **roast**, the independent review gate. A different model reviews the diff until it says well done.
+- **roast**, the independent review gate. A different model reviews the diff until it says well done. It needs TruffleHog for its secret scan, and setup installs that too.
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
 - **agent-browser**, a real browser from the command line, for using what you built like a person would.
 
