@@ -4,7 +4,7 @@ Thanks for pitching in. jstack is opinionated on purpose, so most contributions 
 
 ## Setup
 
-You need git, python3, and gitleaks. Nothing else.
+You need git, Go 1.24 or newer, python3, and gitleaks. Nothing else.
 
 ```sh
 make install-hooks
@@ -18,7 +18,7 @@ That points git at `.githooks/`, where the pre-commit hook runs gitleaks and the
 make verify
 ```
 
-It checks that every skill has frontmatter with a name matching its folder, that the index in `skills/jstack-mode/SKILL.md` matches the description lines, and that nothing carries an em dash or names a specific harness. If you change a description line, run `make index` and commit the result.
+It formats, builds, vets, and tests the binary, then checks that every skill has frontmatter with a name matching its folder, that the workflows table in `AGENTS.md` matches the description lines, and that nothing carries an em dash or names a specific harness. If you change a description line, run `make index` and commit the result.
 
 ## Writing a skill
 

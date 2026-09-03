@@ -18,7 +18,7 @@ HARNESS = re.compile(r"\b(Claude Code|Claude|Cursor|Codex|Agent tool|subagent_ty
 # Work identifiers that must never appear in this repo. The generic procedure lives
 # here; anything customer- or employer-specific belongs in a private skills folder.
 DENY = re.compile(r"(?i)\b(streamlyne|ekualiti|fundfit|kuali|janior-devbox|100\.57\.65\.112|Documents/github)\b")
-HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/setup-jstack/SKILL.md", "skills/setup-jstack/scripts/setup.py"}
+HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/setup-jstack/SKILL.md"}
 SELF = "scripts/verify.py"
 VENDORED = build_index.vendored()
 

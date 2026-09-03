@@ -1,35 +1,59 @@
 ---
 name: setup-jstack
-description: "Use to put jstack on a machine or bring it up to date. Installs the skills into your harness's skills folder, including the vendored third-party ones, checks every tool the flow expects and offers to install what's missing, installs each tool's own skill, and reports what's still not there."
+description: "Use to put jstack on a machine or bring it up to date. Runs the jstack binary's setup: it finds the coding agents on the machine, shows the plan, asks which harnesses to install into, copies the skills, puts the letter in each instructions file, and offers the tools the flow needs. Reports what's still missing."
 ---
 
 # Setup jstack
 
-One command on a fresh machine. Everything the flow needs ends up installed, or you get a list of what's still missing and how to get it.
+`jstack setup` is the whole thing. The binary carries the skills, the letter, and the tool list inside it, so it runs from any directory with no checkout on the machine.
 
-## What it does, in order
+## Get the binary
 
-1. **Skills.** Copies `skills/` into the harness's skills folder. Backs up anything it overwrites. Never touches a skill it doesn't own. The vendored third-party skills are in `skills/` too, so nothing is fetched from the network.
-2. **Instructions.** Makes the harness's user-level instructions file the letter. `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, or `~/.cursor/rules/jstack.mdc` with `alwaysApply` set. The letter goes in as a block between `<!-- jstack:start -->` and `<!-- jstack:end -->`. If the file already has other content, it's replaced and the old file is backed up next to it as `.bak-<timestamp>`, because this is an opinionated stack and two letters side by side is the drift it exists to prevent. Pass `--keep-instructions` to append the block and leave your file alone instead. Later runs only change the text between the markers. This is what makes the mode always on, since the harnesses have no plugin hook of their own.
-3. **Tools.** For each tool in `tools.md`, runs its check. Missing tools get listed with their install line. Nothing gets installed unless you say so, or the session was already given permission to set things up.
-4. **Tool skills.** For each tool that's present, runs its skill install command if the skill isn't in the folder yet. The tool owns that skill and keeps it current.
-5. **Hooks.** If you're in the jstack checkout, points git at `.githooks/`.
-6. **Report.** What changed, what was backed up, what's missing, and a reminder to restart the harness.
-
-## Defaults
-
-- Source: the jstack checkout you're in, or `$JSTACK_REPO`.
-- Target: `--agent auto` picks the harness you're running in. `--agent both` does Codex and Claude Code. `--agent all` adds Cursor. `--agent cursor` on its own works too.
-- Dry run unless `--apply`.
-- Tools are never installed unless `--install-tools` is passed. Ask the human first.
-- An existing instructions file is replaced and backed up unless `--keep-instructions` is passed.
-
-```bash
-python3 skills/setup-jstack/scripts/setup.py --agent auto                    # dry run, shows everything it would do
-python3 skills/setup-jstack/scripts/setup.py --agent both --apply
-python3 skills/setup-jstack/scripts/setup.py --agent auto --apply --install-tools
-python3 skills/setup-jstack/scripts/setup.py --skill voice --skill how --apply
+```sh
+curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh
 ```
+
+The installer verifies the checksum, puts `jstack` in `~/.local/bin`, and runs `jstack setup` once. When it's already installed, `jstack upgrade` fetches the newest release and reruns setup with the saved picks.
+
+## What setup does, in order
+
+1. **Plan.** Lists the harnesses it knows and which ones it found on the machine. For each picked harness: which skills are new, changed, or the same, which local skills it will leave alone, and what happens to the instructions file. Then each tool from `tools.md`: present, or missing with its install line.
+2. **Ask.** With a terminal, a numbered list of harnesses with the found ones preselected, then a y/N per missing tool. Without a terminal, it stops here, prints the exact rerun line, and changes nothing.
+3. **Skills.** Copies the embedded skills into each picked harness's skills folder. A skill that differs is moved to `~/.jstack/backup/<stamp>/<harness>/skills/` first. A skill jstack doesn't own is never touched.
+4. **Letter.** Puts `AGENTS.md` into each picked harness's instructions file between `<!-- jstack:start -->` and `<!-- jstack:end -->`. A file with other content is replaced by the letter and backed up next to the skill backups, because this is an opinionated stack and two letters side by side is the drift it exists to prevent. `--keep-instructions` appends the block and leaves the file alone. Once the markers are in the file, later runs only change the text between them, so that choice holds without passing the flag again. The Cursor rule has to start with jstack's frontmatter, so a `jstack.mdc` without it is replaced and backed up even with the flag. The plan names any file that would be replaced.
+5. **Tools.** Installs the tools the human said yes to, then runs each present tool's own skill install if its skill isn't there yet. Nothing is installed without a yes or `--install-tools`.
+6. **Picks.** Saves the harnesses to `~/.jstack/config.json`. Later runs use them without asking. `--harness` overrides and replaces them.
+7. **Report.** What was installed, updated, backed up, or left missing, and a reminder to restart the harness.
+
+## From an agent
+
+You have no terminal, so `jstack setup` prints the plan and changes nothing. Read it and bring the decision to the human in the fixed shape:
+
+**Decide:** which harnesses jstack installs into.
+**Options:** the harnesses the plan found, one line each with what changes there.
+**Recommendation:** the found ones, unless the plan shows an instructions file with other content, in which case say so and offer `--keep-instructions`.
+
+Then rerun with what they chose:
+
+```sh
+jstack setup --harness claude,codex --yes
+jstack setup --harness all --yes --install-tools
+jstack setup --harness claude --yes --keep-instructions
+```
+
+Read the report back to them. If a tool is still missing, quote its install line. If the run changed anything, they need to restart the harness.
+
+## Harnesses
+
+| Key | Harness | Found by | Skills go to | Letter goes to |
+| --- | --- | --- | --- | --- |
+| `claude` | Claude Code | `~/.claude` | `~/.claude/skills` | `~/.claude/CLAUDE.md` |
+| `codex` | Codex | `~/.codex` | `~/.codex/skills` | `~/.codex/AGENTS.md` |
+| `opencode` | OpenCode | `~/.config/opencode` | `~/.config/opencode/skills` | `~/.config/opencode/AGENTS.md` |
+| `cursor` | Cursor | `~/.cursor` | `~/.cursor/skills` | `~/.cursor/rules/jstack.mdc`, with `alwaysApply` |
+| `pi` | Pi | `~/.pi/agent` | `~/.pi/agent/skills` | `~/.pi/agent/AGENTS.md` |
+
+OpenCode, Cursor, and Pi also read skills from Claude Code's folder or the shared `~/.agents/skills` folder. OpenCode was checked with the same skill in both folders and lists it once, keyed by name. Cursor and Pi are unverified. `decisions.md` has what was checked.
 
 ## Adding a vendored skill
 
@@ -37,8 +61,8 @@ One entry in `vendor.json`: repo, path inside it, pinned commit, license, and wh
 
 ## Adding a tool
 
-One section in `tools.md` with a check line, an install line, and a skill install line if the tool ships a skill. The script parses those lines. Keep the format.
+One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. The binary parses those lines. Keep the format. The next release carries the new tool.
 
-## Report
+## Developing the binary
 
-Source, target and destination, skills installed or updated, backup location, tools missing with install lines, tool skills installed, whether a restart is needed.
+From a checkout, `make setup` runs `go run ./cmd/jstack setup` with that checkout's skills embedded. `make verify` is the gate.

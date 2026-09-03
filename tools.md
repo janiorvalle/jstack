@@ -4,7 +4,7 @@ jstack expects a few tools on the machine. Each one ships its own skill, which t
 
 If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. Then read the skill the tool installed and follow it.
 
-`setup-jstack` runs every check below, installs each tool's own skill when the tool is present, and reports what's missing. The `Skill install` and `Skill folder` lines are what it parses.
+`jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports what's missing. The `Check`, `Install`, `Skill install`, and `Skill folder` lines are what it parses.
 
 ## git and gh
 
@@ -66,6 +66,6 @@ Drives a real browser from the command line. This is how an agent uses a web UI 
 - Repo: https://github.com/vercel-labs/agent-browser
 - Check: `command -v agent-browser`
 - Install: `npm install -g agent-browser && agent-browser install`
-- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json`, because jstack doesn't control the tool. `setup-jstack` installs it like every other skill.
+- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json`, because jstack doesn't control the tool. `jstack setup` installs it like every other skill.
 
 Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not part of this stack, and it stays wherever Codex put it.
