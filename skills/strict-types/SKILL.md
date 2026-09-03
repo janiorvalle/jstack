@@ -1,6 +1,6 @@
 ---
 name: strict-types
-description: "Use when designing a type, reviewing a function signature, or writing in any typed language. Make illegal states impossible to write, brand primitives that mean different things, parse outside data at the edge, never use any or cast past the compiler, match exhaustively, derive from the schema that owns the shape."
+description: "Use when designing a type, reviewing a function signature, or writing in any typed language. Make illegal states impossible to write, brand primitives that mean different things, parse outside data at the edge, never use any or cast past the compiler, match exhaustively, derive from the schema that owns the shape. Also answers to type-system-discipline, the name the vendored typescript-best-practices skill uses for it."
 disable-model-invocation: true
 kind: principle
 ---
@@ -11,7 +11,7 @@ The type checker is the one reviewer that never gets tired. Use it to rule out i
 
 This applies to any typed language. For TypeScript, the `typescript-best-practices` skill and its `references/patterns.md` cover the syntax for each pattern below.
 
-That skill is upstream text, vendored as is, and it calls this principle `type-system-discipline`. When it tells you to apply type-system-discipline first, this is the file. Its pointer to `boundary-discipline` means `validate-at-the-edges`.
+That skill is upstream text, vendored as is. When it says to apply `type-system-discipline` first, that is this file. When it points at `boundary-discipline`, read `validate-at-the-edges`.
 
 ## Never `any`
 
