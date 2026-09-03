@@ -13,7 +13,7 @@ The short version. Claim the work. Get a clean workspace. Understand before you 
 
 1. The letter, `AGENTS.md` at the root of this repo, is already in your context. It states every principle and ends with a table of every workflow skill and when it applies. Open a skill's full file only when it applies to the task in front of you.
 2. Write a todo list with the flow below in it. If you decide to skip a step, leave it in the list with `skip: <reason>`. Silent skips are how work gets lost.
-3. Check `tools.md` for anything the flow needs that isn't installed. Say so before starting, don't route around it.
+3. Check `tools.md` for anything the flow needs that isn't installed. Say so before starting, don't route around it, and install it the way `tools.md` says, `jstack setup` for every tool setup can install, never the install command inside the tool's own skill.
 
 ## The flow
 
