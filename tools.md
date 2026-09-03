@@ -26,7 +26,7 @@ Where tasks live. Claim before you touch project files, record the files you exp
 - Check: `command -v quest`
 - Version: `quest --version`
 - Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/quest/main/install.sh | sh`
-- Skill install: `quest skill install`
+- Skill install: `quest skill install --force`
 - Skill folder: `quest`
 
 **Linear** (coming)
