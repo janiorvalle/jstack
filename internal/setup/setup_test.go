@@ -14,6 +14,7 @@ import (
 
 	"github.com/janiorvalle/jstack/internal/harness"
 	"github.com/janiorvalle/jstack/internal/letter"
+	"github.com/janiorvalle/jstack/internal/skills"
 )
 
 const toolsFixture = "# Tools\n\n" +
@@ -500,5 +501,31 @@ func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "changed since the plan, planned again") {
 		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestBackupFolderIsExclusivePerRun(t *testing.T) {
+	home := t.TempDir()
+	needing := plan{harnesses: []harnessPlan{{skills: skills.Plan{Changed: []string{"voice"}}}}}
+	first, err := reserveBackup(home, "20260903-100405", needing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := reserveBackup(home, "20260903-100405", needing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || !strings.HasSuffix(second, "20260903-100405-2") {
+		t.Fatalf("first = %q, second = %q", first, second)
+	}
+	if !exists(first) || !exists(second) {
+		t.Fatal("reserved folders were not created")
+	}
+	idle, err := reserveBackup(home, "20260903-110000", plan{harnesses: []harnessPlan{{letter: letter.Change{Outcome: letter.Same}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists(idle) {
+		t.Fatalf("%q was created with nothing to back up", idle)
 	}
 }

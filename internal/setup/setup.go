@@ -137,8 +137,11 @@ func Run(ctx context.Context, opts Options) error {
 		fmt.Fprintln(out, "\nNo harness picked. Nothing changed. Pass --harness claude,codex to name one.")
 		return nil
 	}
-	stamp := opts.Now().Format("20060102-150405")
-	if err := applyHarnesses(opts, embedded, current, stamp); err != nil {
+	backupRoot, err := reserveBackup(opts.Home, opts.Now().Format("20060102-150405"), current)
+	if err != nil {
+		return err
+	}
+	if err := applyHarnesses(opts, embedded, current, backupRoot); err != nil {
 		return err
 	}
 	if err := saveConfig(opts.Home, Config{Harnesses: harness.Keys(picked)}); err != nil {
@@ -399,10 +402,43 @@ func askTools(ask *prompt.Prompt, opts Options, current plan) error {
 	return nil
 }
 
-func applyHarnesses(opts Options, embedded assets, current plan, stamp string) error {
+// reserveBackup picks the backup folder for this run. When something will be
+// backed up the folder is created exclusively, so two runs started in the same
+// second never share one; otherwise the path is only named, never created.
+func reserveBackup(home, stamp string, current plan) (string, error) {
+	parent := filepath.Join(home, ".jstack", "backup")
+	needed := false
+	for _, entry := range current.harnesses {
+		if len(entry.skills.Changed) > 0 || entry.letter.Outcome == letter.Replace {
+			needed = true
+		}
+	}
+	if !needed {
+		return filepath.Join(parent, stamp), nil
+	}
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return "", fmt.Errorf("[JSTACK-BACKUP-DIR] cannot create %q: %w; make the home folder writable and rerun", parent, err)
+	}
+	for attempt := 1; ; attempt++ {
+		name := stamp
+		if attempt > 1 {
+			name = fmt.Sprintf("%s-%d", stamp, attempt)
+		}
+		root := filepath.Join(parent, name)
+		err := os.Mkdir(root, 0o755)
+		if err == nil {
+			return root, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return "", fmt.Errorf("[JSTACK-BACKUP-DIR] cannot create %q: %w; make %q writable and rerun", root, err, parent)
+		}
+	}
+}
+
+func applyHarnesses(opts Options, embedded assets, current plan, backupRoot string) error {
 	out := opts.Stdout
 	for _, entry := range current.harnesses {
-		backup := filepath.Join(opts.Home, ".jstack", "backup", stamp, entry.harness.Key)
+		backup := filepath.Join(backupRoot, entry.harness.Key)
 		fmt.Fprintf(out, "\n%s\n", entry.harness.Name)
 		if err := applySkills(embedded, entry, opts.Home, backup, out); err != nil {
 			return err
