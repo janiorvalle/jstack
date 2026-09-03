@@ -47,7 +47,7 @@ The independent code review gate. Reviews the current diff on a different model 
 
 ## TruffleHog
 
-Secret scanner. roast runs it over the diff before review and refuses to start without it. Its official installer drops one binary into `~/.local/bin` on macOS and Linux with no sudo. It ships no skill.
+Secret scanner. roast runs it over the diff before review and refuses to start without it. Its official installer drops one binary into `~/.local/bin`, the folder the jstack installer already put on your PATH, on macOS and Linux with no sudo. It ships no skill.
 
 - Repo: https://github.com/trufflesecurity/trufflehog
 - Check: `command -v trufflehog`
