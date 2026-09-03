@@ -41,8 +41,20 @@ func saveConfig(home string, config Config) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, append(content, '\n'), 0o644); err != nil {
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot stage %q: %w; make its folder writable and rerun", path, err)
+	}
+	defer os.Remove(temporary.Name())
+	if _, err := temporary.Write(append(content, '\n')); err != nil {
+		_ = temporary.Close()
 		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
+	}
+	if err := os.Rename(temporary.Name(), path); err != nil {
+		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot replace %q: %w; make it writable and rerun", path, err)
 	}
 	return nil
 }

@@ -529,3 +529,20 @@ func TestBackupFolderIsExclusivePerRun(t *testing.T) {
 		t.Fatalf("%q was created with nothing to back up", idle)
 	}
 }
+
+func TestConfigSaveLeavesOnlyTheConfigFile(t *testing.T) {
+	home := t.TempDir()
+	if err := saveConfig(home, Config{Harnesses: []string{"pi"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveConfig(home, Config{Harnesses: []string{"claude"}}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(home, ".jstack"))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "config.json" {
+		t.Fatalf("entries = %v, %v", entries, err)
+	}
+	if got := read(t, configPath(home)); !strings.Contains(got, `"claude"`) || strings.Contains(got, "pi") {
+		t.Fatalf("config = %q", got)
+	}
+}

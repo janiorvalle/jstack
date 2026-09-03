@@ -106,10 +106,12 @@ func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
 }
 
 func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) error {
-	staged := filepath.Join(dest, ".jstack-staging-"+name)
-	final := filepath.Join(dest, name)
-	_ = os.RemoveAll(staged)
+	staged, err := os.MkdirTemp(dest, ".jstack-staging-"+name+"-")
+	if err != nil {
+		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot stage skill %q in %q: %w; make the folder writable and rerun", name, dest, err)
+	}
 	defer os.RemoveAll(staged)
+	final := filepath.Join(dest, name)
 	if err := copyDir(source, name, staged); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot write skill %q into %q: %w; the installed copy is untouched, fix the permissions or free space and rerun", name, dest, err)
 	}
@@ -195,6 +197,9 @@ func copyDir(source fs.FS, name, target string) error {
 		relative := strings.TrimPrefix(path, name)
 		destination := filepath.Join(target, filepath.FromSlash(relative))
 		if entry.IsDir() {
+			if path == name {
+				return nil
+			}
 			return os.MkdirAll(destination, 0o755)
 		}
 		content, err := fs.ReadFile(source, path)
