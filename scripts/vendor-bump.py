@@ -4,12 +4,13 @@
   vendor-bump.py bump <name>     copy the skill at its upstream head and move the pin, if upstream moved
   vendor-bump.py restore <name>  copy the skill at its pinned ref, for a fresh or suspect checkout
 
-A skill's version is the last upstream commit that touched its folder or its
-license file, not the repo head, so an unrelated upstream commit never moves the pin. Both commands
+A skill's version is the last upstream commit that touched its folder, not the
+repo head, so an unrelated upstream commit never moves the pin. Both commands
 replace skills/<name> wholesale, so upstream deletions land too, and put the
-upstream license file next to SKILL.md. bump always copies, so a hand edit to a
-vendored file shows up as a change even when the pin didn't move. It prints one
-JSON object for the workflow to read: name, repo, path, old, new, changed.
+license file from that same commit next to SKILL.md, since that is the license
+governing the copied text. bump always copies, so a hand edit to a vendored file
+shows up as a change even when the pin didn't move. It prints one JSON object
+for the workflow to read: name, repo, path, old, new, changed.
 
 Set GITHUB_TOKEN to raise the API rate limit. The vendor-bump workflow does.
 """
