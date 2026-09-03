@@ -17,7 +17,7 @@ func TestParseKeepsSectionsWithACheckLine(t *testing.T) {
 	if git.Title != "git and gh" || git.Check != "command -v git && gh auth status" {
 		t.Fatalf("git = %+v", git)
 	}
-	if git.Install != "brew install git gh, then gh auth login" || git.Command != "brew install git gh" {
+	if git.Install != "brew install git gh, then gh auth login" || git.Command != "brew install git gh && gh auth login" {
 		t.Fatalf("git install = %q, command = %q", git.Install, git.Command)
 	}
 	if git.SkillInstall != "" || git.SkillFolder != "" {

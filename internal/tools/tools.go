@@ -39,7 +39,7 @@ func Parse(markdown string) []Tool {
 		command := ""
 		if match := installLine.FindStringSubmatch(section); match != nil {
 			install = strings.ReplaceAll(strings.TrimSpace(match[1]), "`", "")
-			command = first(backtickSpan, match[1])
+			command = commandFrom(match[1])
 		}
 		parsed = append(parsed, Tool{
 			Title:        strings.TrimSpace(title),
@@ -51,6 +51,16 @@ func Parse(markdown string) []Tool {
 		})
 	}
 	return parsed
+}
+
+// commandFrom joins the backtick spans of an Install line into one shell
+// line, so "`brew install git gh`, then `gh auth login`" runs both steps.
+func commandFrom(line string) string {
+	var steps []string
+	for _, match := range backtickSpan.FindAllStringSubmatch(line, -1) {
+		steps = append(steps, match[1])
+	}
+	return strings.Join(steps, " && ")
 }
 
 func first(pattern *regexp.Regexp, text string) string {

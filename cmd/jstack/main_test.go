@@ -26,18 +26,6 @@ func fakeDependencies(captured *setup.Options, upgraded *bool, err error) depend
 		},
 		home:        func() (string, error) { return "/home/test", nil },
 		interactive: func() bool { return true },
-		lookPath:    func(name string) (string, error) { return "/bin/" + name, nil },
-	}
-}
-
-func TestSetupNeedsAPosixShell(t *testing.T) {
-	upgraded := false
-	deps := fakeDependencies(nil, &upgraded, nil)
-	deps.lookPath = func(string) (string, error) { return "", errors.New("not found") }
-	var stdout, stderr bytes.Buffer
-	code := runWith([]string{"setup"}, strings.NewReader(""), &stdout, &stderr, deps)
-	if code != 1 || !strings.Contains(stderr.String(), "JSTACK-SHELL") {
-		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
 }
 

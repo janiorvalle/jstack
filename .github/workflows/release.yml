@@ -45,5 +45,4 @@ jobs:
         with:
           subject-path: |
             dist/*.tar.gz
-            dist/*.zip
             dist/checksums.txt
