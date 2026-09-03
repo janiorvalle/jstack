@@ -16,3 +16,9 @@ Written 2026-09-02, while drafting the principle skills. The mode gets written l
 Written 2026-09-02, while drafting the how skill.
 
 Every skill has to work in Claude Code, Codex, Cursor, Pi, or anything else. No harness-specific tool names, agent types, model slugs, or config paths inside a skill. Say "spawn read-only subagents", "search the code", "use the browser tooling your harness gives you". The harness maps those to its own tools. Shell commands like grep are fine, since every harness has a shell.
+
+## The skill index lives in the letter, not the mode
+
+Written 2026-09-02, after the letter became the always-on copy.
+
+The day-one decision put the one-line-per-skill index in the mode. That made sense before there was a letter. Now the letter is installed into every harness's instructions file and is in context on every turn, so it holds the index: principles as sections written by hand, workflows as a table generated from each skill's description by `scripts/build-index.py`. The mode no longer carries a copy, and no longer tells the agent to read one, since it's already there. One list, one place, generated.

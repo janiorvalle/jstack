@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Rebuild the skill index inside skills/jstack-mode/SKILL.md from each skill's description line.
+"""Rebuild the workflows table inside AGENTS.md from each skill's description line.
 
-Run after adding, renaming, or re-describing any skill. The index lives between
-<!-- index:start --> and <!-- index:end --> and is never edited by hand.
+Run after adding, renaming, or re-describing any skill. The table lives between
+<!-- index:start --> and <!-- index:end --> and is never edited by hand. Principles
+are stated in the letter by hand, so only workflows are generated.
 """
 import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS = os.path.join(ROOT, "skills")
-MODE = os.path.join(SKILLS, "jstack-mode", "SKILL.md")
+MODE = os.path.join(ROOT, "AGENTS.md")
 
 def description(path):
     text = open(path).read()
@@ -27,7 +28,7 @@ def build():
             continue
         row = f"- **{name}**. {description(skill)}"
         (principles if re.search(r"^kind: principle$", open(skill).read(), re.M) else workflows).append(row)
-    return "### Principles\n\n" + "\n".join(principles) + "\n\n### Workflows\n\n" + "\n".join(workflows)
+    return "\n".join(workflows)
 
 def main():
     index = build()
@@ -40,7 +41,7 @@ def main():
     head, rest = text.split(start, 1)
     _, tail = rest.split(end, 1)
     open(MODE, "w").write(f"{head}{start}\n{index}\n{end}{tail}")
-    print(f"index rebuilt, {index.count(chr(10)+chr(45))} skills")
+    print(f"workflows table rebuilt, {index.count(chr(10)) + 1} skills")
 
 if __name__ == "__main__":
     main()
