@@ -57,6 +57,9 @@ def check_text(rel, path):
             problems.append(f"{rel}:{i}: work identifier: {line.strip()[:80]}")
 
 def main():
+    for name in sorted(VENDORED):
+        if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
+            problems.append(f"skills/{name}/SKILL.md: missing, but vendor.json lists {name}. Run scripts/vendor-bump.py restore {name}")
     for name in sorted(os.listdir(SKILLS)):
         skill = os.path.join(SKILLS, name, "SKILL.md")
         if os.path.isdir(os.path.join(SKILLS, name)) and not os.path.isfile(skill):
