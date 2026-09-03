@@ -527,6 +527,9 @@ func copyFile(source, destination string) error {
 	return os.WriteFile(destination, content, 0o600)
 }
 
+// writeFile replaces path in one step: the new content lands in a temporary
+// file beside it and is renamed over the original only once fully written, so
+// a failed write leaves the user's file as it was.
 func writeFile(path, content string) error {
 	mode := os.FileMode(0o644)
 	if info, err := os.Stat(path); err == nil {
@@ -535,8 +538,30 @@ func writeFile(path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot create %q: %w; make the parent writable and rerun", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(content), mode); err != nil {
-		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".jstack-letter-*")
+	if err != nil {
+		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot stage a new %q: %w; make its folder writable and rerun", path, err)
+	}
+	temporaryName := temporary.Name()
+	defer os.Remove(temporaryName)
+	fail := func(step string, cause error) error {
+		_ = temporary.Close()
+		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot %s for %q: %w; the file was not changed, fix the folder and rerun", step, path, cause)
+	}
+	if err := temporary.Chmod(mode); err != nil {
+		return fail("set permissions", err)
+	}
+	if _, err := temporary.WriteString(content); err != nil {
+		return fail("write the new content", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		return fail("sync the new content", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fail("close the staged file", err)
+	}
+	if err := os.Rename(temporaryName, path); err != nil {
+		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot replace %q: %w; the file was not changed, fix the permissions and rerun", path, err)
 	}
 	return nil
 }

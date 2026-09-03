@@ -426,3 +426,26 @@ func TestNoTerminalRerunLineCarriesTheFlagsGiven(t *testing.T) {
 		t.Fatal("instructions file changed")
 	}
 }
+
+func TestLetterWriteKeepsModeAndLeavesNoStagedFile(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".claude", "CLAUDE.md")
+	write(t, path, "# mine\n")
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(path, "new\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, path); got != "new\n" {
+		t.Fatalf("content = %q", got)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, %v", info.Mode().Perm(), err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("entries = %v, %v", entries, err)
+	}
+}
