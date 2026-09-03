@@ -1,6 +1,6 @@
 ---
 name: validate-at-the-edges
-description: "Use when wiring validation, error handling, or framework adapters. Check data once where it enters the system (CLI args, config, network, external APIs, user input) and trust it everywhere inside. Keep business logic in pure functions. Errors that cross an edge are rewritten for whoever receives them."
+description: "Use when wiring validation, error handling, or framework adapters. Check data once where it enters the system (CLI args, config, network, external APIs, user input) and trust it everywhere inside. Keep business logic in pure functions. Errors that cross an edge are rewritten for whoever receives them. Also answers to boundary-discipline, the name the vendored typescript-best-practices skill uses for it."
 disable-model-invocation: true
 kind: principle
 ---
@@ -10,6 +10,8 @@ kind: principle
 Check data once, where it comes in. Inside, trust the types. Business logic lives in pure functions. The wiring around it is thin and boring.
 
 Validation scattered through the code is noise, it repeats itself, and it makes you feel safe without being safe. Validate once at the edge and the inside gets to be simple.
+
+The vendored `typescript-best-practices` skill is upstream text, and it calls this principle `boundary-discipline`. When it points you there, that is this file.
 
 ## Where the edges are
 
