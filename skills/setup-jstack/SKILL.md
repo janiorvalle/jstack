@@ -11,7 +11,7 @@ One command on a fresh machine. Everything the flow needs ends up installed, or 
 
 1. **Skills.** Copies `skills/` into the harness's skills folder. Backs up anything it overwrites. Never touches a skill it doesn't own.
 2. **Vendor skills.** Fetches each entry in `vendor.json` from its repo at its pinned commit and installs it the same way. These are third-party skills the stack depends on but doesn't rewrite.
-3. **Instructions.** Puts `AGENTS.md` from the repo into the harness's user-level instructions file, `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`, as a block between `<!-- jstack:start -->` and `<!-- jstack:end -->`. Later runs replace the block and never touch anything outside it. This is what makes the mode always on, since the harnesses have no plugin hook of their own.
+3. **Instructions.** Puts `AGENTS.md` from the repo into the harness's user-level instructions file, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, or `~/.cursor/rules/jstack.mdc` with `alwaysApply` set, as a block between `<!-- jstack:start -->` and `<!-- jstack:end -->`. Later runs replace the block and never touch anything outside it. This is what makes the mode always on, since the harnesses have no plugin hook of their own.
 4. **Tools.** For each tool in `tools.md`, runs its check. Missing tools get listed with their install line. Nothing gets installed unless you say so, or the session was already given permission to set things up.
 5. **Tool skills.** For each tool that's present, runs its skill install command if the skill isn't in the folder yet. The tool owns that skill and keeps it current.
 6. **Hooks.** If you're in the jstack checkout, points git at `.githooks/`.
@@ -20,7 +20,7 @@ One command on a fresh machine. Everything the flow needs ends up installed, or 
 ## Defaults
 
 - Source: the jstack checkout you're in, or `$JSTACK_REPO`.
-- Target: `--agent auto` picks the harness you're running in. `--agent both` does Codex and Claude Code.
+- Target: `--agent auto` picks the harness you're running in. `--agent both` does Codex and Claude Code. `--agent all` adds Cursor. `--agent cursor` on its own works too.
 - Dry run unless `--apply`.
 - Tools are never installed unless `--install-tools` is passed. Ask the human first.
 

@@ -20,10 +20,12 @@ def repo_root(explicit):
 def detect_agent():
     if os.environ.get("CLAUDECODE") or os.environ.get("CLAUDE_CODE"): return "claude"
     if os.environ.get("CODEX_HOME") or os.environ.get("CODEX_THREAD_ID"): return "codex"
+    if os.environ.get("CURSOR_TRACE_ID") or os.environ.get("CURSOR_AGENT"): return "cursor"
     return "claude"
 
 def dest_for(agent):
     if agent == "codex": return os.path.join(os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex")), "skills")
+    if agent == "cursor": return os.path.expanduser("~/.cursor/skills")
     return os.path.join(os.environ.get("CLAUDE_HOME", os.path.expanduser("~/.claude")), "skills")
 
 def dir_same(a, b):
@@ -90,7 +92,8 @@ def parse_tools(root):
         tools.append((title, check, install, get("Skill install"), get("Skill folder")))
     return tools
 
-INSTRUCTIONS = {"claude": "~/.claude/CLAUDE.md", "codex": "~/.codex/AGENTS.md"}
+INSTRUCTIONS = {"claude": "~/.claude/CLAUDE.md", "codex": "~/.codex/AGENTS.md", "cursor": "~/.cursor/rules/jstack.mdc"}
+CURSOR_FRONTMATTER = "---\ndescription: jstack, how the human you work for works\nalwaysApply: true\n---\n\n"
 START, END = "<!-- jstack:start -->", "<!-- jstack:end -->"
 
 def install_instructions(root, agent, apply):
@@ -106,7 +109,8 @@ def install_instructions(root, agent, apply):
         updated = head + block.rstrip("\n") + tail
         verb = "left as is" if updated == current else ("updated" if apply else "would update")
     else:
-        updated = (current.rstrip("\n") + "\n\n" if current.strip() else "") + block
+        lead = CURSOR_FRONTMATTER if agent == "cursor" and not current.strip() else ""
+        updated = lead + (current.rstrip("\n") + "\n\n" if current.strip() else "") + block
         verb = "added" if apply else "would add"
     if apply and updated != current:
         os.makedirs(os.path.dirname(path), exist_ok=True); open(path, "w").write(updated)
@@ -117,7 +121,7 @@ def run_ok(cmd):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--agent", default="auto", choices=["auto", "codex", "claude", "both"])
+    p.add_argument("--agent", default="auto", choices=["auto", "codex", "claude", "cursor", "both", "all"])
     p.add_argument("--repo"); p.add_argument("--dest"); p.add_argument("--skill", action="append")
     p.add_argument("--apply", action="store_true"); p.add_argument("--install-tools", action="store_true")
     a = p.parse_args()
@@ -126,7 +130,7 @@ def main():
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     cache = os.path.join(os.path.expanduser("~/.cache/jstack/vendor"))
     os.makedirs(cache, exist_ok=True)
-    agents = ["codex", "claude"] if a.agent == "both" else [detect_agent() if a.agent == "auto" else a.agent]
+    agents = {"both": ["codex", "claude"], "all": ["codex", "claude", "cursor"]}.get(a.agent) or [detect_agent() if a.agent == "auto" else a.agent]
     own = {n: os.path.join(src_skills, n) for n in os.listdir(src_skills) if os.path.isfile(os.path.join(src_skills, n, "SKILL.md"))}
 
     for agent in agents:
