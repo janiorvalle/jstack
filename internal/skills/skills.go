@@ -105,6 +105,9 @@ func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
 	return nil
 }
 
+// rename is os.Rename behind a name the tests can point at a failing stand-in.
+var rename = os.Rename
+
 func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) error {
 	staged, err := os.MkdirTemp(dest, ".jstack-staging-"+name+"-")
 	if err != nil {
@@ -120,13 +123,13 @@ func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) err
 		if err := os.MkdirAll(backupDir, 0o755); err != nil {
 			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w; make it writable and rerun", backupDir, err)
 		}
-		if err := os.Rename(final, backup); err != nil {
+		if err := rename(final, backup); err != nil {
 			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot move %q into %q: %w; the installed copy is untouched, fix the permissions and rerun", final, backupDir, err)
 		}
 	}
-	if err := os.Rename(staged, final); err != nil {
+	if err := rename(staged, final); err != nil {
 		if replace {
-			if restoreErr := os.Rename(backup, final); restoreErr != nil {
+			if restoreErr := rename(backup, final); restoreErr != nil {
 				return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place: %w, and restoring it failed too: %v; copy %q back to %q by hand", name, err, restoreErr, backup, final)
 			}
 		}

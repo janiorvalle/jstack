@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"testing/fstest"
 )
@@ -29,6 +30,44 @@ func write(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// failRenamesOutside makes every rename that leaves or enters tree fail the way the
+// kernel does across filesystems, which is what a CODEX_HOME or
+// CLAUDE_CONFIG_DIR on another mount looks like to os.Rename.
+func failRenamesOutside(t *testing.T, tree string) {
+	t.Helper()
+	rename = func(oldPath, newPath string) error {
+		if !strings.HasPrefix(oldPath, tree) || !strings.HasPrefix(newPath, tree) {
+			return &os.LinkError{Op: "rename", Old: oldPath, New: newPath, Err: syscall.EXDEV}
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	t.Cleanup(func() { rename = os.Rename })
+}
+
+func failRenameInto(t *testing.T, target string) {
+	t.Helper()
+	rename = func(oldPath, newPath string) error {
+		if newPath == target && strings.Contains(oldPath, ".jstack-staging-") {
+			return &os.LinkError{Op: "rename", Old: oldPath, New: newPath, Err: syscall.EACCES}
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	t.Cleanup(func() { rename = os.Rename })
+}
+
+func assertNoWorkFolders(t *testing.T, dest string) {
+	t.Helper()
+	entries, err := os.ReadDir(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".jstack-") {
+			t.Fatalf("work folder left behind in dest: %s", entry.Name())
+		}
 	}
 }
 
@@ -135,6 +174,60 @@ func TestApplyCopiesNewBacksUpChangedAndLeavesLocalAlone(t *testing.T) {
 	if after.Pending() || strings.Join(after.Same, ",") != "how,voice,why" {
 		t.Fatalf("after = %+v", after)
 	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestApplyBacksUpAChangedSkillAcrossFilesystems(t *testing.T) {
+	dest := t.TempDir()
+	failRenamesOutside(t, dest)
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me in the backup\n")
+	backup := filepath.Join(t.TempDir(), "backup", "codex", "skills")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(source(), dest, plan, backup); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(dest, "voice", "SKILL.md"):      "voice v2\n",
+		filepath.Join(backup, "voice", "SKILL.md"):    "voice v1\n",
+		filepath.Join(backup, "voice", "old-only.md"): "keep me in the backup\n",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("%s = %q, %v; want %q", path, got, err, want)
+		}
+	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me\n")
+	failRenameInto(t, filepath.Join(dest, "voice"))
+	backup := filepath.Join(t.TempDir(), "backup")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Apply(source(), dest, plan, backup)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), "back as it was") {
+		t.Fatalf("err = %v", err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(dest, "voice", "SKILL.md"):    "voice v1\n",
+		filepath.Join(dest, "voice", "old-only.md"): "keep me\n",
+		filepath.Join(backup, "voice", "SKILL.md"):  "voice v1\n",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("%s = %q, %v; want %q", path, got, err, want)
+		}
+	}
+	assertNoWorkFolders(t, dest)
 }
 
 func TestApplyWithNothingChangedMakesNoBackup(t *testing.T) {
@@ -174,13 +267,5 @@ func TestApplyFailureLeavesEachSkillWholeAndNoStaging(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(dest, "why", "mine.md")); string(got) != "appeared after the plan\n" {
 		t.Fatalf("why was touched: %q", got)
 	}
-	entries, err := os.ReadDir(dest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".jstack-staging-") {
-			t.Fatalf("staging folder left behind: %s", entry.Name())
-		}
-	}
+	assertNoWorkFolders(t, dest)
 }
