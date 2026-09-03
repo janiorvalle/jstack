@@ -66,8 +66,6 @@ Drives a real browser from the command line. This is how an agent uses a web UI 
 - Repo: https://github.com/vercel-labs/agent-browser
 - Check: `command -v agent-browser`
 - Install: `npm install -g agent-browser && agent-browser install`
-- Skill install: `npx -y skills add vercel-labs/agent-browser --skill agent-browser -g -y -a claude-code -a codex --copy`
-- Skill folder: `agent-browser`
-- The skill lands in the harness skills folder and in `~/.agents/skills`, which Codex also reads.
+- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json`, because jstack doesn't control the tool. `setup-jstack` installs it like every other skill.
 
 Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not part of this stack, and it stays wherever Codex put it.

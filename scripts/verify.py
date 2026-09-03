@@ -3,6 +3,8 @@
 
 Checks every skill's frontmatter, that the mode's index matches the description
 lines, and that no file carries an em dash or a harness name where it shouldn't.
+Vendored skills (the vendor.json list) are upstream text copied verbatim, so they
+only have to exist with a SKILL.md.
 """
 import os, re, sys
 
@@ -18,6 +20,7 @@ HARNESS = re.compile(r"\b(Claude Code|Claude|Cursor|Codex|Agent tool|subagent_ty
 DENY = re.compile(r"(?i)\b(streamlyne|ekualiti|fundfit|kuali|janior-devbox|100\.57\.65\.112|Documents/github)\b")
 HARNESS_ALLOWED = {"tools.md", "README.md", "CONTRIBUTING.md", "decisions.md", "skills/setup-jstack/SKILL.md", "skills/setup-jstack/scripts/setup.py"}
 SELF = "scripts/verify.py"
+VENDORED = build_index.vendored()
 
 problems = []
 
@@ -37,8 +40,12 @@ def check_frontmatter(name, path):
     if k and k.group(1) != "principle":
         problems.append(f"{path}: kind must be principle or absent, got {k.group(1)}")
 
+def is_vendored(rel):
+    parts = rel.split("/")
+    return parts[0] == "skills" and len(parts) > 1 and parts[1] in VENDORED
+
 def check_text(rel, path):
-    if rel == SELF:
+    if rel == SELF or is_vendored(rel):
         return
     text = open(path).read()
     for i, line in enumerate(text.splitlines(), 1):
@@ -54,7 +61,7 @@ def main():
         skill = os.path.join(SKILLS, name, "SKILL.md")
         if os.path.isdir(os.path.join(SKILLS, name)) and not os.path.isfile(skill):
             problems.append(f"skills/{name}: no SKILL.md")
-        elif os.path.isfile(skill):
+        elif os.path.isfile(skill) and name not in VENDORED:
             check_frontmatter(name, skill)
     for dirpath, _, files in os.walk(ROOT):
         if "/.git" in dirpath or "__pycache__" in dirpath:

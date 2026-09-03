@@ -22,3 +22,13 @@ Every skill has to work in Claude Code, Codex, Cursor, Pi, or anything else. No 
 Written 2026-09-02, after the letter became the always-on copy.
 
 The day-one decision put the one-line-per-skill index in the mode. That made sense before there was a letter. Now the letter is installed into every harness's instructions file and is in context on every turn, so it holds the index: principles as sections written by hand, workflows as a table generated from each skill's description by `scripts/build-index.py`. The mode no longer carries a copy, and no longer tells the agent to read one, since it's already there. One list, one place, generated.
+
+## Third-party skills are committed, not fetched
+
+Written 2026-09-03, while vendoring agent-browser and typescript-best-practices.
+
+The first version fetched vendored skills at setup time, from upstream head or a pin nobody bumped, and the readme said they were never committed here. That meant a change to what our agents execute could land on every machine without anyone reading it. Now the rule is: a skill lives in this repo when jstack doesn't control the tool that owns it. Our own tools (quest, roast, bgr, tokenomnom) keep shipping their skill with the binary, since we review those repos already.
+
+`vendor.json` stays the pin record. The committed copy is verbatim, license file alongside, and nobody edits it, because the weekly vendor-bump workflow overwrites the folder. A skill's version is the last upstream commit that touched its folder, not the repo head, so an unrelated upstream commit doesn't open a PR. Vendored text is upstream's voice, not ours, so `verify.py` only checks that a SKILL.md exists and `build-index.py` leaves them out of the letter's table. `tools.md` still names agent-browser, since setup has to install the tool.
+
+Bump PRs are opened with the workflow's own token, and GitHub doesn't start workflows for those, so CI doesn't run on them. The reviewer runs `make verify` before merging. A skill folder can't fail verify anyway, short of losing its SKILL.md.
