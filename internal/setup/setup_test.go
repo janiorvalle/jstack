@@ -12,6 +12,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/janiorvalle/jstack/internal/harness"
 	"github.com/janiorvalle/jstack/internal/letter"
 )
 
@@ -469,5 +470,35 @@ func TestLetterWriteFollowsASymlinkedInstructionsFile(t *testing.T) {
 	}
 	if got := read(t, target); got != "new\n" {
 		t.Fatalf("target = %q", got)
+	}
+}
+
+func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	write(t, path, letter.Block("old letter"))
+	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	opts, out := options(t, home, shell, "")
+	embedded, err := loadAssets(opts.Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := harness.ByKeys([]string{"codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans, err := planHarnesses(opts, embedded, rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, path, "# added while setup was asking\n"+letter.Block("old letter"))
+	if err := applyLetter(opts, embedded, plans[0], filepath.Join(home, ".jstack", "backup", "x", "codex")); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, path); got != "# added while setup was asking\n"+letter.Block("# the letter\n") {
+		t.Fatalf("file = %q", got)
+	}
+	if !strings.Contains(out.String(), "changed since the plan, planned again") {
+		t.Fatalf("output:\n%s", out.String())
 	}
 }

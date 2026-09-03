@@ -48,9 +48,10 @@ type assets struct {
 }
 
 type harnessPlan struct {
-	harness harness.Harness
-	skills  skills.Plan
-	letter  letter.Change
+	harness      harness.Harness
+	skills       skills.Plan
+	instructions string
+	letter       letter.Change
 }
 
 type toolStatus struct {
@@ -233,9 +234,10 @@ func planHarnesses(opts Options, embedded assets, picked []harness.Harness) ([]h
 			return nil, fmt.Errorf("[JSTACK-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
 		}
 		plans = append(plans, harnessPlan{
-			harness: entry,
-			skills:  skillPlan,
-			letter:  letter.Plan(string(existing), embedded.letter, entry.Lead, opts.KeepInstructions),
+			harness:      entry,
+			skills:       skillPlan,
+			instructions: string(existing),
+			letter:       letter.Plan(string(existing), embedded.letter, entry.Lead, opts.KeepInstructions),
 		})
 	}
 	return plans, nil
@@ -405,7 +407,7 @@ func applyHarnesses(opts Options, embedded assets, current plan, stamp string) e
 		if err := applySkills(embedded, entry, opts.Home, backup, out); err != nil {
 			return err
 		}
-		if err := applyLetter(entry, opts.Home, backup, out); err != nil {
+		if err := applyLetter(opts, embedded, entry, backup); err != nil {
 			return err
 		}
 	}
@@ -453,23 +455,37 @@ func applySkills(embedded assets, entry harnessPlan, home, backup string, out io
 	return nil
 }
 
-func applyLetter(entry harnessPlan, home, backup string, out io.Writer) error {
+// applyLetter reads the file again first: the prompts sat between the plan
+// and this point, and a file another session changed meanwhile gets a fresh
+// plan instead of the stale content.
+func applyLetter(opts Options, embedded assets, entry harnessPlan, backup string) error {
+	out := opts.Stdout
+	home := opts.Home
 	path := entry.harness.InstructionsPath(home)
 	shown := display(home, path)
-	if entry.letter.Outcome == letter.Same {
+	fresh, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("[JSTACK-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
+	}
+	change := entry.letter
+	if string(fresh) != entry.instructions {
+		change = letter.Plan(string(fresh), embedded.letter, entry.harness.Lead, opts.KeepInstructions)
+		fmt.Fprintf(out, "  letter   %s changed since the plan, planned again\n", shown)
+	}
+	if change.Outcome == letter.Same {
 		fmt.Fprintf(out, "  letter   up to date in %s\n", shown)
 		return nil
 	}
-	if entry.letter.Outcome == letter.Replace {
+	if change.Outcome == letter.Replace {
 		saved := filepath.Join(backup, filepath.Base(path))
 		if err := copyFile(path, saved); err != nil {
 			return fmt.Errorf("[JSTACK-LETTER-BACKUP] cannot back up %q to %q: %w; the file was not changed, fix the permissions and rerun", path, saved, err)
 		}
 		fmt.Fprintf(out, "  letter   replaced %s, old file backed up to %s\n", shown, display(home, saved))
 	} else {
-		fmt.Fprintf(out, "  letter   %s %s\n", letterPast(entry.letter.Outcome), shown)
+		fmt.Fprintf(out, "  letter   %s %s\n", letterPast(change.Outcome), shown)
 	}
-	return writeFile(path, entry.letter.Content)
+	return writeFile(path, change.Content)
 }
 
 func letterPast(outcome letter.Outcome) string {
