@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # push the vendor/<skill> branch
+      contents: write # push the vendor/<base>/<skill> branch
       pull-requests: write # open or update the bump PR
     strategy:
       fail-fast: false
@@ -78,13 +78,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           gh auth setup-git
-          git checkout -B "vendor/$SKILL"
+          head="vendor/$BASE/$SKILL"
+          git checkout -B "$head"
           git add -A "skills/$SKILL" vendor.json
           git commit -m "$title"
-          git push --force origin "vendor/$SKILL"
-          number=$(gh pr list --head "vendor/$SKILL" --base "$BASE" --state open --json number --jq '.[0].number')
+          git push --force origin "$head"
+          number=$(gh pr list --head "$head" --base "$BASE" --state open --json number --jq '.[0].number')
           if [ -n "$number" ]; then
             gh pr edit "$number" --title "$title" --body "$body"
           else
-            gh pr create --head "vendor/$SKILL" --base "$BASE" --title "$title" --body "$body"
+            gh pr create --head "$head" --base "$BASE" --title "$title" --body "$body"
           fi
