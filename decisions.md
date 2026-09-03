@@ -76,3 +76,13 @@ The git and gh section of `tools.md` installed with `brew install git gh`, so `j
 git and gh aren't tools the flow installs, they're what the flow stands on. Nothing gets cloned without git, and `gh auth login` is a conversation with GitHub that setup can't have for you. On Linux the right command depends on the distro, apt or dnf or pacman, and every one of them wants sudo; a setup tool running sudo on someone's box unasked is the wrong shape. An OS-switched install line would need a distro switch next, and that's the tell.
 
 The rule: a `tools.md` section with a `Check` line and no `Install` line is a prerequisite. Setup checks for it, reports it as missing with a link to its own heading in `tools.md` on GitHub, and never offers to run anything for it, with or without a terminal. The section lists the ways to get it as prose, one line per platform. The curl-based tools and agent-browser keep their install lines, because those lines are the same on every OS the binary ships for.
+
+## The agent-browser CLI is pinned
+
+Written 2026-09-03, for quest 408.
+
+The vendored `skills/agent-browser` is a stub by upstream's design: it tells the agent to run `agent-browser skills get core`, and the instructions the agent then follows ship inside the CLI. With `npm install -g agent-browser` unpinned, a new npm release changed what agents execute on every machine that ran setup, with no PR here. That was the one path left after the skills were vendored, so it closes the same way: the install line in `tools.md` is `npm install -g agent-browser@0.36.0`, setup treats the pin as the latest version and offers the install line whenever the machine has any other version, behind or ahead, since a machine ahead of the pin is running text nobody here read, and `scripts/tool-bump.py` runs in the weekly vendor-bump workflow to open a PR when npm publishes past it. The PR body links the npm version and the upstream release, and a human merges.
+
+The pin lives in the install line, not in `vendor.json`, because the install line is what setup runs and what a person reads; a pin recorded somewhere else would have to be spliced in, and the two could drift. The bump is a second small script rather than a new entry kind in `vendor-bump.py`, because copying a folder from a tarball and rewriting one version in a markdown line share nothing but the PR ceremony, which is in the workflow.
+
+The vendored `skills/agent-browser` folder and the pinned CLI move independently, each through its own PR. A skill bump and a CLI bump can land in either order; the stub only tells the agent to ask the CLI.
