@@ -685,7 +685,11 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	}
 	status.present = true
 	status.installed = installedVersion(ctx, opts, tool)
-	if status.installed == "" || status.tool.Version == "" {
+	if status.outdated() {
+		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the latest is %s; an older %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.installed), tools.Display(status.latest), tool.Title)
+	}
+	if status.installed == "" {
 		fmt.Fprintf(out, "  %s %s\n", done, tool.Title)
 		return nil
 	}

@@ -37,12 +37,14 @@ func fixture() fstest.MapFS {
 // fakeShell is the machine and the network: which checks pass, what the
 // version commands print, and what each tool's source says is latest. A tool
 // missing from latest is one whose lookup failed. The roast install line
-// always lands 1.1.0, the way a real install line installs the newest release.
+// lands 1.1.0, the way a real install line installs the newest release,
+// unless stuck is set: then an older roast keeps winning on PATH.
 type fakeShell struct {
 	present  map[string]bool
 	failing  map[string]bool
 	versions map[string]string
 	latest   map[string]string
+	stuck    bool
 	commands []string
 }
 
@@ -70,7 +72,9 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 			f.versions = map[string]string{}
 		}
 		f.present["check-roast"] = true
-		f.versions["version-roast"] = "roast 1.1.0"
+		if !f.stuck {
+			f.versions["version-roast"] = "roast 1.1.0"
+		}
 	}
 	if output, ok := f.versions[command]; ok {
 		fmt.Fprintln(out, output)
@@ -425,6 +429,25 @@ func TestFailedUpdateIsAnErrorAfterTheRestLanded(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "FAILED roast") || !exists(filepath.Join(home, ".jstack", "config.json")) {
 		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestUpdateThatLeavesTheOldVersionOnPathIsAnError(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.0.0")
+	shell.stuck = true
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.UpdateTools = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "roast: `curl roast | sh` ran, but `version-roast` still prints 1.0.0 and the latest is 1.1.0") || !strings.Contains(err.Error(), "PATH") {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(out.String(), "FAILED roast: updated, but `version-roast` still prints 1.0.0") || strings.Contains(out.String(), "updated roast 1") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;curl roast | sh;check-roast;version-roast" {
+		t.Fatalf("commands = %v", shell.commands)
 	}
 }
 
