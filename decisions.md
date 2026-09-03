@@ -66,3 +66,13 @@ Setup used to know two states per tool, missing or present, so a tool that was i
 `tools.md` carries a `Version` line per tool, the command that prints the installed version, in the same parsed format as `Check`. The latest version comes from the GitHub releases API through each section's `Repo` line, and from the npm registry when the install line is `npm install -g`, which today is only agent-browser. That is five requests per run, well inside the sixty an hour GitHub allows without a token, and they run at the same time with a five-second timeout so a dead network costs one wait, not five. A lookup that fails shows "latest unknown" and setup carries on: the network is never a reason not to install skills. git and gh have no `Version` line, because they come from the system package manager and updating them is not setup's job.
 
 Versions are compared with `golang.org/x/mod/semver`, already a dependency for `jstack upgrade`, after adding the leading v the tools leave off when they print.
+
+## The agent-browser CLI is pinned
+
+Written 2026-09-03, for quest 408.
+
+The vendored `skills/agent-browser` is a stub by upstream's design: it tells the agent to run `agent-browser skills get core`, and the instructions the agent then follows ship inside the CLI. With `npm install -g agent-browser` unpinned, a new npm release changed what agents execute on every machine that ran setup, with no PR here. That was the one path left after the skills were vendored, so it closes the same way: the install line in `tools.md` is `npm install -g agent-browser@0.36.0`, setup treats the pin as the latest version, so a machine is outdated only when it's behind the pin and an update installs the pin, and `scripts/tool-bump.py` runs in the weekly vendor-bump workflow to open a PR when npm publishes past it. The PR body links the npm version and the upstream release, and a human merges.
+
+The pin lives in the install line, not in `vendor.json`, because the install line is what setup runs and what a person reads; a pin recorded somewhere else would have to be spliced in, and the two could drift. The bump is a second small script rather than a new entry kind in `vendor-bump.py`, because copying a folder from a tarball and rewriting one version in a markdown line share nothing but the PR ceremony, which is in the workflow.
+
+The vendored `skills/agent-browser` folder and the pinned CLI move independently, each through its own PR. A skill bump and a CLI bump can land in either order; the stub only tells the agent to ask the CLI.

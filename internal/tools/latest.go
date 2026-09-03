@@ -10,18 +10,21 @@ import (
 	"strings"
 )
 
-// Lookup finds the newest published version of a tool. Our own tools come
-// from the GitHub releases of their Repo line; a tool installed with npm
-// comes from the npm registry. One HTTP call per tool, so a run of setup
-// makes as many calls as tools.md has Version lines, five today, well inside
-// GitHub's sixty an hour for unauthenticated callers.
+// Lookup finds the newest version of a tool that setup may install. Our own
+// tools come from the GitHub releases of their Repo line. A tool installed
+// with npm comes from the npm registry, unless the install line pins a
+// version, "npm install -g name@1.2.3": then the pin is the answer, since it
+// is what the install line would put on the machine, and moving it is a PR.
+// One HTTP call per unpinned tool, so a run of setup makes at most as many
+// calls as tools.md has Version lines, well inside GitHub's sixty an hour for
+// unauthenticated callers.
 type Lookup struct {
 	Client *http.Client
 }
 
 var (
 	githubRepo = regexp.MustCompile(`^https://github\.com/([^/\s]+/[^/\s]+?)/?$`)
-	npmPackage = regexp.MustCompile(`^npm install -g (\S+)`)
+	npmPackage = regexp.MustCompile(`^npm install -g ([^@\s]+)(?:@(\S+))?`)
 )
 
 const maximumMetadata = 1 << 20
@@ -31,6 +34,9 @@ const maximumMetadata = 1 << 20
 // unknown" and carries on, so the error is for the log, not the human.
 func (lookup Lookup) Latest(ctx context.Context, tool Tool) (string, error) {
 	if match := npmPackage.FindStringSubmatch(tool.Command); match != nil {
+		if pin := ParseVersion(match[2]); pin != "" {
+			return pin, nil
+		}
 		return lookup.fetch(ctx, "https://registry.npmjs.org/"+match[1]+"/latest", "version")
 	}
 	if match := githubRepo.FindStringSubmatch(tool.Repo); match != nil {

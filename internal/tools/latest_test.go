@@ -53,6 +53,17 @@ func TestLatestReadsTheNpmVersionForAnNpmInstall(t *testing.T) {
 	}
 }
 
+func TestLatestIsThePinWhenTheNpmInstallLineHasOne(t *testing.T) {
+	lookup := Lookup{Client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		t.Errorf("asked %s, but the pin already says which version installs", request.URL)
+		return nil, errors.New("no")
+	})}}
+	got, err := lookup.Latest(context.Background(), Tool{Title: "agent-browser", Repo: "https://github.com/vercel-labs/agent-browser", Command: "npm install -g agent-browser@0.36.0 && agent-browser install"})
+	if err != nil || got != "v0.36.0" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
 func TestLatestFailuresAreErrorsNotVersions(t *testing.T) {
 	roast := Tool{Title: "roast", Repo: "https://github.com/janiorvalle/roast"}
 	for name, lookup := range map[string]Lookup{
