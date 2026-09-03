@@ -40,6 +40,10 @@ func TestSetupFlagsReachTheRun(t *testing.T) {
 	if captured.Harness != "claude,codex" || !captured.InstallTools || !captured.UpdateTools || !captured.KeepInstructions || !captured.Yes || !captured.Interactive || captured.Home != "/home/test" || captured.Files == nil || captured.Shell == nil {
 		t.Fatalf("options = %+v", captured)
 	}
+	t.Setenv("CODEX_HOME", "/work/codex")
+	if captured.Getenv == nil || captured.Getenv("CODEX_HOME") != "/work/codex" {
+		t.Fatal("Getenv does not read the process environment")
+	}
 }
 
 func TestSetupQuitIsNotAnError(t *testing.T) {

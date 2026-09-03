@@ -34,6 +34,7 @@ type Latest func(ctx context.Context, tool tools.Tool) (string, error)
 type Options struct {
 	Files            fs.FS
 	Home             string
+	Getenv           func(string) string
 	Harness          string
 	InstallTools     bool
 	UpdateTools      bool
@@ -118,12 +119,13 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	picked, source, err := choose(opts, config)
+	rows := harness.Resolve(opts.Home, opts.Getenv)
+	picked, source, err := choose(opts, rows, config)
 	if err != nil {
 		return err
 	}
 	out := opts.Stdout
-	printHarnesses(out, opts.Home, picked)
+	printHarnesses(out, opts.Home, rows, picked)
 	current, err := buildPlan(ctx, opts, embedded, picked)
 	if err != nil {
 		return err
@@ -136,7 +138,7 @@ func Run(ctx context.Context, opts Options) error {
 	if opts.Interactive && !opts.Yes {
 		ask := prompt.New(opts.Stdin, out)
 		if source == fromDetect {
-			repicked, err := askHarnesses(ask, opts.Home, picked)
+			repicked, err := askHarnesses(ask, opts.Home, rows, picked)
 			if err != nil {
 				return err
 			}
@@ -217,19 +219,19 @@ func loadAssets(files fs.FS) (assets, error) {
 	return assets{skills: skillsFS, letter: string(letterText), tools: tools.Parse(string(toolsText)), vendored: vendored}, nil
 }
 
-func choose(opts Options, config Config) ([]harness.Harness, pickSource, error) {
+func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness, pickSource, error) {
 	if opts.Harness != "" {
-		picked, err := harness.Parse(opts.Harness)
+		picked, err := rows.Parse(opts.Harness)
 		return picked, fromFlag, err
 	}
 	if len(config.Harnesses) > 0 {
-		picked, err := harness.ByKeys(config.Harnesses)
+		picked, err := rows.ByKeys(config.Harnesses)
 		if err != nil {
 			return nil, fromConfig, fmt.Errorf("%w; the saved picks in %q are stale, pass --harness to replace them", err, configPath(opts.Home))
 		}
 		return picked, fromConfig, nil
 	}
-	return harness.Found(opts.Home), fromDetect, nil
+	return rows.Found(), fromDetect, nil
 }
 
 func buildPlan(ctx context.Context, opts Options, embedded assets, picked []harness.Harness) (plan, error) {
@@ -312,11 +314,11 @@ func replan(opts Options, embedded assets, picked []harness.Harness, current pla
 func planHarnesses(opts Options, embedded assets, picked []harness.Harness) ([]harnessPlan, error) {
 	var plans []harnessPlan
 	for _, entry := range picked {
-		skillPlan, err := skills.PlanFor(embedded.skills, entry.SkillsDir(opts.Home))
+		skillPlan, err := skills.PlanFor(embedded.skills, entry.SkillsDir())
 		if err != nil {
 			return nil, err
 		}
-		path := entry.InstructionsPath(opts.Home)
+		path := entry.InstructionsPath()
 		existing, err := os.ReadFile(path)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("[JSTACK-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
@@ -344,7 +346,7 @@ func skillPresent(home string, picked []harness.Harness, folder string) bool {
 		return true
 	}
 	for _, entry := range picked {
-		if !isDir(filepath.Join(entry.SkillsDir(home), folder)) {
+		if !isDir(filepath.Join(entry.SkillsDir(), folder)) {
 			return false
 		}
 	}
@@ -356,28 +358,28 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-func printHarnesses(out io.Writer, home string, picked []harness.Harness) {
+func printHarnesses(out io.Writer, home string, rows harness.Table, picked []harness.Harness) {
 	fmt.Fprintln(out, "harnesses")
-	for _, entry := range harness.All() {
+	for _, entry := range rows {
 		mark, state := " ", "not found"
-		if entry.Installed(home) {
+		if entry.Installed() {
 			state = "found"
 		}
 		if contains(picked, entry) {
 			mark = "x"
 		}
-		fmt.Fprintf(out, "  [%s] %-11s %s, %s\n", mark, entry.Name, display(home, entry.DetectDir(home)), state)
+		fmt.Fprintf(out, "  [%s] %-11s %s, %s\n", mark, entry.Name, rootWithVariable(home, entry), state)
 	}
 }
 
 func printPlan(out io.Writer, home string, embedded assets, current plan) {
 	for _, entry := range current.harnesses {
-		fmt.Fprintf(out, "\n%s  %s\n", entry.harness.Name, display(home, entry.harness.SkillsDir(home)))
+		fmt.Fprintf(out, "\n%s  %s\n", entry.harness.Name, display(home, entry.harness.SkillsDir()))
 		fmt.Fprintf(out, "  new      %s\n", list(entry.skills.New))
 		fmt.Fprintf(out, "  changed  %s\n", list(entry.skills.Changed))
 		fmt.Fprintf(out, "  same     %d skills\n", len(entry.skills.Same))
 		fmt.Fprintf(out, "  local    %s (untouched)\n", list(entry.skills.Local))
-		fmt.Fprintf(out, "  letter   %s %s\n", display(home, entry.harness.InstructionsPath(home)), letterIntent(entry.letter.Outcome))
+		fmt.Fprintf(out, "  letter   %s %s\n", display(home, entry.harness.InstructionsPath()), letterIntent(entry.letter.Outcome))
 	}
 	if len(embedded.vendored) > 0 {
 		fmt.Fprintf(out, "\nvendored %s (upstream text, pinned in vendor.json)\n", list(embedded.vendored))
@@ -497,21 +499,20 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 	}
 	for _, entry := range current.harnesses {
 		if !opts.KeepInstructions && entry.letter.Outcome == letter.Replace && entry.harness.Lead == "" {
-			fmt.Fprintf(out, "  add --keep-instructions to append the letter to %s instead of replacing it\n", display(opts.Home, entry.harness.InstructionsPath(opts.Home)))
+			fmt.Fprintf(out, "  add --keep-instructions to append the letter to %s instead of replacing it\n", display(opts.Home, entry.harness.InstructionsPath()))
 		}
 	}
 }
 
-func askHarnesses(ask *prompt.Prompt, home string, picked []harness.Harness) ([]harness.Harness, error) {
-	all := harness.All()
-	labels := make([]string, 0, len(all))
-	selected := make([]bool, 0, len(all))
-	for _, entry := range all {
+func askHarnesses(ask *prompt.Prompt, home string, rows harness.Table, picked []harness.Harness) ([]harness.Harness, error) {
+	labels := make([]string, 0, len(rows))
+	selected := make([]bool, 0, len(rows))
+	for _, entry := range rows {
 		state := "not found"
-		if entry.Installed(home) {
+		if entry.Installed() {
 			state = "found"
 		}
-		labels = append(labels, fmt.Sprintf("%-11s %s, %s", entry.Name, display(home, entry.DetectDir(home)), state))
+		labels = append(labels, fmt.Sprintf("%-11s %s, %s", entry.Name, rootWithVariable(home, entry), state))
 		selected = append(selected, contains(picked, entry))
 	}
 	chosen, err := ask.MultiSelect("Install into which harnesses?", labels, selected)
@@ -519,12 +520,12 @@ func askHarnesses(ask *prompt.Prompt, home string, picked []harness.Harness) ([]
 		return nil, err
 	}
 	var keys []string
-	for index, entry := range all {
+	for index, entry := range rows {
 		if chosen[index] {
 			keys = append(keys, entry.Key)
 		}
 	}
-	return harness.ByKeys(keys)
+	return rows.ByKeys(keys)
 }
 
 func askTools(ask *prompt.Prompt, opts Options, current plan) error {
@@ -616,7 +617,7 @@ func applyTools(ctx context.Context, opts Options, current plan) error {
 }
 
 func applySkills(embedded assets, entry harnessPlan, home, backup string, out io.Writer) error {
-	dest := entry.harness.SkillsDir(home)
+	dest := entry.harness.SkillsDir()
 	if !entry.skills.Pending() {
 		fmt.Fprintf(out, "  skills   up to date in %s\n", display(home, dest))
 		return nil
@@ -645,7 +646,7 @@ func applySkills(embedded assets, entry harnessPlan, home, backup string, out io
 func applyLetter(opts Options, embedded assets, entry harnessPlan, backup string) error {
 	out := opts.Stdout
 	home := opts.Home
-	path := entry.harness.InstructionsPath(home)
+	path := entry.harness.InstructionsPath()
 	shown := display(home, path)
 	fresh, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -799,6 +800,14 @@ func writeFile(path, content string) error {
 		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot replace %q: %w; the file was not changed, fix the permissions and rerun", path, err)
 	}
 	return nil
+}
+
+func rootWithVariable(home string, entry harness.Harness) string {
+	shown := display(home, entry.Root)
+	if entry.HomeVar != "" {
+		return shown + " (" + entry.HomeVar + ")"
+	}
+	return shown
 }
 
 func display(home, path string) string {

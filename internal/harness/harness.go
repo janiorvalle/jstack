@@ -10,69 +10,99 @@ import (
 	"strings"
 )
 
-// Harness is one row of the table. Paths are relative to the home directory
-// and use forward slashes.
-type Harness struct {
-	Key          string
-	Name         string
-	Detect       string
-	Skills       string
-	Instructions string
-	Lead         string
+// row is a table entry before it meets a machine. homeVar is the variable the
+// harness's own docs name as moving its folder; a row gets one only when such
+// docs exist.
+type row struct {
+	key          string
+	name         string
+	homeVar      string
+	root         string
+	skills       string
+	instructions string
+	lead         string
 }
 
 const cursorLead = "---\ndescription: jstack, how the human you work for works\nalwaysApply: true\n---\n\n"
 
-var table = []Harness{
-	{Key: "claude", Name: "Claude Code", Detect: ".claude", Skills: ".claude/skills", Instructions: ".claude/CLAUDE.md"},
-	{Key: "codex", Name: "Codex", Detect: ".codex", Skills: ".codex/skills", Instructions: ".codex/AGENTS.md"},
-	{Key: "opencode", Name: "OpenCode", Detect: ".config/opencode", Skills: ".config/opencode/skills", Instructions: ".config/opencode/AGENTS.md"},
-	{Key: "cursor", Name: "Cursor", Detect: ".cursor", Skills: ".cursor/skills", Instructions: ".cursor/rules/jstack.mdc", Lead: cursorLead},
-	{Key: "pi", Name: "Pi", Detect: ".pi/agent", Skills: ".pi/agent/skills", Instructions: ".pi/agent/AGENTS.md"},
+var table = []row{
+	{key: "claude", name: "Claude Code", homeVar: "CLAUDE_CONFIG_DIR", root: ".claude", skills: "skills", instructions: "CLAUDE.md"},
+	{key: "codex", name: "Codex", homeVar: "CODEX_HOME", root: ".codex", skills: "skills", instructions: "AGENTS.md"},
+	{key: "opencode", name: "OpenCode", root: ".config/opencode", skills: "skills", instructions: "AGENTS.md"},
+	{key: "cursor", name: "Cursor", root: ".cursor", skills: "skills", instructions: "rules/jstack.mdc", lead: cursorLead},
+	{key: "pi", name: "Pi", root: ".pi/agent", skills: "skills", instructions: "AGENTS.md"},
 }
 
-// All returns every row in table order.
-func All() []Harness {
-	return append([]Harness(nil), table...)
+// Harness is one row resolved for a machine. Root is the absolute folder the
+// harness reads from: the value of HomeVar when that variable is set and
+// non-empty, otherwise the folder under home. HomeVar is empty for a row
+// whose folder came from home.
+type Harness struct {
+	Key     string
+	Name    string
+	Root    string
+	HomeVar string
+	Lead    string
+
+	skills       string
+	instructions string
 }
 
-// Found returns the rows whose detect folder exists under home.
-func Found(home string) []Harness {
-	var found []Harness
+// Table is every harness resolved for one machine, in table order.
+type Table []Harness
+
+// Resolve builds the table for a machine. getenv answers the variables the
+// rows document.
+func Resolve(home string, getenv func(string) string) Table {
+	rows := make(Table, 0, len(table))
 	for _, entry := range table {
-		if entry.Installed(home) {
+		rows = append(rows, entry.resolve(home, getenv))
+	}
+	return rows
+}
+
+func (r row) resolve(home string, getenv func(string) string) Harness {
+	resolved := Harness{Key: r.key, Name: r.name, Lead: r.lead, skills: r.skills, instructions: r.instructions}
+	resolved.Root = filepath.Join(home, filepath.FromSlash(r.root))
+	if r.homeVar != "" && getenv(r.homeVar) != "" {
+		resolved.Root = filepath.Clean(getenv(r.homeVar))
+		resolved.HomeVar = r.homeVar
+	}
+	return resolved
+}
+
+// Found returns the rows whose folder exists.
+func (t Table) Found() []Harness {
+	var found []Harness
+	for _, entry := range t {
+		if entry.Installed() {
 			found = append(found, entry)
 		}
 	}
 	return found
 }
 
-// Installed reports whether the harness's detect folder exists under home.
-func (h Harness) Installed(home string) bool {
-	info, err := os.Stat(h.DetectDir(home))
+// Installed reports whether the harness's folder exists.
+func (h Harness) Installed() bool {
+	info, err := os.Stat(h.Root)
 	return err == nil && info.IsDir()
 }
 
-// DetectDir is the absolute folder whose presence means the harness is installed.
-func (h Harness) DetectDir(home string) string {
-	return filepath.Join(home, filepath.FromSlash(h.Detect))
-}
-
 // SkillsDir is the absolute folder the harness loads skills from.
-func (h Harness) SkillsDir(home string) string {
-	return filepath.Join(home, filepath.FromSlash(h.Skills))
+func (h Harness) SkillsDir() string {
+	return filepath.Join(h.Root, filepath.FromSlash(h.skills))
 }
 
 // InstructionsPath is the absolute file the harness reads on every turn.
-func (h Harness) InstructionsPath(home string) string {
-	return filepath.Join(home, filepath.FromSlash(h.Instructions))
+func (h Harness) InstructionsPath() string {
+	return filepath.Join(h.Root, filepath.FromSlash(h.instructions))
 }
 
 // Parse turns a --harness value such as "claude,codex" or "all" into rows.
-func Parse(spec string) ([]Harness, error) {
+func (t Table) Parse(spec string) ([]Harness, error) {
 	spec = strings.TrimSpace(spec)
 	if spec == "all" {
-		return All(), nil
+		return append([]Harness(nil), t...), nil
 	}
 	var keys []string
 	for _, key := range strings.Split(spec, ",") {
@@ -81,22 +111,22 @@ func Parse(spec string) ([]Harness, error) {
 		}
 	}
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("[JSTACK-HARNESS-EMPTY] --harness needs a value; expected a comma-separated list such as --harness claude,codex or --harness all; known keys: %s", strings.Join(Keys(All()), ", "))
+		return nil, fmt.Errorf("[JSTACK-HARNESS-EMPTY] --harness needs a value; expected a comma-separated list such as --harness claude,codex or --harness all; known keys: %s", strings.Join(Keys(t), ", "))
 	}
-	return ByKeys(keys)
+	return t.ByKeys(keys)
 }
 
 // ByKeys resolves keys to rows, keeping table order and dropping repeats.
-func ByKeys(keys []string) ([]Harness, error) {
+func (t Table) ByKeys(keys []string) ([]Harness, error) {
 	wanted := map[string]bool{}
 	for _, key := range keys {
-		if _, ok := byKey(key); !ok {
-			return nil, fmt.Errorf("[JSTACK-HARNESS-UNKNOWN] unknown harness %q; expected one of %s; example: --harness claude,codex", key, strings.Join(Keys(All()), ", "))
+		if !t.has(key) {
+			return nil, fmt.Errorf("[JSTACK-HARNESS-UNKNOWN] unknown harness %q; expected one of %s; example: --harness claude,codex", key, strings.Join(Keys(t), ", "))
 		}
 		wanted[key] = true
 	}
 	var rows []Harness
-	for _, entry := range table {
+	for _, entry := range t {
 		if wanted[entry.Key] {
 			rows = append(rows, entry)
 		}
@@ -113,11 +143,11 @@ func Keys(rows []Harness) []string {
 	return keys
 }
 
-func byKey(key string) (Harness, bool) {
-	for _, entry := range table {
+func (t Table) has(key string) bool {
+	for _, entry := range t {
 		if entry.Key == key {
-			return entry, true
+			return true
 		}
 	}
-	return Harness{}, false
+	return false
 }

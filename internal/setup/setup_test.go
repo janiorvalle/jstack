@@ -133,6 +133,7 @@ func options(t *testing.T, home string, shell *fakeShell, stdin string) (Options
 	return Options{
 		Files:  fixture(),
 		Home:   home,
+		Getenv: func(string) string { return "" },
 		Stdin:  strings.NewReader(stdin),
 		Stdout: &out,
 		Shell:  shell.run,
@@ -232,6 +233,47 @@ func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 		if !strings.Contains(out.String(), expected) {
 			t.Fatalf("output missing %q:\n%s", expected, out.String())
 		}
+	}
+}
+
+func TestVariableMovesTheRowThroughPlanAndApply(t *testing.T) {
+	home := homeWithClaude(t)
+	codexHome := filepath.Join(t.TempDir(), "codex")
+	write(t, filepath.Join(codexHome, "config.toml"), "")
+	shell := &fakeShell{present: map[string]bool{"check-git": true, "check-roast": true}}
+	opts, out := options(t, home, shell, "")
+	opts.Getenv = func(name string) string {
+		if name == "CODEX_HOME" {
+			return codexHome
+		}
+		return ""
+	}
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"[x] Claude Code ~/.claude, found",
+		"[x] Codex       " + codexHome + " (CODEX_HOME), found",
+		"Codex  " + filepath.Join(codexHome, "skills"),
+		"skills   2 installed, 0 updated in " + filepath.Join(codexHome, "skills"),
+		"letter   created " + filepath.Join(codexHome, "AGENTS.md"),
+	} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("output missing %q:\n%s", expected, out.String())
+		}
+	}
+	if got := read(t, filepath.Join(codexHome, "skills", "voice", "SKILL.md")); got != "voice v2\n" {
+		t.Fatalf("voice = %q", got)
+	}
+	if got := read(t, filepath.Join(codexHome, "AGENTS.md")); got != letter.Block("# the letter\n") {
+		t.Fatalf("AGENTS.md = %q", got)
+	}
+	if exists(filepath.Join(home, ".codex")) {
+		t.Fatal("~/.codex was created although CODEX_HOME points elsewhere")
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\",\n    \"codex\"\n  ]\n}\n" {
+		t.Fatalf("config = %q", got)
 	}
 }
 
@@ -800,7 +842,7 @@ func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := harness.ByKeys([]string{"codex"})
+	rows, err := harness.Resolve(home, opts.Getenv).ByKeys([]string{"codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
