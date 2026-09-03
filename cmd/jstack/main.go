@@ -112,6 +112,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	err = deps.setup(ctx, setup.Options{
 		Files:            jstack.Files,
 		Home:             home,
+		Getenv:           os.Getenv,
 		Harness:          *harnesses,
 		InstallTools:     *installTools,
 		UpdateTools:      *updateTools,

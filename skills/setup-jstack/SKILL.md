@@ -46,13 +46,15 @@ Read the report back to them. If a tool is still missing or outdated, quote its 
 
 ## Harnesses
 
-| Key | Harness | Found by | Skills go to | Letter goes to |
-| --- | --- | --- | --- | --- |
-| `claude` | Claude Code | `~/.claude` | `~/.claude/skills` | `~/.claude/CLAUDE.md` |
-| `codex` | Codex | `~/.codex` | `~/.codex/skills` | `~/.codex/AGENTS.md` |
-| `opencode` | OpenCode | `~/.config/opencode` | `~/.config/opencode/skills` | `~/.config/opencode/AGENTS.md` |
-| `cursor` | Cursor | `~/.cursor` | `~/.cursor/skills` | `~/.cursor/rules/jstack.mdc`, with `alwaysApply` |
-| `pi` | Pi | `~/.pi/agent` | `~/.pi/agent/skills` | `~/.pi/agent/AGENTS.md` |
+| Key | Harness | Found by | Skills go to | Letter goes to | Moved by |
+| --- | --- | --- | --- | --- | --- |
+| `claude` | Claude Code | `~/.claude` | `~/.claude/skills` | `~/.claude/CLAUDE.md` | `CLAUDE_CONFIG_DIR` |
+| `codex` | Codex | `~/.codex` | `~/.codex/skills` | `~/.codex/AGENTS.md` | `CODEX_HOME` |
+| `opencode` | OpenCode | `~/.config/opencode` | `~/.config/opencode/skills` | `~/.config/opencode/AGENTS.md` | |
+| `cursor` | Cursor | `~/.cursor` | `~/.cursor/skills` | `~/.cursor/rules/jstack.mdc`, with `alwaysApply` | |
+| `pi` | Pi | `~/.pi/agent` | `~/.pi/agent/skills` | `~/.pi/agent/AGENTS.md` | |
+
+When a row's variable is set and non-empty, that harness is found, and its skills and letter land, under the folder it names instead of the one under `~`. That is where the harness reads from, so setup follows it. The plan shows the folder with the variable next to it, `/work/codex (CODEX_HOME)`. An empty variable means the default.
 
 OpenCode, Cursor, and Pi also read skills from Claude Code's folder or the shared `~/.agents/skills` folder. OpenCode was checked with the same skill in both folders and lists it once, keyed by name. Cursor and Pi are unverified. `decisions.md` has what was checked.
 
