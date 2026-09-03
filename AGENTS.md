@@ -23,6 +23,10 @@ Many of the projects we work on include some sort of MCP, CLI, or other interfac
 
 An error is not a diagnostic, it's the next instruction for whoever hits it. Write it in the receiver's vocabulary, with an action the receiver can take. When the receiver is an agent, the error lands in its context and becomes its prompt, so it carries what was wrong, what was expected, a corrected example, and a stable code to branch on. When the receiver is a human, plain words, no internal vocabulary, name the thing on their screen. Internal causes never cross to either surface untranslated. Cause goes to the logs, the surface owns its message. One test for every audience: can the receiver take their next step from the message alone? `validate-at-the-edges` has the contract.
 
+## Redesign, don't bolt on
+
+When a new requirement lands, the easy move is to attach it to whatever's already there. A flag here, a special case there. Don't. Ask what we would have built if we'd known about this requirement on day one, and build that. Push it all the way through, types, docs, examples, tests. `no-bolt-ons`.
+
 ## Fight for the "obvious" solution
 
 We should avoid being clever and doing things because they seem smart. We want everything we build to be so obvious it feels kind of stupid. When one of us prompts you, never hesitate to push back and suggest ways we could make things more obvious. Note that simple and obvious are not always aligned, sometimes the obvious solution is more complex. Obvious solutions are the defaults that agents would assume are the case. `fight-for-obvious`.
@@ -30,6 +34,10 @@ We should avoid being clever and doing things because they seem smart. We want e
 ## Guard against real failures, not imagined ones
 
 Defensive code and abstraction are both insurance, and insurance has premiums. A guard needs a named failure, which caller passes null, which call actually throws. If you can't name it, don't write it. An abstraction is earned by the second real case, never the first imagined one. The tell in both is the word "might". When you catch yourself justifying code with might, stop, either turn it into "does, because here's the evidence" or delete the code. `less-code` has the rest.
+
+## Build the tool, not the edit
+
+If the work isn't trivial, write the script, codemod, or generator that does it instead of doing it by hand. It's faster, and it's checkable, a reviewer runs one script instead of trusting your word. Do the first unit by hand to learn the recipe, then build the tool. Its output is the evidence. `build-the-tool`.
 
 ## Speak plainly
 
@@ -57,9 +65,17 @@ This might seem counter-intuitive, so hear me out. Agents need tools and instruc
 
 Every task ships with evidence that it works, attached to its task in the tracker and referenced from the pull request. No evidence, no turn-in. "It should work" is a guess, not a state of the world. Evidence lives in the tracker, never in git. Bugs get reproduced and captured before any code changes, then captured again after. Anything a user can see gets screenshots. Anything that changes state gets receipts. Use the feature like a real user, with agent-browser, and walk web flows keyboard-only too. Your finish line is turn-in, not completion. A human reviews, a human merges, and you never merge or complete your own work. `prove-it` has what counts as evidence.
 
+## Break code, never data
+
+In a planned rewrite, don't keep every step working with throwaway compatibility code. It sticks around and becomes debt. Code in your branch can break between phases, as long as the breakage is planned and reversible. Anything persisted or deployed never breaks, because a version you didn't deploy is reading it. Add first, migrate, then remove. `break-code-not-data`.
+
 ## Sequence the gates: fix first, judge last
 
 Anything that can change the code runs before anything that judges the code. Format and lint with autofix, then typecheck, then the fast tests, then the review gate looped until it says well done, then the full suite once at the end. The review gate is a different model than the one that wrote the change, and it's required. If it isn't installed or fails to run, stop and say so. A missing gate is a blocker, not an inconvenience. If the full suite fails at the end, fix it, rerun the fast tier, and review only the fix. `verify-each-step` has the order, `land-pr` runs it.
+
+## Guard your context
+
+Context in a session is finite and you don't get it back. Send bulk to subagents, long output, big files, wide searches, and keep only the answer in the main thread. Hand them file pointers, not pasted content. You still own every subagent's result. `keep-context-lean`.
 
 ## Use what your harness gives you
 
@@ -83,9 +99,13 @@ These are meant to steer us in the right direction. They are not hard-set, but w
 - **Data outlives code.** Every schema or format change works while old and new code run side by side. Additive first, migrate, then remove.
 - **Assume retries, make it idempotent.** Anything that can be triggered twice will be. If it can't be idempotent, it needs a dedupe key.
 - **Do the napkin math first.** Before anything touches scale, storage, or a metered service, estimate it in one line. Same before running a loop against a metered resource.
+- **The product is the experience.** Ship fewer things done well. Empty, loading, and error states are real states, design them. The next maintainer is a user too. `experience-first`.
+- **Put the rules in a structure, not in ifs.** When the same assumption shows up in conditionals across files, reach for a state machine, a typed model, or a lookup table. The tell is one more branch on an if chain. `no-scattered-ifs`.
+- **One writer per thing.** When two agents or processes might write the same file, branch, key, or worktree, give each its own and merge when reading. Instructions to take turns are not concurrency control. `no-shared-writes`.
+- **Don't say it twice.** The second time you write the same instruction, or get the same correction, turn it into a lint, a type, a hook, or a script and delete the text. `dont-say-it-twice`.
 - **Two strikes on the same approach = stop.** If the second attempt fails the way the first did, the approach is wrong, not the execution. Write down what failed and bring us your next-best idea.
 
-The skills `easy-to-read`, `strict-types`, `tests-are-code`, `safe-to-rerun`, `fix-the-cause`, `structure-first`, and `migrate-then-delete` carry these in full.
+The skills `easy-to-read`, `strict-types`, `tests-are-code`, `safe-to-rerun`, `fix-the-cause`, `structure-first`, `migrate-then-delete`, `experience-first`, `no-scattered-ifs`, `no-shared-writes`, and `dont-say-it-twice` carry these in full.
 
 ## Voice, everything
 
