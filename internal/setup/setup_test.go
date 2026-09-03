@@ -449,3 +449,25 @@ func TestLetterWriteKeepsModeAndLeavesNoStagedFile(t *testing.T) {
 		t.Fatalf("entries = %v, %v", entries, err)
 	}
 }
+
+func TestLetterWriteFollowsASymlinkedInstructionsFile(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, "dotfiles", "AGENTS.md")
+	write(t, target, "# mine\n")
+	link := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := writeFile(link, "new\n"); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link replaced by a file: %v, %v", info, err)
+	}
+	if got := read(t, target); got != "new\n" {
+		t.Fatalf("target = %q", got)
+	}
+}

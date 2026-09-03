@@ -529,11 +529,15 @@ func copyFile(source, destination string) error {
 
 // writeFile replaces path in one step: the new content lands in a temporary
 // file beside it and is renamed over the original only once fully written, so
-// a failed write leaves the user's file as it was.
+// a failed write leaves the user's file as it was. A symlink, the dotfiles
+// repo case, stays a symlink: the file it points to is what gets replaced.
 func writeFile(path, content string) error {
 	mode := os.FileMode(0o644)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm()
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			path = resolved
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot create %q: %w; make the parent writable and rerun", filepath.Dir(path), err)
