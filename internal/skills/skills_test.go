@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"testing/fstest"
 )
@@ -29,6 +30,44 @@ func write(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// failRenamesOutside makes every rename that leaves or enters tree fail the way the
+// kernel does across filesystems, which is what a CODEX_HOME or
+// CLAUDE_CONFIG_DIR on another mount looks like to os.Rename.
+func failRenamesOutside(t *testing.T, tree string) {
+	t.Helper()
+	rename = func(oldPath, newPath string) error {
+		if !strings.HasPrefix(oldPath, tree) || !strings.HasPrefix(newPath, tree) {
+			return &os.LinkError{Op: "rename", Old: oldPath, New: newPath, Err: syscall.EXDEV}
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	t.Cleanup(func() { rename = os.Rename })
+}
+
+func failRenameInto(t *testing.T, target string) {
+	t.Helper()
+	rename = func(oldPath, newPath string) error {
+		if newPath == target && strings.Contains(oldPath, ".jstack-staging-") {
+			return &os.LinkError{Op: "rename", Old: oldPath, New: newPath, Err: syscall.EACCES}
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	t.Cleanup(func() { rename = os.Rename })
+}
+
+func assertNoWorkFolders(t *testing.T, dest string) {
+	t.Helper()
+	entries, err := os.ReadDir(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".jstack-") {
+			t.Fatalf("work folder left behind in dest: %s", entry.Name())
+		}
 	}
 }
 
@@ -135,6 +174,133 @@ func TestApplyCopiesNewBacksUpChangedAndLeavesLocalAlone(t *testing.T) {
 	if after.Pending() || strings.Join(after.Same, ",") != "how,voice,why" {
 		t.Fatalf("after = %+v", after)
 	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestApplyBacksUpAChangedSkillAcrossFilesystems(t *testing.T) {
+	dest := t.TempDir()
+	failRenamesOutside(t, dest)
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me in the backup\n")
+	backup := filepath.Join(t.TempDir(), "backup", "codex", "skills")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(source(), dest, plan, backup); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(dest, "voice", "SKILL.md"):      "voice v2\n",
+		filepath.Join(backup, "voice", "SKILL.md"):    "voice v1\n",
+		filepath.Join(backup, "voice", "old-only.md"): "keep me in the backup\n",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("%s = %q, %v; want %q", path, got, err, want)
+		}
+	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestBackupKeepsSymlinksAndFileModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need a privilege on windows")
+	}
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	write(t, filepath.Join(dest, "voice", "run"), "no shebang, made runnable by hand\n")
+	if err := os.Chmod(filepath.Join(dest, "voice", "run"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("SKILL.md", filepath.Join(dest, "voice", "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dest, "voice", "private", "notes.md"), "mine\n")
+	if err := os.Chmod(filepath.Join(dest, "voice", "private"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(t.TempDir(), "backup")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(source(), dest, plan, backup); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(filepath.Join(backup, "voice", "link.md"))
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link.md in the backup = %v, %v; want a symlink", info, err)
+	}
+	if link, _ := os.Readlink(filepath.Join(backup, "voice", "link.md")); link != "SKILL.md" {
+		t.Fatalf("link.md points at %q", link)
+	}
+	for path, want := range map[string]os.FileMode{
+		filepath.Join(backup, "voice", "run"):     0o700,
+		filepath.Join(backup, "voice", "private"): 0o700,
+	} {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != want {
+			t.Fatalf("%s mode = %v, %v; want %o", path, info.Mode().Perm(), err, want)
+		}
+	}
+}
+
+func TestSymlinkedSkillFolderIsBackedUpAsALink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need a privilege on windows")
+	}
+	dest := t.TempDir()
+	elsewhere := filepath.Join(t.TempDir(), "dotfiles", "voice")
+	write(t, filepath.Join(elsewhere, "SKILL.md"), "voice v1\n")
+	if err := os.Symlink(elsewhere, filepath.Join(dest, "voice")); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(t.TempDir(), "backup", "claude", "skills")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(source(), dest, plan, backup); err != nil {
+		t.Fatal(err)
+	}
+	if link, err := os.Readlink(filepath.Join(backup, "voice")); err != nil || link != elsewhere {
+		t.Fatalf("backup voice = %q, %v; want a link to %q", link, err, elsewhere)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dest, "voice", "SKILL.md")); string(got) != "voice v2\n" {
+		t.Fatalf("installed voice = %q", got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(elsewhere, "SKILL.md")); string(got) != "voice v1\n" {
+		t.Fatalf("the linked folder was touched: %q", got)
+	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
+	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me\n")
+	failRenameInto(t, filepath.Join(dest, "voice"))
+	backup := filepath.Join(t.TempDir(), "backup")
+	plan, err := PlanFor(source(), dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Apply(source(), dest, plan, backup)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), "back as it was") {
+		t.Fatalf("err = %v", err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(dest, "voice", "SKILL.md"):    "voice v1\n",
+		filepath.Join(dest, "voice", "old-only.md"): "keep me\n",
+		filepath.Join(backup, "voice", "SKILL.md"):  "voice v1\n",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("%s = %q, %v; want %q", path, got, err, want)
+		}
+	}
+	assertNoWorkFolders(t, dest)
 }
 
 func TestApplyWithNothingChangedMakesNoBackup(t *testing.T) {
@@ -174,13 +340,5 @@ func TestApplyFailureLeavesEachSkillWholeAndNoStaging(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(dest, "why", "mine.md")); string(got) != "appeared after the plan\n" {
 		t.Fatalf("why was touched: %q", got)
 	}
-	entries, err := os.ReadDir(dest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".jstack-staging-") {
-			t.Fatalf("staging folder left behind: %s", entry.Name())
-		}
-	}
+	assertNoWorkFolders(t, dest)
 }

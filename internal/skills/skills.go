@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -88,7 +89,7 @@ func PlanFor(source fs.FS, dest string) (Plan, error) {
 // Apply puts the new and changed skills into dest one skill at a time. Each
 // one is staged beside its destination first, then swapped in, so a copy that
 // fails leaves that skill as it was and every earlier skill fully replaced.
-// A changed skill is moved to backupDir before the swap.
+// A changed skill is copied to backupDir before the swap.
 func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
@@ -105,6 +106,13 @@ func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
 	return nil
 }
 
+// rename is os.Rename behind a name the tests can point at a failing stand-in.
+var rename = os.Rename
+
+// swapIn only ever renames inside dest. The backup folder can sit on another
+// filesystem, where a rename fails with EXDEV, so the old folder is retired
+// beside its replacement first, copied from there into the backup, and only
+// removed once the swap has succeeded.
 func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) error {
 	staged, err := os.MkdirTemp(dest, ".jstack-staging-"+name+"-")
 	if err != nil {
@@ -115,24 +123,72 @@ func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) err
 	if err := copyDir(source, name, staged); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot write skill %q into %q: %w; the installed copy is untouched, fix the permissions or free space and rerun", name, dest, err)
 	}
-	backup := filepath.Join(backupDir, name)
-	if replace {
-		if err := os.MkdirAll(backupDir, 0o755); err != nil {
-			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w; make it writable and rerun", backupDir, err)
+	if !replace {
+		if err := rename(staged, final); err != nil {
+			return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w; fix the permissions and rerun", name, final, err)
 		}
-		if err := os.Rename(final, backup); err != nil {
-			return fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot move %q into %q: %w; the installed copy is untouched, fix the permissions and rerun", final, backupDir, err)
-		}
+		return nil
 	}
-	if err := os.Rename(staged, final); err != nil {
-		if replace {
-			if restoreErr := os.Rename(backup, final); restoreErr != nil {
-				return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place: %w, and restoring it failed too: %v; copy %q back to %q by hand", name, err, restoreErr, backup, final)
-			}
-		}
-		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w; the installed copy is back as it was, fix the permissions and rerun", name, final, err)
+	retired := filepath.Join(dest, ".jstack-retired-"+name+"-"+strconv.Itoa(os.Getpid()))
+	if err := rename(final, retired); err != nil {
+		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot move skill %q aside to %q: %w; the installed copy is untouched, fix the permissions and rerun", name, retired, err)
+	}
+	backup := filepath.Join(backupDir, name)
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w", backupDir, err))
+	}
+	if err := copyTree(retired, backup); err != nil {
+		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot copy skill %q into %q: %w", name, backup, err))
+	}
+	if err := rename(staged, final); err != nil {
+		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w", name, final, err))
+	}
+	if err := os.RemoveAll(retired); err != nil {
+		return fmt.Errorf("[JSTACK-SKILLS-CLEANUP] cannot remove the retired copy of skill %q at %q: %w; the new skill is in place and the old one is backed up in %q, delete that folder by hand", name, retired, err, backup)
 	}
 	return nil
+}
+
+// restore puts the retired folder back where it was and finishes the error
+// message with what state the skill is in.
+func restore(retired, final string, cause error) error {
+	if err := rename(retired, final); err != nil {
+		return fmt.Errorf("%w, and restoring it failed too: %v; move %q back to %q by hand", cause, err, retired, final)
+	}
+	return fmt.Errorf("%w; the installed copy is back as it was, fix the permissions and rerun", cause)
+}
+
+// copyTree copies an installed skill as it is on disk: symlinks stay
+// symlinks and files and folders keep their modes, so the backup can be put
+// back whole. Folders always get owner write and search so their contents
+// can land in them.
+func copyTree(source, target string) error {
+	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, _ := filepath.Rel(source, path)
+		destination := filepath.Join(target, relative)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case entry.IsDir():
+			return os.MkdirAll(destination, info.Mode().Perm()|0o700)
+		case info.Mode()&os.ModeSymlink != 0:
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, destination)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(destination, content, info.Mode().Perm())
+	})
 }
 
 func dirSame(source fs.FS, name, target string) (bool, error) {
