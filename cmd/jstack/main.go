@@ -54,16 +54,19 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 func runWith(args []string, stdin io.Reader, stdout, stderr io.Writer, deps dependencies) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
+	// setup keeps the default signal handling: Ctrl-C at a question ends the
+	// process before anything is written. upgrade turns signals into a
+	// cancelled context so a download stops cleanly.
 	switch args[0] {
 	case "setup":
-		return runSetup(ctx, args[1:], stdin, stdout, stderr, deps)
+		return runSetup(context.Background(), args[1:], stdin, stdout, stderr, deps)
 	case "upgrade":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 		return runUpgrade(ctx, args[1:], stdout, stderr, deps)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, version)
@@ -72,6 +75,8 @@ func runWith(args []string, stdin io.Reader, stdout, stderr io.Writer, deps depe
 		fmt.Fprint(stdout, usage)
 		return 0
 	case "__upgrade-cleanup":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 		return runUpgradeCleanup(ctx, args[1:], stderr)
 	}
 	fmt.Fprintf(stderr, "jstack: [JSTACK-CLI-COMMAND] unknown command %q; use `jstack setup`, `jstack upgrade`, or `jstack version`\n", args[0])
