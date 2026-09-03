@@ -376,3 +376,12 @@ func testBinaryName() string {
 	}
 	return "jstack"
 }
+
+func TestSetupAppliesOnlyWithSavedPicks(t *testing.T) {
+	if got := strings.Join(setupArguments(true), " "); got != "setup --yes" {
+		t.Fatalf("with picks = %q", got)
+	}
+	if got := strings.Join(setupArguments(false), " "); got != "setup" {
+		t.Fatalf("without picks = %q", got)
+	}
+}

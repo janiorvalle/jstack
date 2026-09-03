@@ -96,7 +96,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	printPlan(out, opts.Home, embedded, current)
 	if !opts.Interactive && !opts.Yes {
-		printRerun(out, opts.Home, picked, current)
+		printRerun(out, opts, picked, current)
 		return nil
 	}
 	if opts.Interactive && !opts.Yes {
@@ -326,22 +326,29 @@ func toolIntent(status toolStatus) string {
 	return line + ", skill missing, would run: " + status.tool.SkillInstall
 }
 
-func printRerun(out io.Writer, home string, picked []harness.Harness, current plan) {
+func printRerun(out io.Writer, opts Options, picked []harness.Harness, current plan) {
 	fmt.Fprintln(out, "\nNo terminal, so nothing changed. Rerun with the flags to apply:")
 	keys := strings.Join(harness.Keys(picked), ",")
 	if keys == "" {
 		keys = "claude,codex"
 	}
-	fmt.Fprintf(out, "  jstack setup --harness %s --yes\n", keys)
+	line := "jstack setup --harness " + keys + " --yes"
+	if opts.InstallTools {
+		line += " --install-tools"
+	}
+	if opts.KeepInstructions {
+		line += " --keep-instructions"
+	}
+	fmt.Fprintf(out, "  %s\n", line)
 	for _, status := range current.tools {
-		if !status.present && status.tool.Command != "" {
+		if !opts.InstallTools && !status.present && status.tool.Command != "" {
 			fmt.Fprintln(out, "  add --install-tools to also install the missing tools")
 			break
 		}
 	}
 	for _, entry := range current.harnesses {
-		if entry.letter.Outcome == letter.Replace && entry.harness.Lead == "" {
-			fmt.Fprintf(out, "  add --keep-instructions to append the letter to %s instead of replacing it\n", display(home, entry.harness.InstructionsPath(home)))
+		if !opts.KeepInstructions && entry.letter.Outcome == letter.Replace && entry.harness.Lead == "" {
+			fmt.Fprintf(out, "  add --keep-instructions to append the letter to %s instead of replacing it\n", display(opts.Home, entry.harness.InstructionsPath(opts.Home)))
 		}
 	}
 }

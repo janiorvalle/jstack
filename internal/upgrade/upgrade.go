@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/janiorvalle/jstack/internal/setup"
 )
 
 const (
@@ -400,11 +402,17 @@ func finishWithSetup(ctx context.Context, rerun func(context.Context, string, io
 	return nil
 }
 
-// rerunSetup applies setup from the new binary. --yes because an upgrade is
-// the apply, with or without a terminal: the picks are saved, and tools are
-// still never installed without --install-tools.
+// rerunSetup runs setup from the new binary. With saved picks it applies
+// straight away, terminal or not, and tools are still never installed without
+// --install-tools. Without saved picks nobody has chosen harnesses yet, so
+// setup asks on a terminal and only prints the plan without one.
 func rerunSetup(ctx context.Context, executable string, output io.Writer) error {
-	command := exec.CommandContext(ctx, executable, "setup", "--yes")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot find the home directory: %w", err)
+	}
+	command := exec.CommandContext(ctx, executable, setupArguments(setup.HasSavedPicks(home))...)
+	command.Stdin = os.Stdin
 	command.Stdout = output
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
@@ -412,4 +420,11 @@ func rerunSetup(ctx context.Context, executable string, output io.Writer) error 
 		return fmt.Errorf("%w (%s)", err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
+}
+
+func setupArguments(savedPicks bool) []string {
+	if savedPicks {
+		return []string{"setup", "--yes"}
+	}
+	return []string{"setup"}
 }

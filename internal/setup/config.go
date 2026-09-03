@@ -46,3 +46,10 @@ func saveConfig(home string, config Config) error {
 	}
 	return nil
 }
+
+// HasSavedPicks reports whether an earlier run saved harness picks, which is
+// what lets a rerun apply without asking.
+func HasSavedPicks(home string) bool {
+	config, err := loadConfig(home)
+	return err == nil && len(config.Harnesses) > 0
+}

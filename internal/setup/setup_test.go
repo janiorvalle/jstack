@@ -391,3 +391,38 @@ func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
+
+func TestHasSavedPicks(t *testing.T) {
+	home := t.TempDir()
+	if HasSavedPicks(home) {
+		t.Fatal("picks reported before any run")
+	}
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":[]}`)
+	if HasSavedPicks(home) {
+		t.Fatal("empty picks reported as saved")
+	}
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["codex"]}`)
+	if !HasSavedPicks(home) {
+		t.Fatal("saved picks not reported")
+	}
+}
+
+func TestNoTerminalRerunLineCarriesTheFlagsGiven(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := &fakeShell{present: map[string]bool{"check-git": true}}
+	opts, out := options(t, home, shell, "")
+	opts.KeepInstructions = true
+	opts.InstallTools = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "jstack setup --harness claude --yes --install-tools --keep-instructions") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "add --") {
+		t.Fatalf("hints for flags already given:\n%s", out.String())
+	}
+	if read(t, filepath.Join(home, ".claude", "CLAUDE.md")) != "# my own notes\n" {
+		t.Fatal("instructions file changed")
+	}
+}

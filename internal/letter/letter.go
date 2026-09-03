@@ -41,12 +41,16 @@ func Block(text string) string {
 // This is an opinionated stack, so a file with other content becomes the letter
 // and the old file is backed up, unless keepExisting appends the block instead.
 // Once the markers are in the file, only the text between them changes, so a
-// choice made with keepExisting holds on every later run.
+// choice made with keepExisting holds on every later run. The one exception is
+// a lead the file has lost, since without it the harness won't read the file.
 func Plan(current, text, lead string, keepExisting bool) Change {
 	block := Block(text)
 	startAt := strings.Index(current, Start)
 	endAt := strings.Index(current, End)
 	if startAt >= 0 && endAt > startAt {
+		if !strings.HasPrefix(current, lead) {
+			return Change{Outcome: Replace, Content: lead + block}
+		}
 		updated := current[:startAt] + strings.TrimRight(block, "\n") + current[endAt+len(End):]
 		if updated == current {
 			return Change{Outcome: Same, Content: current}

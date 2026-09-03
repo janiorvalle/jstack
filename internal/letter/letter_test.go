@@ -27,6 +27,7 @@ func TestPlanDecidesFromWhatTheFileHolds(t *testing.T) {
 		{name: "lead is written on create", current: "", lead: "lead\n", outcome: Create, content: "lead\n" + block},
 		{name: "lead is written on replace", current: "# mine\n", lead: "lead\n", outcome: Replace, content: "lead\n" + block},
 		{name: "keep on a file that starts with the lead appends", current: "lead\nmine\n", lead: "lead\n", keep: true, outcome: Append, content: "lead\nmine\n\n" + block},
+		{name: "a marked file that lost the lead is replaced", current: "---\nalwaysApply: false\n---\n" + Block("old"), lead: "lead\n", outcome: Replace, content: "lead\n" + block},
 		{name: "keep on a file without the lead is replaced", current: "---\nalwaysApply: false\n---\nmine\n", lead: "lead\n", keep: true, outcome: Replace, content: "lead\n" + block},
 	}
 	for _, tc := range cases {
