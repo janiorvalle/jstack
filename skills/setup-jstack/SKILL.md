@@ -11,7 +11,7 @@ One command on a fresh machine. Everything the flow needs ends up installed, or 
 
 1. **Skills.** Copies `skills/` into the harness's skills folder. Backs up anything it overwrites. Never touches a skill it doesn't own.
 2. **Vendor skills.** Fetches each entry in `vendor.json` from its repo at its pinned commit and installs it the same way. These are third-party skills the stack depends on but doesn't rewrite.
-3. **Instructions.** Puts `AGENTS.md` from the repo into the harness's user-level instructions file, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, or `~/.cursor/rules/jstack.mdc` with `alwaysApply` set, as a block between `<!-- jstack:start -->` and `<!-- jstack:end -->`. Later runs replace the block and never touch anything outside it. This is what makes the mode always on, since the harnesses have no plugin hook of their own.
+3. **Instructions.** Makes the harness's user-level instructions file the letter. `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, or `~/.cursor/rules/jstack.mdc` with `alwaysApply` set. The letter goes in as a block between `<!-- jstack:start -->` and `<!-- jstack:end -->`. If the file already has other content, it's replaced and the old file is backed up next to it as `.bak-<timestamp>`, because this is an opinionated stack and two letters side by side is the drift it exists to prevent. Pass `--keep-instructions` to append the block and leave your file alone instead. Later runs only change the text between the markers. This is what makes the mode always on, since the harnesses have no plugin hook of their own.
 4. **Tools.** For each tool in `tools.md`, runs its check. Missing tools get listed with their install line. Nothing gets installed unless you say so, or the session was already given permission to set things up.
 5. **Tool skills.** For each tool that's present, runs its skill install command if the skill isn't in the folder yet. The tool owns that skill and keeps it current.
 6. **Hooks.** If you're in the jstack checkout, points git at `.githooks/`.
@@ -23,6 +23,7 @@ One command on a fresh machine. Everything the flow needs ends up installed, or 
 - Target: `--agent auto` picks the harness you're running in. `--agent both` does Codex and Claude Code. `--agent all` adds Cursor. `--agent cursor` on its own works too.
 - Dry run unless `--apply`.
 - Tools are never installed unless `--install-tools` is passed. Ask the human first.
+- An existing instructions file is replaced and backed up unless `--keep-instructions` is passed.
 
 ```bash
 python3 skills/setup-jstack/scripts/setup.py --agent auto                    # dry run, shows everything it would do

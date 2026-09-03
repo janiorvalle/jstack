@@ -20,6 +20,8 @@ python3 skills/setup-jstack/scripts/setup.py --agent auto --apply
 
 `--agent auto` picks the harness you're running in. `--agent both` installs into Codex and Claude Code, `--agent all` adds Cursor. Without `--apply` it's a dry run. It never deletes a skill it doesn't own, and it backs up anything it overwrites. It also fetches the vendored third-party skills from `vendor.json`, checks every tool in `tools.md`, and installs each tool's own skill. Add `--install-tools` to have it install missing tools too.
 
+It also makes your harness's user-level instructions file the letter, backing up whatever was there. Pass `--keep-instructions` to append instead.
+
 Restart your harness afterward so the skills load.
 
 ## What's in it
