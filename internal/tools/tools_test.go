@@ -31,8 +31,22 @@ func TestParseKeepsSectionsWithACheckLine(t *testing.T) {
 		t.Fatalf("quest version = %q, repo = %q", quest.Version, quest.Repo)
 	}
 	bare := parsed[2]
-	if bare.Install != "see tools.md" || bare.Command != "" {
+	if bare.Install != "see https://github.com/janiorvalle/jstack/blob/main/tools.md#bare" || bare.Command != "" {
 		t.Fatalf("bare = %+v", bare)
+	}
+}
+
+func TestPrerequisiteLinksToItsOwnHeading(t *testing.T) {
+	prerequisite := "## git and gh\n\nProse.\n\n- Check: `command -v git`\n- macOS: `brew install git gh`\n- Then `gh auth login`\n"
+	parsed := Parse(prerequisite)
+	if len(parsed) != 1 {
+		t.Fatalf("parsed %d tools, want 1: %+v", len(parsed), parsed)
+	}
+	if parsed[0].Command != "" {
+		t.Fatalf("a prerequisite has a command to run: %q", parsed[0].Command)
+	}
+	if parsed[0].Install != "see https://github.com/janiorvalle/jstack/blob/main/tools.md#git-and-gh" {
+		t.Fatalf("install = %q", parsed[0].Install)
 	}
 }
 

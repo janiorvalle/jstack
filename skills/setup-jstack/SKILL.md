@@ -17,7 +17,7 @@ The installer verifies the checksum, puts `jstack` in `~/.local/bin`, and runs `
 
 ## What setup does, in order
 
-1. **Plan.** Lists the harnesses it knows and which ones it found on the machine. For each picked harness: which skills are new, changed, or the same, which local skills it will leave alone, and what happens to the instructions file. Then each tool from `tools.md`: missing with its install line, outdated with the installed and the latest version, or current. The latest version comes from the tool's GitHub releases, or from npm for agent-browser, one short request per tool; when that lookup fails the tool shows as current with "latest unknown" and setup carries on. git and gh have no version line and are only ever missing or present.
+1. **Plan.** Lists the harnesses it knows and which ones it found on the machine. For each picked harness: which skills are new, changed, or the same, which local skills it will leave alone, and what happens to the instructions file. Then each tool from `tools.md`: missing with its install line, outdated with the installed and the latest version, or current. The latest version comes from the tool's GitHub releases, or from npm for agent-browser, one short request per tool; when that lookup fails the tool shows as current with "latest unknown" and setup carries on. git and gh are prerequisites: no version line, no install line, only ever missing or present, and a missing one shows a link to its section of `tools.md` instead of an install line.
 2. **Ask.** With a terminal, a numbered list of harnesses with the found ones preselected, then a y/N per missing tool and per outdated tool. Without a terminal, it stops here, prints the exact rerun line, and changes nothing.
 3. **Skills.** Copies the embedded skills into each picked harness's skills folder. A skill that differs is moved to `~/.jstack/backup/<stamp>/<harness>/skills/` first. A skill jstack doesn't own is never touched.
 4. **Letter.** Puts `AGENTS.md` into each picked harness's instructions file between `<!-- jstack:start -->` and `<!-- jstack:end -->`. A file with other content is replaced by the letter and backed up next to the skill backups, because this is an opinionated stack and two letters side by side is the drift it exists to prevent. `--keep-instructions` appends the block and leaves the file alone. Once the markers are in the file, later runs only change the text between them, so that choice holds without passing the flag again. The Cursor rule has to start with jstack's frontmatter, so a `jstack.mdc` without it is replaced and backed up even with the flag. The plan names any file that would be replaced.
@@ -42,7 +42,7 @@ jstack setup --harness all --yes --install-tools --update-tools
 jstack setup --harness claude --yes --keep-instructions
 ```
 
-Read the report back to them. If a tool is still missing or outdated, quote its install line. If the run changed anything, they need to restart the harness.
+Read the report back to them. If a tool is still missing or outdated, quote its install line. If git or gh is missing, setup never installs them: send the human to the git and gh section of `tools.md` for their platform's command, then `gh auth login`, then rerun setup. If the run changed anything, they need to restart the harness.
 
 ## Harnesses
 
@@ -62,7 +62,7 @@ One entry in `vendor.json`: repo, path inside it, pinned commit, license, and wh
 
 ## Adding a tool
 
-One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. Add a `Version` line with the command that prints the installed version and a `Repo` line with the GitHub page when setup should offer updates; the latest version is read from that repo's releases, or from the npm registry when the install line is `npm install -g`. The binary parses those lines. Keep the format. The next release carries the new tool.
+One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. Leave the `Install` line out for a prerequisite setup should check but never install, and list how to get it as prose instead; setup then reports it missing with a link to that section. Add a `Version` line with the command that prints the installed version and a `Repo` line with the GitHub page when setup should offer updates; the latest version is read from that repo's releases, or from the npm registry when the install line is `npm install -g`. The binary parses those lines. Keep the format. The next release carries the new tool.
 
 ## Developing the binary
 

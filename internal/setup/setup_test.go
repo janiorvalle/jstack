@@ -20,7 +20,7 @@ import (
 )
 
 const toolsFixture = "# Tools\n\n" +
-	"## git\n\n- Check: `check-git`\n- Install: `brew install git`\n\n" +
+	"## git\n\n- Check: `check-git`\n- macOS: `brew install git`\n\n" +
 	"## roast\n\n- Repo: https://github.com/x/roast\n- Check: `check-roast`\n- Version: `version-roast`\n- Install: `curl roast | sh`\n- Skill install: `roast install-skill`\n- Skill folder: `roast`\n\n" +
 	"## prose only\n\nno check line\n"
 
@@ -581,18 +581,57 @@ func TestFailedToolInstallIsAnErrorAfterTheRestLanded(t *testing.T) {
 func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
-	shell.present["check-git"] = false
+	shell.failing = map[string]bool{"check-roast": true}
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	opts.InstallTools = true
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "git: `brew install git` ran, but the check `check-git` still fails") {
+	if err == nil || !strings.Contains(err.Error(), "roast: `curl roast | sh` ran, but the check `check-roast` still fails") {
 		t.Fatalf("err = %v", err)
 	}
-	if !strings.Contains(out.String(), "FAILED git: installed, but its check still fails") {
+	if !strings.Contains(out.String(), "FAILED roast: installed, but its check still fails") {
 		t.Fatalf("output:\n%s", out.String())
 	}
-	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;brew install git;check-git;roast install-skill" {
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast" {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+const missingGit = "missing git, a prerequisite setup never installs. get it by hand, see https://github.com/janiorvalle/jstack/blob/main/tools.md#git"
+
+func TestMissingPrerequisiteIsReportedWithoutAnInstallOffer(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.1.0")
+	shell.present["check-git"] = false
+	opts, out := options(t, home, shell, "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), missingGit) {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "add --install-tools") {
+		t.Fatalf("hint to install a tool setup cannot install:\n%s", out.String())
+	}
+}
+
+func TestMissingPrerequisiteIsNeverAskedAboutOrInstalled(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.1.0")
+	shell.present["check-git"] = false
+	opts, out := options(t, home, shell, "\n")
+	opts.Interactive = true
+	opts.InstallTools = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Install git?") {
+		t.Fatalf("asked to install a prerequisite:\n%s", out.String())
+	}
+	if strings.Count(out.String(), missingGit) != 2 {
+		t.Fatalf("the plan and the report both name the prerequisite once:\n%s", out.String())
+	}
+	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }

@@ -9,9 +9,15 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+// Doc is where tools.md is read by a human; a tool with no install line
+// points at its own section there.
+const Doc = "https://github.com/janiorvalle/jstack/blob/main/tools.md"
+
 // Tool is one section of tools.md that carries a Check line. Version is the
 // command that prints the installed version and Repo is the tool's GitHub
-// page; both are empty for tools setup never updates, such as git.
+// page; both are empty for tools setup never updates, such as git. Command
+// is empty for a prerequisite, a section with no Install line: Install then
+// names its section of Doc, the only thing setup can offer for it.
 type Tool struct {
 	Title        string
 	Check        string
@@ -44,7 +50,7 @@ func Parse(markdown string) []Tool {
 		if check == "" {
 			continue
 		}
-		install := "see tools.md"
+		install := "see " + Doc + "#" + anchor(title)
 		command := ""
 		if match := installLine.FindStringSubmatch(section); match != nil {
 			install = strings.ReplaceAll(strings.TrimSpace(match[1]), "`", "")
@@ -62,6 +68,12 @@ func Parse(markdown string) []Tool {
 		})
 	}
 	return parsed
+}
+
+// anchor is the fragment GitHub gives a heading, so "git and gh" links to
+// #git-and-gh.
+func anchor(title string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(title)), " ", "-")
 }
 
 // commandFrom joins the backtick spans of an Install line into one shell
