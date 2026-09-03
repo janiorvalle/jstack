@@ -53,7 +53,7 @@ Read the report back to them. If a tool is still missing, quote its install line
 | `cursor` | Cursor | `~/.cursor` | `~/.cursor/skills` | `~/.cursor/rules/jstack.mdc`, with `alwaysApply` |
 | `pi` | Pi | `~/.pi/agent` | `~/.pi/agent/skills` | `~/.pi/agent/AGENTS.md` |
 
-OpenCode, Cursor, and Pi also read skills from other harnesses' folders, so picking one of them next to Claude Code can list each skill twice. `decisions.md` has what was checked.
+OpenCode, Cursor, and Pi also read skills from Claude Code's folder or the shared `~/.agents/skills` folder. OpenCode was checked with the same skill in both folders and lists it once, keyed by name. Cursor and Pi are unverified. `decisions.md` has what was checked.
 
 ## Adding a vendored skill
 
