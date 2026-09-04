@@ -59,8 +59,10 @@ Secret scanner. roast runs it over the diff before review and refuses to start w
 
 - Repo: https://github.com/trufflesecurity/trufflehog
 - Check: `command -v trufflehog`
+- Check (windows): `Get-Command trufflehog`
 - Version: `trufflehog --version`
 - Install: `curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin`
+- Install (windows): download the Windows tar.gz from https://github.com/trufflesecurity/trufflehog/releases, extract it with tar, and put trufflehog.exe on your PATH
 
 ## bgr
 

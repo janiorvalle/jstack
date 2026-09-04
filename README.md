@@ -24,7 +24,7 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex
 ```
 
-That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, adds the folder to your user PATH, and runs `jstack setup` the same way. Setup runs the tool checks in Windows PowerShell there. quest installs from its own PowerShell line; roast, bgr, and tokenomnom ship no PowerShell installer yet, so on Windows setup shows the zip to download and leaves that step to you.
+That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, adds the folder to your user PATH, and runs `jstack setup` the same way. Setup runs the tool checks in Windows PowerShell there. quest installs from its own PowerShell line; roast, bgr, tokenomnom, and TruffleHog ship no PowerShell installer yet, so on Windows setup shows the archive to download and leaves that step to you.
 
 Run `jstack setup` again any time. It remembers the harnesses you picked. `jstack upgrade` fetches the newest release and reruns setup.
 
