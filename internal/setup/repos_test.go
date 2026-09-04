@@ -344,7 +344,7 @@ func TestForgettingARepoLeavesItsSkillsAsLocal(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "changed  voice\n", "local    deploy, mine (untouched)")
+	expectAll(t, out.String(), "changed  voice\n", "local    deploy, mine, roast (untouched)")
 	if strings.Contains(out.String(), "skill repos") {
 		t.Fatalf("a forgotten repo was still listed:\n%s", out.String())
 	}
@@ -438,7 +438,7 @@ func TestLostCloneAndDeadNetworkKeepTheSkillAsInstalled(t *testing.T) {
 		"FAILED: `gh repo clone me/work-skills",
 		"voice  left as it is in each harness, me/work-skills couldn't be reached this run; a harness without it gets it once the repo is reached\n",
 		"changed  -\n",
-		"local    deploy, mine, voice (untouched)",
+		"local    deploy, mine, roast, voice (untouched)",
 	)
 	if got := read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")); got != "voice, my way\n" {
 		t.Fatalf("voice reverted to jstack's: %q", got)

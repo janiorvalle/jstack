@@ -219,7 +219,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := writeScripts(embedded, opts.Home); err != nil {
 		return err
 	}
-	toolsErr := applyTools(ctx, opts, current)
+	toolsErr := applyTools(ctx, opts, current, picked)
 	if !noted {
 		noteInstallFolderOffPath(opts, out)
 	}
@@ -417,6 +417,49 @@ func skillPresent(home string, picked []harness.Harness, folder string) bool {
 		}
 	}
 	return true
+}
+
+// carrySkill copies a tool's skill into each picked harness that lacks it and
+// returns the harnesses that got a copy. The tools write their skill into
+// Claude Code's and Codex's folders, some also into ~/.agents/skills, so a
+// person who picked OpenCode or Pi would otherwise never get it there and
+// every run would find it missing and install it again. The copy is the
+// tool's, not jstack's: no source owns the folder, so the skills plan leaves
+// it alone as local.
+func carrySkill(opts Options, picked []harness.Harness, folder string) ([]harness.Harness, error) {
+	source, found := toolSkillSource(opts, folder)
+	if !found {
+		return nil, nil
+	}
+	var copied []harness.Harness
+	for _, entry := range picked {
+		target := filepath.Join(entry.SkillsDir(), folder)
+		if isDir(target) {
+			continue
+		}
+		if err := os.CopyFS(target, os.DirFS(source)); err != nil {
+			os.RemoveAll(target)
+			return copied, fmt.Errorf("[JSTACK-SKILL-COPY] cannot copy %q to %q: %w; make %q writable and rerun", source, target, err, entry.SkillsDir())
+		}
+		copied = append(copied, entry)
+	}
+	return copied, nil
+}
+
+// toolSkillSource is the folder a tool's skill install left behind: the
+// shared ~/.agents/skills when the tool wrote there, else the first harness
+// in table order that has it, picked or not, which is Claude Code's.
+func toolSkillSource(opts Options, folder string) (string, bool) {
+	shared := filepath.Join(opts.Home, ".agents", "skills", folder)
+	if isDir(shared) {
+		return shared, true
+	}
+	for _, entry := range harness.Resolve(opts.Home, opts.Getenv) {
+		if candidate := filepath.Join(entry.SkillsDir(), folder); isDir(candidate) {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 func isDir(path string) bool {
@@ -684,11 +727,11 @@ func applyHarnesses(opts Options, embedded assets, current plan, backupRoot stri
 // applyTools installs what was agreed and reports every tool. The skills and
 // the letter are already in place, so a tool that fails is reported at the end
 // instead of stopping the run.
-func applyTools(ctx context.Context, opts Options, current plan) error {
+func applyTools(ctx context.Context, opts Options, current plan, picked []harness.Harness) error {
 	fmt.Fprintln(opts.Stdout, "\ntools")
 	var failures []error
 	for _, status := range current.tools {
-		if err := applyTool(ctx, opts, status, opts.Stdout); err != nil {
+		if err := applyTool(ctx, opts, status, picked); err != nil {
 			failures = append(failures, err)
 		}
 	}
@@ -789,7 +832,8 @@ func letterPast(outcome letter.Outcome) string {
 	return "updated between the markers in"
 }
 
-func applyTool(ctx context.Context, opts Options, status toolStatus, out io.Writer) error {
+func applyTool(ctx context.Context, opts Options, status toolStatus, picked []harness.Harness) error {
+	out := opts.Stdout
 	if !status.present && !status.install {
 		fmt.Fprintf(out, "  %s\n", toolState(status))
 		return nil
@@ -814,7 +858,16 @@ func applyTool(ctx context.Context, opts Options, status toolStatus, out io.Writ
 		fmt.Fprintf(out, "%s, skill install FAILED via %s: %v\n", line, status.tool.SkillInstall, err)
 		return fmt.Errorf("%s: `%s` failed: %v; run it by hand so the tool's skill is in place", status.tool.Title, status.tool.SkillInstall, err)
 	}
-	fmt.Fprintf(out, "%s, skill installed via %s\n", line, status.tool.SkillInstall)
+	line += ", skill installed via " + status.tool.SkillInstall
+	copied, err := carrySkill(opts, picked, status.tool.SkillFolder)
+	if len(copied) > 0 {
+		line += ", copied to " + names(copied)
+	}
+	if err != nil {
+		fmt.Fprintf(out, "%s, copy FAILED: %v\n", line, err)
+		return fmt.Errorf("%s: %w", status.tool.Title, err)
+	}
+	fmt.Fprintln(out, line)
 	return nil
 }
 
