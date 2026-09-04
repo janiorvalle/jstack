@@ -67,7 +67,7 @@ func TestPullLineChangesIntoTheCloneAndSyncsFromTheRepoItself(t *testing.T) {
 func TestRepoQuestionIsAskedOnceAndRememberedWhenSkipped(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
-	opts, out := options(t, home, shell, "\n\n")
+	opts, out := options(t, home, shell, "\n\n\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -106,7 +106,7 @@ func TestNoSkillRepoFlagRecordsTheAnswerHeadlessly(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"skill_repos_asked": true`) {
 		t.Fatalf("config = %q", got)
 	}
-	opts, out = options(t, home, shell, "\n")
+	opts, out = options(t, home, shell, "\n\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -119,7 +119,7 @@ func TestNoSkillRepoFlagRecordsTheAnswerHeadlessly(t *testing.T) {
 func TestRepoQuestionRejectsABadNameAndAsksAgain(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRepo()
-	opts, out := options(t, home, shell, "not a repo\nme/work-skills\n\ny\n")
+	opts, out := options(t, home, shell, "not a repo\nme/work-skills\n\n\ny\n")
 	opts.Interactive = true
 	opts.Overrides = map[string]string{"voice": "jstack"}
 	if err := Run(context.Background(), opts); err != nil {
@@ -200,7 +200,7 @@ func TestRerunPullsTheRepoAndUpdatesAChangedSkillWithABackup(t *testing.T) {
 func TestCollisionAsksAndRemembersThePick(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRepo()
-	opts, out := options(t, home, shell, "me/work-skills\n2\n\ny\n")
+	opts, out := options(t, home, shell, "me/work-skills\n\n2\n\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -230,7 +230,7 @@ func TestCollisionAsksAndRemembersThePick(t *testing.T) {
 func TestRenameChoiceStopsSetupWithTheHarnessesUntouched(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRepo()
-	opts, _ := options(t, home, shell, "me/work-skills\n3\n")
+	opts, _ := options(t, home, shell, "me/work-skills\n\n3\n")
 	opts.Interactive = true
 	err := Run(context.Background(), opts)
 	if err == nil || !strings.Contains(err.Error(), `rename the "voice" folder in me/work-skills`) {
