@@ -1,0 +1,119 @@
+---
+name: tracker
+description: "Use to claim a task, record the files you'll touch, file a ticket, turn work in with the PR and evidence, or find out which tracker a repo uses. One contract everywhere, and a short section per backend the repo's Tracker line can name: markdown tasks in the repo, GitHub Issues, Linear, or Jira. Every ticket is four labels under 120 words, checked by the lint before it's filed."
+---
+
+# Tracker
+
+Work lives in the tracker. What you do there is the same in every repo: claim, record the files, turn in, a human completes, evidence on the ticket. Only the backend differs, and the repo says which one on a single line. The sections at the bottom map each verb to that backend's commands.
+
+## The line that names the tracker
+
+A repo names its tracker on one line of its own `AGENTS.md`, or `CLAUDE.md` when that's the file it keeps. The line starts with `Tracker:`, then the backend, then the one thing that backend needs:
+
+```
+Tracker: markdown tasks/
+Tracker: github-issues
+Tracker: linear SR
+Tracker: jira SR
+```
+
+The folder for markdown. Nothing for GitHub Issues, since gh reads the repo from git. The team key for Linear. The project key for Jira. Find it with `grep -h '^Tracker:' AGENTS.md CLAUDE.md`. No line means the repo has no tracker: say so and stop, don't pick one.
+
+## The five verbs
+
+1. **Claim** before touching project files. Put your name on the ticket so nobody else picks it up, and open your first message with the ticket id.
+2. **Record the files** you expect to change, on the ticket, right after claiming. A reviewer reads them against the diff.
+3. **Turn in** with the PR link and the evidence. Then stop.
+4. **A human completes** after the merge. Never the agent that built it.
+5. **Evidence lives on the ticket.** Never in git.
+
+## The ticket shape
+
+Anyone gets it in twenty seconds. Four labels, at most 120 words:
+
+```
+Problem: Two sentences, from the person who hits it.
+Fix: Two or three sentences.
+Done when:
+- Up to four observable lines.
+Out of scope: Optional, one line.
+```
+
+Files to touch and design notes go in the PR, not the ticket. The same shape is the PR description and the turn-in comment.
+
+Run the lint before filing. It reads a file or stdin and exits non-zero over 120 words, when a label is missing, or when Done when has no lines or more than four, and it says what to cut:
+
+```sh
+python3 scripts/ticket-lint.py ticket.md
+```
+
+One that passes:
+
+```
+Problem: Opening a new thread ignores my "new worktree" default when I'm already in a worktree. I set the preference and nothing changes.
+Fix: New threads inherit only the project from context. Branch, worktree, and env mode come from the configured defaults every time.
+Done when:
+- A new thread from inside a worktree lands in a fresh worktree.
+- The preference screen's value is the one used.
+Out of scope: The sidebar's thread list.
+```
+
+## Evidence
+
+What counts as evidence is in `prove-it`. Where it goes is here: on the ticket, as comments with links and attachments, in whatever form the backend has. GitHub comments take images, video, and PDFs but not HTML, so on GitHub the walkthrough goes in a gist, `gh gist create walkthrough.html`, linked from the comment. Nothing binary ever enters git, and a `tasks/` folder is git too.
+
+## Markdown tasks in the repo
+
+`Tracker: markdown tasks/`. One file per task, named for the task, under `tasks/open/`, `tasks/doing/`, and `tasks/done/`. The folder is the status, and the frontmatter carries it too, with the owner, the files, and the PR:
+
+```
+---
+status: doing
+owner: agent:session-abc
+files: [src/thread.ts, src/thread.test.ts]
+pr: https://github.com/owner/repo/pull/12
+---
+Problem: ...
+```
+
+File: write it under `tasks/open/`, lint it, commit it. Claim: move it to `tasks/doing/` with your owner and files in the frontmatter, the first commit on your task branch, pushed, so the branch tells anyone else the task is taken. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist linked from one.
+
+## GitHub Issues
+
+`Tracker: github-issues`. gh does all of it, and the issue number is the ticket id.
+
+- File: `gh issue create --title "<outcome>" --body-file ticket.md`, after the lint.
+- Claim: `gh issue edit <n> --add-assignee @me`, then `gh issue comment <n> --body "Claimed. Files: src/thread.ts, src/thread.test.ts"`.
+- Turn in: `gh issue comment <n> --body-file turnin.md`, the ticket shape plus the PR link and the evidence links. Screenshots and recordings drop into that comment through the browser, since gh can't upload attachments. The walkthrough goes in a gist.
+- Complete: `gh issue close <n>` after the merge, by the human.
+
+## Linear
+
+`Tracker: linear SR`, where `SR` is the team key. Connect Linear's MCP in your harness; every verb is a call on it.
+
+- File: create the issue in that team with the ticket shape as the description, after the lint.
+- Claim: assign yourself and move it to In Progress. Record the files in a comment.
+- Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the status to In Review.
+- Complete: Done after the merge, by the human.
+
+The PR title carries the issue key, `fix(web): SR-123 new threads respect the worktree default`, so Linear links the PR to the issue.
+
+## Jira
+
+`Tracker: jira SR`, where `SR` is the project key. Connect Jira's MCP in your harness; every verb is a call on it.
+
+- File: create the issue in that project with the ticket shape as the description, after the lint.
+- Claim: assign yourself and transition it to In Progress. Record the files in a comment.
+- Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the transition to In Review.
+- Complete: Done after the merge, by the human.
+
+The PR title carries the issue key, `fix(web): SR-123 new threads respect the worktree default`, so Jira links the PR to the issue.
+
+## Never
+
+- Touch project files before the claim.
+- File a ticket the lint rejects.
+- Put files to touch or design notes in the ticket. They go in the PR.
+- Complete a ticket you built.
+- Commit a screenshot, a recording, or a walkthrough.

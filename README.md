@@ -6,7 +6,7 @@
 
 How I work with coding agents, written down as skills.
 
-One flow from claiming a task to turning it in with proof. Twenty-four principles, each a single rule with a test. Sixteen workflows for the parts that need steps. A mode skill that ties it together. Every file is written to be read by an agent in Claude Code, Codex, Cursor, or anything else that loads skills from a folder.
+One flow from claiming a task to turning it in with proof. Twenty-four principles, each a single rule with a test. Twenty-six workflows for the parts that need steps. A mode skill that ties it together. Every file is written to be read by an agent in Claude Code, Codex, Cursor, or anything else that loads skills from a folder.
 
 The opinions are the point. A human stays in the merge seat. Every claim ships with evidence. The obvious solution wins over the clever one. If you don't agree with those, this isn't your stack, and that's fine.
 
@@ -24,7 +24,7 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex
 ```
 
-That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, adds the folder to your user PATH, and runs `jstack setup` the same way. Setup runs the tool checks in Windows PowerShell there. quest installs from its own PowerShell line; roast, bgr, tokenomnom, and TruffleHog ship no PowerShell installer yet, so on Windows setup shows the archive to download and leaves that step to you.
+That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, adds the folder to your user PATH, and runs `jstack setup` the same way. Setup runs the tool checks and the installs in Windows PowerShell there.
 
 Run `jstack setup` again any time. It remembers the harnesses you picked. `jstack upgrade` fetches the newest release and reruns setup.
 
@@ -44,12 +44,13 @@ Restart your harness so the skills load. Then start any multi-step task with `/j
 
 ## Tools
 
-The flow leans on four tools, and `jstack setup` offers each one that's missing or behind its latest release:
+The flow leans on three tools, and `jstack setup` offers each one that's missing or behind its latest release:
 
-- **quest**, the work tracker. Claim before touching files, attach evidence at turn-in.
 - **roast**, the independent review gate. A different model reviews the diff until it says well done. It needs TruffleHog for its secret scan, and setup installs that too.
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
 - **agent-browser**, a real browser from the command line, for using what you built like a person would.
+
+The work tracker isn't a tool setup installs. Each repo names its own on a `Tracker:` line in its instructions file, and the `tracker` skill carries the contract, the ticket shape, and the commands for markdown tasks, GitHub Issues, Linear, and Jira.
 
 Each tool ships its own skill and installs it. `tools.md` has the check, version, and install lines setup runs, with `~/.local/bin` on PATH so a tool it just installed there is found in the same run. git and gh are prerequisites: setup checks for them and says where to get them, but never installs them, since the right command depends on the OS and `gh auth login` is yours to run.
 
@@ -60,7 +61,7 @@ Each tool ships its own skill and installs it. `tools.md` has the check, version
 - `skills/*/` with `kind: principle` in the frontmatter are the principles. One rule each.
 - The rest are workflows. `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.
 - `tools.md` names the tools the flow expects to find installed and how to get them. A line suffixed `(windows)` is what setup runs there, in PowerShell; the plain line is POSIX shell for macOS and Linux. The agent-browser install line pins the CLI version, because its skill text ships inside the CLI; `scripts/tool-bump.py` and the same weekly workflow move that pin through a PR.
-- `vendor.json` pins the third-party skills that live in `skills/`. A skill lives in this repo when jstack doesn't control the tool that owns it, so a change to the skill text goes through a reviewed PR. `scripts/vendor-bump.py` copies each one in at its pinned commit, and a weekly workflow opens a bump PR when upstream moves. Our own tools (quest, roast, bgr, tokenomnom) keep shipping their skill with the binary.
+- `vendor.json` pins the third-party skills that live in `skills/`. A skill lives in this repo when jstack doesn't control the tool that owns it, so a change to the skill text goes through a reviewed PR. `scripts/vendor-bump.py` copies each one in at its pinned commit, and a weekly workflow opens a bump PR when upstream moves. Our own tools (roast, bgr, tokenomnom) keep shipping their skill with the binary.
 - `cmd/jstack` and `internal/` are the binary. The skills, the letter, `tools.md`, and `vendor.json` are embedded at build time, so setup runs from anywhere. Your own skills come from a repo you name, cloned under `~/.jstack/repos`.
 - `decisions.md` is the record of choices made while building this, so nobody relitigates them.
 

@@ -46,7 +46,7 @@ Good:
 
 > My "new worktree" default was ignored when starting new threads on existing worktrees. Super unintuitive. Now your preferences always apply.
 
-Put the tracker's task id in the description. End with a line naming the model and harness that made the change.
+Write it in the ticket shape from `tracker`: problem, fix, done when. Put the task id in it. End with a line naming the model and harness that made the change.
 
 ## Proof
 
@@ -54,7 +54,7 @@ Don't say it works, show it. Anything a user can see gets screenshots, including
 
 Once the PR is open and the diff is final, run `bgr` on it and keep the HTML walkthrough with the rest of the evidence. If the diff moves after that, regenerate it.
 
-All of it attaches to the tracker at turn-in, never to git.
+All of it goes on the ticket at turn-in, the way `tracker` says for the repo's backend, never into git.
 
 ## After the PR is open
 
