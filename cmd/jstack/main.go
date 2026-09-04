@@ -31,6 +31,7 @@ const usage = `jstack puts the skills, the letter, and the tools into the coding
 
   jstack setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
                [--skill-repo owner/name] [--forget-skill-repo owner/name] [--no-skill-repo] [--override skill=source]
+               [--repos-dir folder]
   jstack upgrade
   jstack version
 
@@ -39,6 +40,8 @@ Without one it changes nothing unless --yes is passed. Picks are saved in ~/.jst
 Each tool is missing, outdated, or current; the latest versions come from GitHub and npm.
 A skills repo of your own is cloned with gh and its skills/ folder installs beside jstack's.
 A skill named the same in two sources stops setup until --override says which one to install.
+It also asks once where your repos live, lists each repo's Tracker line, and with a terminal
+asks for the ones that have none, writes the line into the repo, and offers to open the PR.
 `
 
 func main() {
@@ -110,6 +113,11 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return nil
 	})
 	noSkillRepo := flags.Bool("no-skill-repo", false, "record that there is no skills repo of your own, so setup stops asking")
+	var reposDirs []string
+	flags.Func("repos-dir", "a folder your repos live in, one checkout per subfolder; saved, so setup stops asking; repeatable", func(value string) error {
+		reposDirs = append(reposDirs, value)
+		return nil
+	})
 	flags.Func("override", "which source a skill in more than one source comes from, skill=jstack or skill=owner/name; repeatable", func(value string) error {
 		name, source, ok := strings.Cut(value, "=")
 		if !ok || name == "" || source == "" {
@@ -146,6 +154,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		SkillRepos:       skillRepos,
 		ForgetSkillRepos: forgetSkillRepos,
 		NoSkillRepo:      *noSkillRepo,
+		ReposDirs:        reposDirs,
 		Overrides:        overrides,
 		Stdin:            stdin,
 		Stdout:           stdout,

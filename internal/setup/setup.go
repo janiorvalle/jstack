@@ -47,6 +47,7 @@ type Options struct {
 	SkillRepos       []string
 	ForgetSkillRepos []string
 	NoSkillRepo      bool
+	ReposDirs        []string
 	Overrides        map[string]string
 	Stdin            io.Reader
 	Stdout           io.Writer
@@ -107,6 +108,7 @@ type plan struct {
 	harnesses []harnessPlan
 	tools     []toolStatus
 	catalog   catalog
+	repos     reposReport
 }
 
 type pickSource int
@@ -154,17 +156,30 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		asked = true
 	}
+	reposDirs, reposAsked, err := chooseReposDirs(config, opts)
+	if err != nil {
+		return err
+	}
+	if ask != nil && !reposAsked {
+		chosen, err := askReposDirs(ask, out, opts.Home, guessReposDirs(opts.Home))
+		if err != nil {
+			return err
+		}
+		reposDirs = append(reposDirs, chosen...)
+		reposAsked = true
+	}
 	skillSources, err := gatherSources(ctx, opts, ask, embedded, config, repoNames)
 	if err != nil {
 		return err
 	}
 	defer skillSources.close()
-	current, err := buildPlan(ctx, opts, embedded, skillSources, picked)
+	current, err := buildPlan(ctx, opts, embedded, skillSources, picked, reposDirs)
 	if err != nil {
 		return err
 	}
 	printPlan(out, opts.Home, embedded, current)
 	noted := noteInstallFolderOffPath(opts, out)
+	printReposPlan(out, opts.Home, current.repos)
 	if !opts.Interactive && !opts.Yes {
 		printRerun(out, opts, picked, current, asked)
 		return nil
@@ -212,7 +227,14 @@ func Run(ctx context.Context, opts Options) error {
 	if err := applyHarnesses(opts, embedded, current, backupRoot); err != nil {
 		return err
 	}
-	saved := Config{Harnesses: harness.Keys(picked), SkillRepos: repoNames, SkillReposAsked: asked, SkillOverrides: rememberOverrides(config.SkillOverrides, current.catalog.unreachable(), current.catalog.picks)}
+	saved := Config{
+		Harnesses:       harness.Keys(picked),
+		SkillRepos:      repoNames,
+		SkillReposAsked: asked,
+		SkillOverrides:  rememberOverrides(config.SkillOverrides, current.catalog.unreachable(), current.catalog.picks),
+		ReposDirs:       reposDirs,
+		ReposDirsAsked:  reposAsked,
+	}
 	if err := saveConfig(opts.Home, saved); err != nil {
 		return err
 	}
@@ -220,11 +242,12 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	toolsErr := applyTools(ctx, opts, current, picked, backupRoot)
+	trackersErr := applyTrackers(ctx, opts, ask, current.repos)
 	if !noted {
 		noteInstallFolderOffPath(opts, out)
 	}
 	fmt.Fprintf(out, "\nharness picks saved to %s\nrestart the harness so the skills load.\n", display(opts.Home, configPath(opts.Home)))
-	return toolsErr
+	return errors.Join(toolsErr, trackersErr)
 }
 
 func loadAssets(files fs.FS) (assets, error) {
@@ -300,12 +323,12 @@ func gatherSources(ctx context.Context, opts Options, ask *prompt.Prompt, embedd
 	return skillSources, nil
 }
 
-func buildPlan(ctx context.Context, opts Options, embedded assets, skillSources catalog, picked []harness.Harness) (plan, error) {
+func buildPlan(ctx context.Context, opts Options, embedded assets, skillSources catalog, picked []harness.Harness, reposDirs []string) (plan, error) {
 	harnessPlans, err := planHarnesses(opts, embedded, skillSources, picked)
 	if err != nil {
 		return plan{}, err
 	}
-	current := plan{harnesses: harnessPlans, catalog: skillSources}
+	current := plan{harnesses: harnessPlans, catalog: skillSources, repos: planRepos(opts.Home, reposDirs)}
 	for _, tool := range embedded.tools {
 		status := toolStatus{tool: tool, present: opts.Shell(ctx, tool.Check, io.Discard) == nil}
 		if status.present {
@@ -316,6 +339,17 @@ func buildPlan(ctx context.Context, opts Options, embedded assets, skillSources 
 	lookupLatest(ctx, opts, current.tools)
 	markSkillPresence(opts, picked, current.tools)
 	return current, nil
+}
+
+// planRepos scans the named folders. With none named, the guesses under
+// home go in the report instead, so the hint can say what setup would have
+// scanned.
+func planRepos(home string, reposDirs []string) reposReport {
+	report := reposReport{dirs: reposDirs, repos: scanRepos(reposDirs)}
+	if len(reposDirs) == 0 {
+		report.guesses = guessReposDirs(home)
+	}
+	return report
 }
 
 func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string {
@@ -641,9 +675,15 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 	if opts.NoSkillRepo {
 		line += " --no-skill-repo"
 	}
+	for _, dir := range opts.ReposDirs {
+		line += " --repos-dir " + quote(runtime.GOOS, dir)
+	}
 	fmt.Fprintf(out, "  %s\n", line)
 	if !repoAsked {
 		fmt.Fprintln(out, "  add --skill-repo owner/name to also install the skills from a repo of yours, or --no-skill-repo to say there is none")
+	}
+	if undeclared := current.repos.undeclared(); len(undeclared) > 0 {
+		fmt.Fprintf(out, "  %d repo(s) declare no tracker: %s; rerun with a terminal to name each one\n", len(undeclared), repoNames(undeclared))
 	}
 	missing, outdated := false, false
 	for _, status := range current.tools {

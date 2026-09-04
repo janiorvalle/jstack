@@ -30,6 +30,8 @@ Run `jstack setup` again any time. It remembers the harnesses you picked. `jstac
 
 Setup also asks, once, for a skills repo of your own, `owner/name` on GitHub with a `skills/` folder in it. It clones the repo with gh, keeps it pulled under `~/.jstack/repos`, and installs its skills beside jstack's in every harness you picked, with the same backups. `--skill-repo owner/name` adds one later, `--forget-skill-repo` drops one. A skill named the same in two places stops setup and asks which one you want; `--override name=owner/name` answers without a terminal. The clone is refreshed on every run, plan-only ones included; it is jstack's own folder, so without a terminal the harnesses still change nothing.
 
+Setup also asks, once, where your repos live, guessing from the folders under home that hold git checkouts, `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`, and remembers the answer. It lists every repo there with its `Tracker:` line or `not declared`. With a terminal it asks for each undeclared one, a pick from the four backends the `tracker` skill knows or skip, with a same-for-all shortcut, writes the line into the repo's `AGENTS.md`, and offers to open a one-line PR through gh. `--repos-dir <folder>` answers the folder question without asking.
+
 Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing:
 
 ```sh

@@ -106,6 +106,14 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 	}
 	if output, ok := f.versions[command]; ok {
 		fmt.Fprintln(out, output)
+	} else if strings.HasSuffix(command, "git rev-parse --abbrev-ref HEAD") {
+		fmt.Fprintln(out, "main")
+	} else if strings.HasSuffix(command, "git remote get-url --push origin") {
+		fmt.Fprintln(out, "git@github.com:me/bravo.git")
+	} else if strings.HasSuffix(command, "git symbolic-ref --short refs/remotes/origin/HEAD") {
+		fmt.Fprintln(out, "origin/main")
+	} else if strings.Contains(command, "git rev-parse HEAD ") {
+		fmt.Fprintln(out, "0123456789abcdef0123456789abcdef01234567\n0123456789abcdef0123456789abcdef01234567")
 	}
 	return nil
 }
@@ -177,11 +185,6 @@ func read(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(content)
-}
-
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func options(t *testing.T, home string, shell *fakeShell, stdin string) (Options, *bytes.Buffer) {
@@ -351,7 +354,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast\n")
 	write(t, filepath.Join(home, ".codex", "skills", "roast", "SKILL.md"), "roast\n")
 	shell.commands = nil
-	opts, out := options(t, home, shell, "\n\n")
+	opts, out := options(t, home, shell, "\n\n\n")
 	opts.Interactive = true
 	opts.Now = func() time.Time { return time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC) }
 	if err := Run(context.Background(), opts); err != nil {
@@ -373,7 +376,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
-	opts, out := options(t, home, shell, "\n3\n\ny\n")
+	opts, out := options(t, home, shell, "\n\n3\n\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -490,7 +493,7 @@ func TestTerminalYesToUpdateRunsTheInstallLineAndReinstallsTheSkill(t *testing.T
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
 	shell := withRoast("1.0.0")
-	opts, out := options(t, home, shell, "\n\ny\n")
+	opts, out := options(t, home, shell, "\n\n\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -514,7 +517,7 @@ func TestTerminalNoToUpdateLeavesItOutdated(t *testing.T) {
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
 	shell := withRoast("1.0.0")
-	opts, out := options(t, home, shell, "\n\nn\n")
+	opts, out := options(t, home, shell, "\n\n\nn\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -630,7 +633,7 @@ func TestUpdateThatLeavesTheOldVersionOnPathIsAnError(t *testing.T) {
 func TestTerminalNoToToolKeepsItMissing(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
-	opts, out := options(t, home, shell, "\n\nn\n")
+	opts, out := options(t, home, shell, "\n\n\nn\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -1097,7 +1100,7 @@ func TestMissingPrerequisiteIsNeverAskedAboutOrInstalled(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
 	shell.present["check-git"] = false
-	opts, out := options(t, home, shell, "\n\n")
+	opts, out := options(t, home, shell, "\n\n\n")
 	opts.Interactive = true
 	opts.InstallTools = true
 	if err := Run(context.Background(), opts); err != nil {
