@@ -771,12 +771,14 @@ func TestToolSkillCopyComesFromTheFolderTheToolWroteLast(t *testing.T) {
 	}
 }
 
+// The stale copy is the newest file on the machine and Pi is the only picked
+// harness, so a source picked by time alone would be the copy itself.
 func TestStaleToolSkillCopyCountsAsMissingAndIsReplaced(t *testing.T) {
 	home := homeWithOpenCodeAndPi(t)
 	shell := withRoast("1.1.0")
 	opts, _ := options(t, home, shell, "")
 	opts.Yes = true
-	opts.Harness = "opencode,pi"
+	opts.Harness = "pi"
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}

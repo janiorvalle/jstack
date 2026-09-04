@@ -439,15 +439,17 @@ type installedSkill struct {
 }
 
 // toolSkill is the folder a tool's skill install wrote last, by the time on
-// its SKILL.md, among ~/.agents/skills and every harness folder, picked or
-// not. The tools write into Claude Code's and Codex's folders, so on a fresh
-// machine that is Claude Code's. A folder an older version of the tool left
-// somewhere else is older than what the install just wrote, so it never
-// wins.
+// its SKILL.md, among the folders the tools write to: ~/.agents/skills and
+// the harnesses the table marks, Claude Code's and Codex's, picked or not.
+// A folder an older version of the tool left in one of them is older than
+// what the install just wrote, so it never wins. A folder setup copied into
+// is never the source, so a copy changed by hand is replaced, not mirrored.
 func toolSkill(opts Options, folder string) (installedSkill, bool) {
 	candidates := []string{filepath.Join(opts.Home, ".agents", "skills", folder)}
 	for _, entry := range harness.Resolve(opts.Home, opts.Getenv) {
-		candidates = append(candidates, filepath.Join(entry.SkillsDir(), folder))
+		if entry.ToolSkills {
+			candidates = append(candidates, filepath.Join(entry.SkillsDir(), folder))
+		}
 	}
 	var newest string
 	var written time.Time
