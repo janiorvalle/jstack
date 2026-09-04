@@ -12,7 +12,8 @@ import (
 
 // row is a table entry before it meets a machine. homeVar is the variable the
 // harness's own docs name as moving its folder; a row gets one only when such
-// docs exist.
+// docs exist. toolSkills marks the harnesses the tools in tools.md install
+// their own skill into; setup carries that skill from there to the rest.
 type row struct {
 	key          string
 	name         string
@@ -21,13 +22,14 @@ type row struct {
 	skills       string
 	instructions string
 	lead         string
+	toolSkills   bool
 }
 
 const cursorLead = "---\ndescription: jstack, how the human you work for works\nalwaysApply: true\n---\n\n"
 
 var table = []row{
-	{key: "claude", name: "Claude Code", homeVar: "CLAUDE_CONFIG_DIR", root: ".claude", skills: "skills", instructions: "CLAUDE.md"},
-	{key: "codex", name: "Codex", homeVar: "CODEX_HOME", root: ".codex", skills: "skills", instructions: "AGENTS.md"},
+	{key: "claude", name: "Claude Code", homeVar: "CLAUDE_CONFIG_DIR", root: ".claude", skills: "skills", instructions: "CLAUDE.md", toolSkills: true},
+	{key: "codex", name: "Codex", homeVar: "CODEX_HOME", root: ".codex", skills: "skills", instructions: "AGENTS.md", toolSkills: true},
 	{key: "opencode", name: "OpenCode", root: ".config/opencode", skills: "skills", instructions: "AGENTS.md"},
 	{key: "cursor", name: "Cursor", root: ".cursor", skills: "skills", instructions: "rules/jstack.mdc", lead: cursorLead},
 	{key: "pi", name: "Pi", root: ".pi/agent", skills: "skills", instructions: "AGENTS.md"},
@@ -36,13 +38,15 @@ var table = []row{
 // Harness is one row resolved for a machine. Root is the absolute folder the
 // harness reads from: the value of HomeVar when that variable is set and
 // non-empty, otherwise the folder under home. HomeVar is empty for a row
-// whose folder came from home.
+// whose folder came from home. ToolSkills is true for a harness the tools
+// install their own skill into.
 type Harness struct {
-	Key     string
-	Name    string
-	Root    string
-	HomeVar string
-	Lead    string
+	Key        string
+	Name       string
+	Root       string
+	HomeVar    string
+	Lead       string
+	ToolSkills bool
 
 	skills       string
 	instructions string
@@ -62,7 +66,7 @@ func Resolve(home string, getenv func(string) string) Table {
 }
 
 func (r row) resolve(home string, getenv func(string) string) Harness {
-	resolved := Harness{Key: r.key, Name: r.name, Lead: r.lead, skills: r.skills, instructions: r.instructions}
+	resolved := Harness{Key: r.key, Name: r.name, Lead: r.lead, ToolSkills: r.toolSkills, skills: r.skills, instructions: r.instructions}
 	resolved.Root = filepath.Join(home, filepath.FromSlash(r.root))
 	if r.homeVar != "" && getenv(r.homeVar) != "" {
 		resolved.Root = filepath.Clean(getenv(r.homeVar))
