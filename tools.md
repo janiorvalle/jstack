@@ -6,7 +6,7 @@ If a tool is missing, run the check, show the install command, and install only 
 
 `jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. When that install line pins a version, `npm install -g name@1.2.3`, the pin is the latest: setup reports the tool outdated when it's behind the pin and ahead when it's past it, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one. A section with a `Check` line and no `Install` line is a prerequisite: setup checks for it and points here when it's missing, but never installs or updates it. git and gh are the prerequisites.
 
-Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `quest --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it. An `Install` line that fetches a script downloads it to a file first and runs the file only once the download succeeded, so a failed download fails the line: `curl | sh` runs nothing and exits zero when curl gets nothing, and setup would report the tool installed.
+Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `roast --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it. An `Install` line that fetches a script downloads it to a file first and runs the file only once the download succeeded, so a failed download fails the line: `curl | sh` runs nothing and exits zero when curl gets nothing, and setup would report the tool installed.
 
 ## git and gh
 
@@ -20,23 +20,6 @@ Version control and the PR host CLI. Every flow assumes both. Setup checks for t
 - Windows: `winget install --id Git.Git -e; winget install --id GitHub.cli -e`
 - Anything else: https://github.com/cli/cli#installation covers gh, and git comes from the same package manager
 - Then `gh auth login`
-
-## The work tracker
-
-Where tasks live. Claim before you touch project files, record the files you expect to change, attach evidence at turn-in, and a human completes after the merge. That contract is the same whichever tracker the project uses. Read the installed tracker's skill for its commands.
-
-**Quest** (current)
-- Repo: https://github.com/janiorvalle/quest
-- Check: `command -v quest`
-- Check (windows): `Get-Command quest`
-- Version: `quest --version`
-- Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/janiorvalle/quest/main/install.sh && sh "$script"`
-- Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/quest/main/install.ps1 | iex`
-- Skill install: `quest skill install --force`
-- Skill folder: `quest`
-
-**Linear** (coming)
-- Not yet wired up. When it is, this section gets its check and its skill.
 
 ## roast
 

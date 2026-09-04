@@ -13,7 +13,7 @@ Keep it on topic. Read only what the in-scope threads need. The heavy reading go
 ## Where the state lives
 
 - **Live state.** Git branches, worktrees, uncommitted changes, open PRs and their checks. This is the truth. Everything else is history.
-- **The tracker.** The task, its status, what's attached, who owns it.
+- **The tracker.** The task, its status, what's attached, who owns it. `tracker` says which backend the repo uses and how to read it.
 - **The shared record.** What happened around the same code under other names. Bugs users keep reporting, fixes that shipped and got reverted, errors still firing. That's what `why` searches. A feature with a long bug tail keeps most of its story there.
 - **Your own history.** If your harness keeps session transcripts and gives you access, they hold what you did and decided. Use them when they're there. Don't depend on them.
 

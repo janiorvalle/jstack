@@ -31,9 +31,26 @@ type Change struct {
 	Content string
 }
 
-// Block wraps the letter in the markers.
+// Block wraps the letter in the markers. A line starting with "Tracker:" names
+// the repo's own work tracker, so it stays in the repo and never lands in a
+// harness's instructions file, which every repo on the machine reads.
 func Block(text string) string {
-	return Start + "\n" + strings.TrimRight(text, "\n") + "\n" + End + "\n"
+	return Start + "\n" + strings.TrimRight(withoutTrackerLine(text), "\n") + "\n" + End + "\n"
+}
+
+func withoutTrackerLine(text string) string {
+	lines := strings.Split(text, "\n")
+	kept := lines[:0]
+	for index := 0; index < len(lines); index++ {
+		if strings.HasPrefix(lines[index], "Tracker:") {
+			if index+1 < len(lines) && lines[index+1] == "" {
+				index++
+			}
+			continue
+		}
+		kept = append(kept, lines[index])
+	}
+	return strings.Join(kept, "\n")
 }
 
 // Plan decides how the letter lands in a file that currently holds current.

@@ -47,6 +47,6 @@ Trust artifacts, not summaries. When a subagent says it's done, read the diff, o
 
 ## Where evidence goes
 
-Evidence lives in the work tracker, attached to the task when you turn it in, with the task id in the PR description. Whichever tracker the project uses, the contract is the same: real files, attached at turn-in, a human completes after the merge. Never in git. History carries every committed byte forever, in every clone.
+Evidence lives in the work tracker, attached to the task when you turn it in, with the task id in the PR description. Whichever tracker the project uses, the contract is the same: real files, attached at turn-in, a human completes after the merge. `tracker` says where each backend takes them. Never in git. History carries every committed byte forever, in every clone.
 
 Never fabricate proof. If the evidence doesn't exist, the work isn't done.

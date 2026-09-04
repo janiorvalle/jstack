@@ -145,7 +145,7 @@ try {
     # Windows check line, Get-Command through PowerShell, is what says ok.
     Assert ($report.Contains("ok git and gh")) "the Windows check line for git and gh did not pass"
   }
-  Assert ($report.Contains("irm https://raw.githubusercontent.com/janiorvalle/quest/main/install.ps1 | iex")) "the report does not show the Windows install line for quest"
+  Assert ($report -match "irm https://raw\.githubusercontent\.com/janiorvalle/roast/[^\r\n]*install\.ps1") "the report does not show the Windows install line for roast"
 
   # Every installer registers its folder on the user PATH in the registry.
   # Setup reads that PATH back before each line it runs, so the check after
@@ -154,13 +154,13 @@ try {
   $report = & $installed setup --harness claude,codex --yes --install-tools | Out-String
   Write-Output $report
   Assert ($LASTEXITCODE -eq 0) "jstack setup --install-tools exited with $LASTEXITCODE"
-  foreach ($tool in @("The work tracker", "roast", "TruffleHog", "bgr", "tokenomnom")) {
+  foreach ($tool in @("roast", "TruffleHog", "bgr", "tokenomnom")) {
     Assert ($report -match "(?m)^\s+ok $tool\b") "setup did not report $tool ok after installing it"
   }
-  foreach ($executable in @("quest\quest.exe", "roast\roast.exe", "trufflehog\trufflehog.exe", "bgr\bgr.exe", "bgr\better-git-review.exe", "tokenomnom\tokenomnom.exe", "tokenomnom\nomnom.exe")) {
+  foreach ($executable in @("roast\roast.exe", "trufflehog\trufflehog.exe", "bgr\bgr.exe", "bgr\better-git-review.exe", "tokenomnom\tokenomnom.exe", "tokenomnom\nomnom.exe")) {
     Assert (Test-Path (Join-Path $programs $executable)) "$executable is not where its installer puts it"
   }
-  foreach ($skill in @("quest", "roast", "bgr", "tokenomnom")) {
+  foreach ($skill in @("roast", "bgr", "tokenomnom")) {
     Assert (Test-Path (Join-Path $profileHome ".claude\skills\$skill\SKILL.md")) "setup did not install the $skill skill after installing the tool"
   }
   $writtenTruffleInstaller = Join-Path $profileHome ".jstack\scripts\install-trufflehog.ps1"

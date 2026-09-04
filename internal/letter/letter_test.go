@@ -48,6 +48,13 @@ func TestPlanDecidesFromWhatTheFileHolds(t *testing.T) {
 	}
 }
 
+func TestBlockLeavesTheTrackerLineToTheRepo(t *testing.T) {
+	letter := "# letter\n\nTracker: markdown tasks/\n\nhello\n"
+	if Block(letter) != Start+"\n# letter\n\nhello\n"+End+"\n" {
+		t.Fatalf("block = %q", Block(letter))
+	}
+}
+
 func TestBlockNormalizesTrailingNewlines(t *testing.T) {
 	if Block("x\n\n\n") != Start+"\nx\n"+End+"\n" {
 		t.Fatalf("block = %q", Block("x\n\n\n"))
