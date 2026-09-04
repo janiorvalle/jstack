@@ -6,7 +6,7 @@ If a tool is missing, run the check, show the install command, and install only 
 
 `jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. When that install line pins a version, `npm install -g name@1.2.3`, the pin is the latest: setup reports the tool outdated when it's behind the pin and ahead when it's past it, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one. A section with a `Check` line and no `Install` line is a prerequisite: setup checks for it and points here when it's missing, but never installs or updates it. git and gh are the prerequisites.
 
-Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `quest --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it. That is how the tools with no PowerShell installer read on Windows, a zip from the releases page.
+Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `quest --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it.
 
 ## git and gh
 
@@ -47,7 +47,7 @@ The independent code review gate. Reviews the current diff on a different model 
 - Check (windows): `Get-Command roast`
 - Version: `roast --version`
 - Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/roast/main/install.sh | sh`
-- Install (windows): download the Windows zip from https://github.com/janiorvalle/roast/releases, unzip it, and put roast.exe on your PATH
+- Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/roast/main/install.ps1 | iex`
 - Skill install: `roast install-skill --force`
 - Skill folder: `roast`
 - The skill covers the scope fence and the loop until well done. roast also installs it on its own the first time it runs in a repo.
@@ -55,14 +55,14 @@ The independent code review gate. Reviews the current diff on a different model 
 
 ## TruffleHog
 
-Secret scanner. roast runs it over the diff before review and refuses to start without it. Its official installer drops one binary into `~/.local/bin`, the folder the jstack installer already put on your PATH, on macOS and Linux with no sudo. It ships no skill.
+Secret scanner. roast runs it over the diff before review and refuses to start without it. Its official installer drops one binary into `~/.local/bin`, the folder the jstack installer already put on your PATH, on macOS and Linux with no sudo. Upstream ships no Windows installer, so jstack carries one, `scripts/install-trufflehog.ps1`, inside the binary: setup writes it to `~/.jstack/scripts` before it runs any tool line, and the Windows install line runs it from there. It downloads the release tar.gz, verifies the SHA-256 against the release's checksums file, and puts `trufflehog.exe` in `%LOCALAPPDATA%\Programs\trufflehog` on your user PATH. It ships no skill.
 
 - Repo: https://github.com/trufflesecurity/trufflehog
 - Check: `command -v trufflehog`
 - Check (windows): `Get-Command trufflehog`
 - Version: `trufflehog --version`
 - Install: `curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin`
-- Install (windows): download the Windows tar.gz from https://github.com/trufflesecurity/trufflehog/releases, extract it with tar, and put trufflehog.exe on your PATH
+- Install (windows): `Get-Content -Raw (Join-Path $env:USERPROFILE '.jstack\scripts\install-trufflehog.ps1') | iex`
 
 ## bgr
 
@@ -73,7 +73,7 @@ Turns a PR, commit, or diff into a review walkthrough. The HTML output is attach
 - Check (windows): `Get-Command bgr`
 - Version: `bgr --version`
 - Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/better-git-review/main/install.sh | sh`
-- Install (windows): download the Windows zip from https://github.com/janiorvalle/better-git-review/releases, unzip it, and put bgr.exe on your PATH
+- Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/better-git-review/main/install.ps1 | iex`
 - Skill install: `bgr install-skill`
 - Skill folder: `bgr`
 - From an agent, use `--format json --out <path>`, pass `--yes` on anything that might stage, and never run the interactive picker or `bgr configure`.
@@ -87,7 +87,7 @@ Token usage and spend across your coding agents, plus transcript search. Not par
 - Check (windows): `Get-Command tokenomnom`
 - Version: `tokenomnom --version`
 - Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/tokenomnom/main/install.sh | sh`
-- Install (windows): download the Windows zip from https://github.com/janiorvalle/tokenomnom/releases, unzip it, and put both executables on your PATH
+- Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/tokenomnom/main/install.ps1 | iex`
 - Skill install: `tokenomnom install-skill`
 - Skill folder: `tokenomnom`
 

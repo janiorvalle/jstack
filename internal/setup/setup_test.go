@@ -38,11 +38,12 @@ func pinnedFixture() fstest.MapFS {
 
 func fixture() fstest.MapFS {
 	return fstest.MapFS{
-		"skills/voice/SKILL.md": {Data: []byte("voice v2\n")},
-		"skills/how/SKILL.md":   {Data: []byte("how\n")},
-		"AGENTS.md":             {Data: []byte("# the letter\n")},
-		"tools.md":              {Data: []byte(toolsFixture)},
-		"vendor.json":           {Data: []byte(`{"skills":[{"name":"how"}]}`)},
+		"skills/voice/SKILL.md":    {Data: []byte("voice v2\n")},
+		"skills/how/SKILL.md":      {Data: []byte("how\n")},
+		"AGENTS.md":                {Data: []byte("# the letter\n")},
+		"tools.md":                 {Data: []byte(toolsFixture)},
+		"vendor.json":              {Data: []byte(`{"skills":[{"name":"how"}]}`)},
+		"scripts/install-tool.ps1": {Data: []byte("# installs a tool\n")},
 	}
 }
 
@@ -617,6 +618,33 @@ func TestInstallToolsWithYesInstallsMissingTools(t *testing.T) {
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestApplyWritesTheEmbeddedScriptsUnderHome(t *testing.T) {
+	home := homeWithClaude(t)
+	opts, _ := options(t, home, withRoast("1.1.0"), "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(home, ".jstack", "scripts", "install-tool.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "# installs a tool\n" {
+		t.Fatalf("script = %q", content)
+	}
+}
+
+func TestPlanOnlyWritesNoScripts(t *testing.T) {
+	home := homeWithClaude(t)
+	opts, _ := options(t, home, withRoast("1.1.0"), "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".jstack", "scripts")); !os.IsNotExist(err) {
+		t.Fatalf("plan-only run wrote scripts: %v", err)
 	}
 }
 
