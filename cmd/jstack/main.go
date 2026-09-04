@@ -182,14 +182,23 @@ func runShell(ctx context.Context, command string, output io.Writer) error {
 // install would not find the tool it just installed.
 const windowsRefreshPath = "$env:Path += ';' + [Environment]::GetEnvironmentVariable('Path', 'User')"
 
+// posixInstallFolderOnPath puts ~/.local/bin first on PATH when it is not
+// there yet. The jstack installer and every curl installer in tools.md put
+// their tool in that folder, and a fresh machine has it off PATH until the
+// shell profile says otherwise, so without this the check that follows an
+// install would not find the tool it just installed. A PATH that already has
+// the folder is left in its order.
+const posixInstallFolderOnPath = `case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) PATH="$HOME/.local/bin:$PATH" ;; esac`
+
 // shellArguments is sh on macOS and Linux and Windows PowerShell on Windows,
 // the two shells the lines in tools.md are written for. The installer and
-// the lines pick the same way, so this is the one place the OS decides.
+// the lines pick the same way, so this is the one place the OS decides, and
+// the one place the folder a fresh install lands in is put on PATH.
 func shellArguments(operatingSystem, command string) []string {
 	if operatingSystem == "windows" {
 		return []string{"powershell", "-NoProfile", "-Command", windowsRefreshPath + "; " + command}
 	}
-	return []string{"sh", "-c", command}
+	return []string{"sh", "-c", posixInstallFolderOnPath + "; " + command}
 }
 
 // stdinIsTerminal is true for a real terminal. /dev/null is a character

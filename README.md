@@ -49,7 +49,7 @@ The flow leans on four tools, and `jstack setup` offers each one that's missing 
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
 - **agent-browser**, a real browser from the command line, for using what you built like a person would.
 
-Each tool ships its own skill and installs it. `tools.md` has the check, version, and install lines setup runs. git and gh are prerequisites: setup checks for them and says where to get them, but never installs them, since the right command depends on the OS and `gh auth login` is yours to run.
+Each tool ships its own skill and installs it. `tools.md` has the check, version, and install lines setup runs, with `~/.local/bin` on PATH so a tool it just installed there is found in the same run. git and gh are prerequisites: setup checks for them and says where to get them, but never installs them, since the right command depends on the OS and `gh auth login` is yours to run.
 
 ## What's in it
 
