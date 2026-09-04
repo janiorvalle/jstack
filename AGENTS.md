@@ -1,5 +1,7 @@
 # A letter to the agent
 
+Tracker: markdown tasks/
+
 This is a letter from the human you work for to you, the agent. You're building projects together. Bold projects. Going with the flow and using existing solutions won't get you where you want to be.
 
 Quick glossary of the parties in this document:

@@ -18,7 +18,7 @@ Tracker: linear SR
 Tracker: jira SR
 ```
 
-The folder for markdown. Nothing for GitHub Issues, since gh reads the repo from git. The team key for Linear. The project key for Jira. Find it with `grep -h '^Tracker:' AGENTS.md CLAUDE.md`. No line means the repo has no tracker: say so and stop, don't pick one.
+The folder for markdown. Nothing for GitHub Issues, since gh reads the repo from git. The team key for Linear. The project key for Jira. Find it with `grep -h '^Tracker:' AGENTS.md CLAUDE.md`. No line means the repo has no tracker: say so and stop, don't pick one. When the file is also a letter setup installs into harnesses, as jstack's own `AGENTS.md` is, setup leaves the `Tracker:` line out of the installed block, so the line stays with the repo.
 
 ## The five verbs
 
