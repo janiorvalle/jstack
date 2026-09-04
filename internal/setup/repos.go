@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 
 	"github.com/janiorvalle/jstack/internal/prompt"
@@ -20,7 +19,8 @@ import (
 // clone lives under ~/.jstack/repos/owner/name. verb says what happened to
 // the clone; failure says why it can't be installed from this run, and a
 // usable repo has none and carries its source. toolSkills are the folders
-// in it that a tool installs itself, left out of the source.
+// in it that a tool installs itself and oddNames the folders that aren't
+// lowercase names; both are left out of the source.
 type skillRepo struct {
 	name       string
 	dir        string
@@ -29,6 +29,7 @@ type skillRepo struct {
 	source     skills.Source
 	count      int
 	toolSkills []string
+	oddNames   []string
 }
 
 func (r skillRepo) usable() bool {
@@ -134,7 +135,7 @@ func syncRepo(ctx context.Context, opts Options, name string) skillRepo {
 	repo := skillRepo{name: name, dir: filepath.Join(opts.Home, ".jstack", "repos", filepath.FromSlash(name))}
 	command, verb := "gh repo clone "+name+" "+quote(runtime.GOOS, repo.dir), "cloned"
 	if isDir(filepath.Join(repo.dir, ".git")) {
-		command, verb = pullLine(runtime.GOOS, repo.dir), "pulled"
+		command, verb = pullLine(runtime.GOOS, name, repo.dir), "pulled"
 	} else if err := os.MkdirAll(filepath.Dir(repo.dir), 0o755); err != nil {
 		repo.failure = fmt.Sprintf("cannot create %s: %v; make the home folder writable", display(opts.Home, filepath.Dir(repo.dir)), err)
 		return repo
@@ -182,15 +183,16 @@ func lastLine(output string) string {
 	return ", " + last
 }
 
-// pullLine fast-forwards the clone from GitHub. gh has no flag for the
-// folder to work in, so the line changes into it first, and stops there
-// when it can't: a sync that ran in whatever folder setup was started from
-// would move that repo instead.
-func pullLine(operatingSystem, dir string) string {
+// pullLine fast-forwards the clone from the repo itself: without --source,
+// gh syncs a fork from its parent instead. gh has no flag for the folder to
+// work in, so the line changes into it first, and stops there when it
+// can't: a sync that ran in whatever folder setup was started from would
+// move that repo instead.
+func pullLine(operatingSystem, name, dir string) string {
 	if operatingSystem == "windows" {
-		return "Set-Location " + quote(operatingSystem, dir) + " -ErrorAction Stop; gh repo sync"
+		return "Set-Location " + quote(operatingSystem, dir) + " -ErrorAction Stop; gh repo sync --source " + name
 	}
-	return "cd " + quote(operatingSystem, dir) + " && gh repo sync"
+	return "cd " + quote(operatingSystem, dir) + " && gh repo sync --source " + name
 }
 
 // quote makes a path one argument for the shell setup runs lines in: sh on
@@ -203,10 +205,12 @@ func quote(operatingSystem, path string) string {
 	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 }
 
-// buildCatalog lines the sources up, jstack first. A folder a tool installs
-// itself, quest or roast say, is left out of every repo: a repo built from
-// a whole skills folder carries those along, and the tool's own install
-// keeps them matched to its binary.
+// buildCatalog lines the sources up, jstack first. Two kinds of folder are
+// left out of every repo. One a tool installs itself, quest or roast say: a
+// repo built from a whole skills folder carries those along, and the tool's
+// own install keeps them matched to its binary. And one whose name isn't
+// lowercase: on the case-insensitive disks macOS and Windows ship with,
+// Voice and voice would land in one folder, and the plan can't tell.
 func buildCatalog(embedded assets, repos []skillRepo) catalog {
 	toolFolders := map[string]bool{}
 	for _, tool := range embedded.tools {
@@ -220,25 +224,30 @@ func buildCatalog(embedded assets, repos []skillRepo) catalog {
 		if !repo.usable() {
 			continue
 		}
-		repo.toolSkills, repo.source.Files = leaveOutToolSkills(repo.source.Files, toolFolders)
-		repo.count -= len(repo.toolSkills)
+		names, err := skills.Names(repo.source)
+		if err != nil {
+			repo.failure = err.Error()
+			continue
+		}
+		hidden := map[string]bool{}
+		for _, name := range names {
+			switch {
+			case toolFolders[name]:
+				repo.toolSkills = append(repo.toolSkills, name)
+			case name != strings.ToLower(name):
+				repo.oddNames = append(repo.oddNames, name)
+			default:
+				continue
+			}
+			hidden[name] = true
+		}
+		if len(hidden) > 0 {
+			repo.source.Files = withoutFolders{FS: repo.source.Files, hidden: hidden}
+			repo.count -= len(hidden)
+		}
 		sources = append(sources, repo.source)
 	}
 	return catalog{repos: repos, sources: sources}
-}
-
-func leaveOutToolSkills(files fs.FS, toolFolders map[string]bool) ([]string, fs.FS) {
-	var found []string
-	for folder := range toolFolders {
-		if _, err := fs.Stat(files, folder+"/SKILL.md"); err == nil {
-			found = append(found, folder)
-		}
-	}
-	if len(found) == 0 {
-		return nil, files
-	}
-	sort.Strings(found)
-	return found, withoutFolders{FS: files, hidden: toolFolders}
 }
 
 // withoutFolders is a skills folder with some top-level folders hidden.
@@ -285,27 +294,40 @@ func printRepos(out io.Writer, home string, repos []skillRepo) {
 		for _, folder := range repo.toolSkills {
 			fmt.Fprintf(out, "  %s  installed by the %s tool itself, the copy in %s is left out\n", folder, folder, repo.name)
 		}
+		for _, folder := range repo.oddNames {
+			fmt.Fprintf(out, "  %s  not a lowercase name, the copy in %s is left out; rename the folder\n", folder, repo.name)
+		}
 	}
 }
 
-// rememberOverrides is what the config keeps: this run's picks over the
-// saved ones, minus any pick for a repo that is no longer named. A pick for
-// a repo that failed to sync this run survives it.
-func rememberOverrides(saved map[string]string, repoNames []string, picks map[string]string) map[string]string {
-	known := map[string]bool{"jstack": true}
-	for _, name := range repoNames {
-		known[name] = true
-	}
+// rememberOverrides is what the config keeps: this run's picks, one per
+// skill that collides today, plus the saved picks for a repo that couldn't
+// be reached this run, so a clone that failed doesn't lose them. A pick for
+// a name that no longer collides is dropped.
+func rememberOverrides(saved map[string]string, unreachable []skillRepo, picks map[string]string) map[string]string {
 	kept := map[string]string{}
-	for name, source := range saved {
-		if known[source] {
-			kept[name] = source
-		}
-	}
 	for name, source := range picks {
 		kept[name] = source
 	}
+	for _, repo := range unreachable {
+		for name, source := range saved {
+			if source == repo.name {
+				kept[name] = source
+			}
+		}
+	}
 	return kept
+}
+
+// unreachable lists the repos setup has no copy of this run.
+func (c catalog) unreachable() []skillRepo {
+	var repos []skillRepo
+	for _, repo := range c.repos {
+		if !repo.usable() {
+			repos = append(repos, repo)
+		}
+	}
+	return repos
 }
 
 // printOverrides says where each colliding skill name comes from on every

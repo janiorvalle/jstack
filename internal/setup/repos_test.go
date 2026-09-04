@@ -55,11 +55,11 @@ func TestQuoteMakesAPathOneShellArgument(t *testing.T) {
 	}
 }
 
-func TestPullLineChangesIntoTheCloneAndStopsWhenItCannot(t *testing.T) {
-	if got := pullLine("linux", "/home/jo/.jstack/repos/me/x"); got != "cd '/home/jo/.jstack/repos/me/x' && gh repo sync" {
+func TestPullLineChangesIntoTheCloneAndSyncsFromTheRepoItself(t *testing.T) {
+	if got := pullLine("linux", "me/x", "/home/jo/.jstack/repos/me/x"); got != "cd '/home/jo/.jstack/repos/me/x' && gh repo sync --source me/x" {
 		t.Fatalf("sh line = %s", got)
 	}
-	if got := pullLine("windows", `C:\Users\jo\.jstack\repos\me\x`); got != `Set-Location 'C:\Users\jo\.jstack\repos\me\x' -ErrorAction Stop; gh repo sync` {
+	if got := pullLine("windows", "me/x", `C:\Users\jo\.jstack\repos\me\x`); got != `Set-Location 'C:\Users\jo\.jstack\repos\me\x' -ErrorAction Stop; gh repo sync --source me/x` {
 		t.Fatalf("powershell line = %s", got)
 	}
 }
@@ -152,7 +152,7 @@ func TestRerunPullsTheRepoAndUpdatesAChangedSkillWithABackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	clone := filepath.Join(home, ".jstack", "repos", "me", "work-skills")
-	if got := shell.commands[0]; got != pullLine(runtime.GOOS, clone) {
+	if got := shell.commands[0]; got != pullLine(runtime.GOOS, workSkills, clone) {
 		t.Fatalf("first command = %q", got)
 	}
 	expectAll(t, out.String(),
@@ -369,14 +369,14 @@ func TestFailedPullKeepsTheLastCopyAndTheSavedPick(t *testing.T) {
 		t.Fatal(err)
 	}
 	clone := filepath.Join(home, ".jstack", "repos", "me", "work-skills")
-	shell.failing = map[string]bool{pullLine(runtime.GOOS, clone): true}
+	shell.failing = map[string]bool{pullLine(runtime.GOOS, workSkills, clone): true}
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(),
-		"me/work-skills  ~/.jstack/repos/me/work-skills, not pulled, using the copy from the last run: `"+pullLine(runtime.GOOS, clone)+"` failed: exit status 1; if the repo is private, check `gh auth status`, 2 skills",
+		"me/work-skills  ~/.jstack/repos/me/work-skills, not pulled, using the copy from the last run: `"+pullLine(runtime.GOOS, workSkills, clone)+"` failed: exit status 1; if the repo is private, check `gh auth status`, 2 skills",
 		"voice  overridden by me/work-skills, not installed from jstack",
 		"changed  -\n",
 	)
@@ -388,11 +388,31 @@ func TestFailedPullKeepsTheLastCopyAndTheSavedPick(t *testing.T) {
 	}
 }
 
-func TestSavedPickOutlivesAFailedCloneButNotAForgottenRepo(t *testing.T) {
-	saved := map[string]string{"voice": workSkills, "how": "jstack", "deploy": "me/old"}
-	got := rememberOverrides(saved, []string{workSkills}, map[string]string{"why": workSkills})
-	if len(got) != 3 || got["voice"] != workSkills || got["how"] != "jstack" || got["why"] != workSkills {
+func TestSavedPickOutlivesAFailedCloneButNotAGoneCollision(t *testing.T) {
+	saved := map[string]string{"voice": workSkills, "how": "jstack", "deploy": "me/down"}
+	got := rememberOverrides(saved, []skillRepo{{name: "me/down", failure: "no network"}}, map[string]string{"why": workSkills})
+	if len(got) != 2 || got["deploy"] != "me/down" || got["why"] != workSkills {
 		t.Fatalf("remembered = %v", got)
+	}
+}
+
+func TestRepoSkillWithACapitalLetterIsLeftOut(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRepo()
+	shell.repos[workSkills]["skills/Notes/SKILL.md"] = "Notes, capitalized\n"
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.SkillRepos = []string{workSkills}
+	opts.Overrides = map[string]string{"voice": "jstack"}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(),
+		"me/work-skills  ~/.jstack/repos/me/work-skills, cloned, 2 skills\n  Notes  not a lowercase name, the copy in me/work-skills is left out; rename the folder\n",
+		"new      deploy (me/work-skills), how\n",
+	)
+	if exists(filepath.Join(home, ".claude", "skills", "Notes")) {
+		t.Fatal("the capitalized folder was installed")
 	}
 }
 

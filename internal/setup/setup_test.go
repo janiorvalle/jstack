@@ -75,7 +75,7 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 	if f.failing[command] {
 		return errors.New("exit status 1")
 	}
-	if strings.HasPrefix(command, "gh repo clone ") || strings.HasSuffix(command, "gh repo sync") {
+	if strings.HasPrefix(command, "gh repo clone ") || strings.Contains(command, "gh repo sync") {
 		return f.gitHub(command, out)
 	}
 	if strings.HasPrefix(command, "check-") && !f.present[command] {

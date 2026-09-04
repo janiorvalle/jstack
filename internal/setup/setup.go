@@ -210,7 +210,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := applyHarnesses(opts, embedded, current, backupRoot); err != nil {
 		return err
 	}
-	saved := Config{Harnesses: harness.Keys(picked), SkillRepos: repoNames, SkillReposAsked: asked, SkillOverrides: rememberOverrides(config.SkillOverrides, repoNames, current.catalog.picks)}
+	saved := Config{Harnesses: harness.Keys(picked), SkillRepos: repoNames, SkillReposAsked: asked, SkillOverrides: rememberOverrides(config.SkillOverrides, current.catalog.unreachable(), current.catalog.picks)}
 	if err := saveConfig(opts.Home, saved); err != nil {
 		return err
 	}
