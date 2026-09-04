@@ -1,3 +1,6 @@
+# The whole installer runs in its own scope, so `irm ... | iex` in a terminal
+# leaves that terminal's preferences, functions, and variables as they were.
+& {
 $ErrorActionPreference = "Stop"
 
 function Fail([string]$Message) {
@@ -40,8 +43,10 @@ namespace Jstack {
 }
 
 $repo = if ($env:JSTACK_INSTALL_REPO) { $env:JSTACK_INSTALL_REPO } else { "janiorvalle/jstack" }
+# The folder goes into the user PATH, so a relative override is made absolute
+# against the current location first.
 $installDir = if ($env:JSTACK_INSTALL_DIR) {
-  $env:JSTACK_INSTALL_DIR
+  $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($env:JSTACK_INSTALL_DIR)
 } else {
   Join-Path $env:LOCALAPPDATA "Programs\jstack"
 }
@@ -216,4 +221,5 @@ try {
   }
 } finally {
   Remove-Item -Recurse -Force $temporaryDirectory -ErrorAction SilentlyContinue
+}
 }

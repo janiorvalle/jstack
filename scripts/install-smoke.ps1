@@ -1,12 +1,14 @@
 # The Windows half of install-smoke.sh. Builds jstack.exe from this checkout,
 # zips it the way goreleaser does, then runs install.ps1 against that zip
-# twice, refuses a bad checksum, and runs setup for real into a throwaway
-# profile folder so the PowerShell lines in tools.md are exercised, including
-# the install lines: setup --install-tools downloads every tool's release and
-# each one's check has to pass afterwards.
+# twice, refuses a bad checksum, checks that `irm ... | iex` leaves the session
+# alone and that a relative install folder goes on the user PATH absolute, and
+# runs setup for real into a throwaway profile folder so the PowerShell lines
+# in tools.md are exercised, including the install lines: setup --install-tools
+# downloads every tool's release and each one's check has to pass afterwards.
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
+$installer = Join-Path $root "install.ps1"
 $version = "0.0.0-smoke"
 $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
   "AMD64" { "amd64" }
@@ -22,16 +24,79 @@ function Assert([bool]$Condition, [string]$Message) {
   }
 }
 
-function Invoke-Installer([string]$Dist, [string]$Bin) {
+function Set-InstallerEnvironment([string]$Dist, [string]$Bin) {
   $env:JSTACK_INSTALL_ARCHIVE = Join-Path $Dist $archiveName
   $env:JSTACK_INSTALL_CHECKSUMS = Join-Path $Dist "checksums.txt"
   $env:JSTACK_INSTALL_VERSION = $version
   $env:JSTACK_INSTALL_DIR = $Bin
   $env:JSTACK_INSTALL_SKIP_PATH = "1"
+}
+
+function Invoke-Installer([string]$Dist, [string]$Bin) {
+  Set-InstallerEnvironment $Dist $Bin
   # The installer's output goes to the host, not into this function's
   # return value, so the caller compares one exit code and not a list.
-  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "install.ps1") | Out-Host
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $installer | Out-Host
   return $LASTEXITCODE
+}
+
+# The README line is `irm ... | iex`, which runs the installer's text in the
+# terminal's own scope. This runs it the same way in a fresh session and fails
+# on anything the session gained. LASTEXITCODE is PowerShell's own, set
+# whenever a native program runs, and the installer runs jstack.exe.
+function Invoke-InstallerThroughSession([string]$Dist, [string]$Bin) {
+  Set-InstallerEnvironment $Dist $Bin
+  $probe = Join-Path $work "session-probe.ps1"
+  Set-Content -Path $probe -Encoding ascii -Value @'
+param([string]$Installer)
+$ErrorActionPreference = "Stop"
+$before = @(Get-Variable | ForEach-Object Name) + @(Get-Command -CommandType Function | ForEach-Object Name)
+Get-Content -Raw $Installer | Invoke-Expression
+$after = @(Get-Variable | ForEach-Object Name) + @(Get-Command -CommandType Function | ForEach-Object Name)
+$leaked = @($after | Where-Object { $_ -notin $before -and $_ -notin @("before", "LASTEXITCODE") })
+if ($leaked.Count) {
+  throw "install.ps1 left these in the session: $($leaked -join ', ')"
+}
+Write-Output "install.ps1 through iex left nothing in the session"
+'@
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $probe $installer | Out-Host
+  return $LASTEXITCODE
+}
+
+# The registry write that puts the PATH back says nothing to Explorer. A
+# user-variable write through .NET sends the same environment-change broadcast
+# the installer does, so a terminal opened afterwards sees the restored PATH
+# and not the folder this smoke deleted. The variable itself goes right away.
+function Publish-EnvironmentChange {
+  [Environment]::SetEnvironmentVariable("JSTACK_INSTALL_SMOKE", "1", "User")
+  [Environment]::SetEnvironmentVariable("JSTACK_INSTALL_SMOKE", $null, "User")
+}
+
+# The installer puts its folder on the user PATH, so a relative
+# JSTACK_INSTALL_DIR has to go on as an absolute path. This is the one install
+# here that writes the PATH, and it puts the PATH back afterwards.
+function Assert-RelativeInstallDirGoesOnPathAbsolute([string]$Dist) {
+  $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
+  $savedKind = $environmentKey.GetValueKind("Path")
+  $savedPath = [string]$environmentKey.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+  Push-Location $work
+  try {
+    Set-InstallerEnvironment $Dist "relative-bin"
+    Remove-Item Env:JSTACK_INSTALL_SKIP_PATH
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $installer | Out-Host
+    Assert ($LASTEXITCODE -eq 0) "install into a relative folder failed"
+    $absolute = Join-Path (Get-Location).Path "relative-bin"
+    Assert (Test-Path (Join-Path $absolute "jstack.exe")) "jstack.exe did not land in $absolute"
+    $userPath = @([string]$environmentKey.GetValue("Path", "") -split ";")
+    Assert ($absolute -in $userPath) "the user PATH did not get $absolute"
+    Assert ("relative-bin" -notin $userPath) "the user PATH got the relative folder as written"
+    Write-Output "a relative JSTACK_INSTALL_DIR went on the user PATH as $absolute"
+  } finally {
+    Pop-Location
+    $environmentKey.SetValue("Path", $savedPath, $savedKind)
+    Publish-EnvironmentChange
+    $environmentKey.Dispose()
+  }
 }
 
 try {
@@ -63,6 +128,8 @@ try {
   $installed = Join-Path $bin "jstack.exe"
   $reported = (& $installed --version | Out-String).Trim()
   Assert ($reported -eq $version) "installed jstack reports '$reported', want '$version'"
+  Assert ((Invoke-InstallerThroughSession $dist (Join-Path $work "session-bin")) -eq 0) "install.ps1 changed the session it ran in"
+  Assert-RelativeInstallDirGoesOnPathAbsolute $dist
   Assert (-not (Test-Path (Join-Path $profileHome ".claude\skills\jstack-mode"))) "install.ps1 changed the profile without a terminal"
 
   $report = & $installed setup --harness claude,codex --yes | Out-String
