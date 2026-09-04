@@ -611,41 +611,57 @@ Done when:
 
 Opened by jstack setup.`
 
-// openTrackerPR commits the line on its own branch, pushes, opens the PR,
-// and puts the repo back on the branch it was on, whether or not a step
-// failed after the branch was made. The push borrows gh as git's
-// credential helper for that one command, and the PR goes through gh, so
-// gh's login is what reaches GitHub either way and nothing in the
-// person's git config changes.
+// openTrackerPR checks that gh knows the origin, commits the line on its
+// own branch, pushes, opens the PR, and puts the repo back on the branch
+// it was on, whether or not a step failed after the branch was made. A
+// failure before the commit deletes the empty branch, so the next run
+// asks again instead of reporting a PR that was never made. The push
+// borrows gh as git's credential helper for that one command, and the PR
+// goes through gh, so gh's login is what reaches GitHub either way and
+// nothing in the person's git config changes.
 func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo, previous string) error {
 	out := opts.Stdout
 	operatingSystem := runtime.GOOS
 	staged, _ := insideRepo(repo.dir, repo.file)
 	steps := []string{
+		"gh repo view --json name",
 		"git checkout -b " + trackerBranch,
 		"git add " + quote(operatingSystem, staged),
 		"git commit -m " + quote(operatingSystem, "docs: name the tracker"),
 		"git -c credential.helper=" + quote(operatingSystem, "!gh auth git-credential") + " push -u origin " + trackerBranch,
 		"gh pr create --title " + quote(operatingSystem, "docs: name the tracker") + " --body " + quote(operatingSystem, trackerPRBody),
 	}
+	const branched, committed = 1, 3
+	failedAt := -1
 	var failed error
 	for index, step := range steps {
 		fmt.Fprintf(out, "  %s  %s\n", repo.name, step)
 		if err := opts.Shell(ctx, inRepo(operatingSystem, repo.dir, step), out); err != nil {
-			failed = fmt.Errorf("`%s` failed: %v; finish the PR by hand from %s, the branch %s holds the line", step, err, repo.dir, trackerBranch)
-			if index == 0 {
-				return failed
-			}
+			failedAt, failed = index, err
 			break
 		}
 	}
-	if err := opts.Shell(ctx, inRepo(operatingSystem, repo.dir, "git checkout "+quote(operatingSystem, previous)), out); err != nil && failed == nil {
-		failed = fmt.Errorf("the PR is open, but `git checkout %s` failed: %v; the repo is still on %s", previous, err, trackerBranch)
+	if failedAt == 0 {
+		return fmt.Errorf("`%s` failed: %v; gh doesn't know the origin, so no PR was opened; the line is written and uncommitted, commit it yourself", steps[0], failed)
 	}
-	if failed == nil {
+	if failedAt == branched {
+		return fmt.Errorf("`%s` failed: %v; the line is written and uncommitted in %s, commit it yourself", steps[branched], failed, repo.dir)
+	}
+	if err := opts.Shell(ctx, inRepo(operatingSystem, repo.dir, "git checkout "+quote(operatingSystem, previous)), out); err != nil {
+		if failed == nil {
+			return fmt.Errorf("the PR is open, but `git checkout %s` failed: %v; the repo is still on %s", previous, err, trackerBranch)
+		}
+		return fmt.Errorf("`%s` failed: %v, and `git checkout %s` failed after it: %v; the repo is on %s, sort it out by hand in %s", steps[failedAt], failed, previous, err, trackerBranch, repo.dir)
+	}
+	switch {
+	case failed == nil:
 		fmt.Fprintf(out, "  %s  PR opened, back on %s\n", repo.name, previous)
+		return nil
+	case failedAt <= committed:
+		_ = opts.Shell(ctx, inRepo(operatingSystem, repo.dir, "git branch -D "+trackerBranch), out)
+		return fmt.Errorf("`%s` failed: %v; the line is written and uncommitted in %s, commit it yourself", steps[failedAt], failed, repo.dir)
 	}
-	return failed
+	return fmt.Errorf("`%s` failed: %v; finish the PR by hand from %s, the branch %s holds the line", steps[failedAt], failed, repo.dir, trackerBranch)
 }
 
 // inRepo runs a command inside a checkout, and stops there when the folder

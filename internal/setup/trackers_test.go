@@ -222,6 +222,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "bravo", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "bravo", "git symbolic-ref --short refs/remotes/origin/HEAD"),
 		in(home, "bravo", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main")),
+		in(home, "bravo", "gh repo view --json name"),
 		in(home, "bravo", "git checkout -b tracker-line"),
 		in(home, "bravo", "git add "+quote(runtime.GOOS, "AGENTS.md")),
 		in(home, "bravo", "git commit -m "+quote(runtime.GOOS, "docs: name the tracker")),
@@ -505,4 +506,44 @@ func TestLinkChainEndingOutsideTheRepoIsLeftAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(), "  charlie  not declared, charlie's instructions file links to outside the repo, so setup leaves it alone\n")
+}
+
+func TestFailedCommitPutsTheBranchBackAndDeletesTheEmptyOne(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	shell := withRoast("1.1.0")
+	shell.failing = map[string]bool{in(home, "bravo", "git commit -m "+quote(runtime.GOOS, "docs: name the tracker")): true}
+	opts, _ := options(t, home, shell, "\n2\ny\ny\nn\n")
+	opts.Interactive = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "the line is written and uncommitted in") || strings.Contains(err.Error(), "holds the line") {
+		t.Fatalf("err = %v", err)
+	}
+	commands := strings.Join(shell.commands, "\n")
+	checkoutBack := in(home, "bravo", "git checkout "+quote(runtime.GOOS, "main"))
+	deleted := in(home, "bravo", "git branch -D tracker-line")
+	if !strings.Contains(commands, checkoutBack+"\n"+deleted) || strings.Contains(commands, "push") {
+		t.Fatalf("commands:\n%s", commands)
+	}
+	if got := read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")); got != "# Bravo\n\nTracker: github-issues\n\nSome text.\n" {
+		t.Fatalf("bravo AGENTS.md = %q", got)
+	}
+}
+
+func TestOriginGhDoesNotKnowGetsNoBranchAndNoPush(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	shell := withRoast("1.1.0")
+	shell.failing = map[string]bool{in(home, "bravo", "gh repo view --json name"): true}
+	opts, out := options(t, home, shell, "\n2\ny\ny\nn\n")
+	opts.Interactive = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "gh doesn't know the origin, so no PR was opened") {
+		t.Fatalf("err = %v", err)
+	}
+	commands := strings.Join(shell.commands, "\n")
+	if strings.Contains(commands, "checkout -b") || strings.Contains(commands, "push") {
+		t.Fatalf("commands:\n%s", commands)
+	}
+	expectAll(t, out.String(), "bravo  FAILED: `gh repo view --json name` failed")
 }
