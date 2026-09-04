@@ -410,18 +410,23 @@ func markSkillPresence(opts Options, picked []harness.Harness, statuses []toolSt
 // skillPresent is true when every picked harness has the tool's skill as the
 // tool wrote it. A copy that differs is one an update left behind, or one a
 // failed copy left in place, and counts as missing so the tool's install runs
-// again and the copy is replaced.
+// again and the copy is replaced. So does a copy with nothing left to compare
+// it with, the tool's own folders deleted: the install runs again and writes
+// them back.
 func skillPresent(opts Options, picked []harness.Harness, folder string) bool {
 	if isDir(filepath.Join(opts.Home, ".agents", "skills", folder)) {
 		return true
 	}
 	skill, found := toolSkill(opts, folder)
+	if !found {
+		return false
+	}
 	for _, entry := range picked {
 		target := filepath.Join(entry.SkillsDir(), folder)
 		if !isDir(target) {
 			return false
 		}
-		if !found || target == skill.source {
+		if target == skill.source {
 			continue
 		}
 		if same, err := skills.Same(skill.Skill, target); err != nil || !same {

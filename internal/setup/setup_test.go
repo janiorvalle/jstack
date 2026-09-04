@@ -802,6 +802,32 @@ func TestStaleToolSkillCopyCountsAsMissingAndIsReplaced(t *testing.T) {
 	expectAll(t, out.String(), "skill missing, would run: roast install-skill", "ok roast 1.1.0, skill installed via roast install-skill, copied to Pi")
 }
 
+func TestToolSkillCopyWithItsSourceDeletedCountsAsMissing(t *testing.T) {
+	home := homeWithOpenCodeAndPi(t)
+	shell := withRoast("1.1.0")
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.Harness = "pi"
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{".claude", ".codex"} {
+		if err := os.RemoveAll(filepath.Join(home, root)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shell.commands = nil
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(shell.commands, ";"), "roast install-skill") || !exists(filepath.Join(home, ".claude", "skills", "roast", "SKILL.md")) {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+	expectAll(t, out.String(), "skill missing, would run: roast install-skill", "ok roast 1.1.0, skill installed via roast install-skill\n")
+}
+
 func TestToolSkillWrittenNowhereKnownIsNotCopied(t *testing.T) {
 	home := homeWithOpenCodeAndPi(t)
 	opts, _ := options(t, home, withRoast("1.1.0"), "")
