@@ -746,10 +746,14 @@ func TestUpdatedToolSkillReplacesTheCopiesAndBacksThemUp(t *testing.T) {
 	}
 }
 
-func TestToolSkillCopyPrefersTheSharedFolderOverClaudeCodes(t *testing.T) {
+func TestToolSkillCopyComesFromTheFolderTheToolWroteLast(t *testing.T) {
 	home := homeWithOpenCodeAndPi(t)
-	write(t, filepath.Join(home, ".agents", "skills", "roast", "SKILL.md"), "shared\n")
+	shared := filepath.Join(home, ".agents", "skills", "roast", "SKILL.md")
+	write(t, shared, "shared, from an older roast\n")
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "claude\n")
+	if err := os.Chtimes(shared, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	opts, _ := options(t, home, withRoast("1.1.0"), "")
 	pi, err := harness.Resolve(home, opts.Getenv).ByKeys([]string{"pi"})
 	if err != nil {
@@ -762,9 +766,38 @@ func TestToolSkillCopyPrefersTheSharedFolderOverClaudeCodes(t *testing.T) {
 	if names(copied) != "Pi" {
 		t.Fatalf("copied = %v", names(copied))
 	}
-	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "shared\n" {
+	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "claude\n" {
 		t.Fatalf("pi roast = %q", got)
 	}
+}
+
+func TestStaleToolSkillCopyCountsAsMissingAndIsReplaced(t *testing.T) {
+	home := homeWithOpenCodeAndPi(t)
+	shell := withRoast("1.1.0")
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.Harness = "opencode,pi"
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
+	shell.commands = nil
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.Now = func() time.Time { return time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC) }
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(shell.commands, ";"), "roast install-skill") {
+		t.Fatalf("commands = %v", shell.commands)
+	}
+	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "roast 1.1.0\n" {
+		t.Fatalf("pi roast = %q", got)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "backup", "20260903-110000", "pi", "skills", "roast", "SKILL.md")); got != "roast 1.0.0\n" {
+		t.Fatalf("pi roast backup = %q", got)
+	}
+	expectAll(t, out.String(), "skill missing, would run: roast install-skill", "ok roast 1.1.0, skill installed via roast install-skill, copied to Pi")
 }
 
 func TestToolSkillWrittenNowhereKnownIsNotCopied(t *testing.T) {

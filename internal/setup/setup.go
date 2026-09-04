@@ -314,7 +314,7 @@ func buildPlan(ctx context.Context, opts Options, embedded assets, skillSources 
 		current.tools = append(current.tools, status)
 	}
 	lookupLatest(ctx, opts, current.tools)
-	markSkillPresence(opts.Home, picked, current.tools)
+	markSkillPresence(opts, picked, current.tools)
 	return current, nil
 }
 
@@ -373,7 +373,7 @@ func replan(opts Options, embedded assets, picked []harness.Harness, current pla
 		return plan{}, err
 	}
 	current.harnesses = harnessPlans
-	markSkillPresence(opts.Home, picked, current.tools)
+	markSkillPresence(opts, picked, current.tools)
 	return current, nil
 }
 
@@ -399,24 +399,72 @@ func planHarnesses(opts Options, embedded assets, skillSources catalog, picked [
 	return plans, nil
 }
 
-func markSkillPresence(home string, picked []harness.Harness, statuses []toolStatus) {
+func markSkillPresence(opts Options, picked []harness.Harness, statuses []toolStatus) {
 	for index := range statuses {
 		if folder := statuses[index].tool.SkillFolder; folder != "" {
-			statuses[index].skillPresent = skillPresent(home, picked, folder)
+			statuses[index].skillPresent = skillPresent(opts, picked, folder)
 		}
 	}
 }
 
-func skillPresent(home string, picked []harness.Harness, folder string) bool {
-	if isDir(filepath.Join(home, ".agents", "skills", folder)) {
+// skillPresent is true when every picked harness has the tool's skill as the
+// tool wrote it. A copy that differs is one an update left behind, or one a
+// failed copy left in place, and counts as missing so the tool's install runs
+// again and the copy is replaced.
+func skillPresent(opts Options, picked []harness.Harness, folder string) bool {
+	if isDir(filepath.Join(opts.Home, ".agents", "skills", folder)) {
 		return true
 	}
+	skill, found := toolSkill(opts, folder)
 	for _, entry := range picked {
-		if !isDir(filepath.Join(entry.SkillsDir(), folder)) {
+		target := filepath.Join(entry.SkillsDir(), folder)
+		if !isDir(target) {
+			return false
+		}
+		if !found || target == skill.source {
+			continue
+		}
+		if same, err := skills.Same(skill.Skill, target); err != nil || !same {
 			return false
 		}
 	}
 	return true
+}
+
+// installedSkill is a tool's skill as the tool's own install left it on
+// disk, in the shape the skills package reads, and the folder it came from.
+type installedSkill struct {
+	skills.Skill
+	source string
+}
+
+// toolSkill is the folder a tool's skill install wrote last, by the time on
+// its SKILL.md, among ~/.agents/skills and every harness folder, picked or
+// not. The tools write into Claude Code's and Codex's folders, so on a fresh
+// machine that is Claude Code's. A folder an older version of the tool left
+// somewhere else is older than what the install just wrote, so it never
+// wins.
+func toolSkill(opts Options, folder string) (installedSkill, bool) {
+	candidates := []string{filepath.Join(opts.Home, ".agents", "skills", folder)}
+	for _, entry := range harness.Resolve(opts.Home, opts.Getenv) {
+		candidates = append(candidates, filepath.Join(entry.SkillsDir(), folder))
+	}
+	var newest string
+	var written time.Time
+	for _, candidate := range candidates {
+		info, err := os.Stat(filepath.Join(candidate, "SKILL.md"))
+		if err != nil || newest != "" && !info.ModTime().After(written) {
+			continue
+		}
+		newest, written = candidate, info.ModTime()
+	}
+	if newest == "" {
+		return installedSkill{}, false
+	}
+	return installedSkill{
+		Skill:  skills.Skill{Name: folder, Source: skills.Source{Name: folder, Files: os.DirFS(filepath.Dir(newest))}},
+		source: newest,
+	}, true
 }
 
 // carrySkill puts a tool's skill into each picked harness as the tool's own
@@ -428,17 +476,16 @@ func skillPresent(home string, picked []harness.Harness, folder string) bool {
 // the skills plan leaves it alone as local, and a copy left behind by an
 // update is replaced and backed up like any changed skill.
 func carrySkill(opts Options, picked []harness.Harness, backupRoot, folder string) ([]harness.Harness, error) {
-	source, found := toolSkillSource(opts, folder)
+	skill, found := toolSkill(opts, folder)
 	if !found {
 		return nil, nil
 	}
-	skill := skills.Skill{Name: folder, Source: skills.Source{Name: folder, Files: os.DirFS(filepath.Dir(source))}}
 	var copied []harness.Harness
 	for _, entry := range picked {
-		if filepath.Join(entry.SkillsDir(), folder) == source {
+		if filepath.Join(entry.SkillsDir(), folder) == skill.source {
 			continue
 		}
-		changed, err := skills.Sync(skill, entry.SkillsDir(), filepath.Join(backupRoot, entry.Key, "skills"))
+		changed, err := skills.Sync(skill.Skill, entry.SkillsDir(), filepath.Join(backupRoot, entry.Key, "skills"))
 		if err != nil {
 			return copied, err
 		}
@@ -447,22 +494,6 @@ func carrySkill(opts Options, picked []harness.Harness, backupRoot, folder strin
 		}
 	}
 	return copied, nil
-}
-
-// toolSkillSource is the folder a tool's skill install left behind: the
-// shared ~/.agents/skills when the tool wrote there, else the first harness
-// in table order that has it, picked or not, which is Claude Code's.
-func toolSkillSource(opts Options, folder string) (string, bool) {
-	shared := filepath.Join(opts.Home, ".agents", "skills", folder)
-	if isDir(shared) {
-		return shared, true
-	}
-	for _, entry := range harness.Resolve(opts.Home, opts.Getenv) {
-		if candidate := filepath.Join(entry.SkillsDir(), folder); isDir(candidate) {
-			return candidate, true
-		}
-	}
-	return "", false
 }
 
 func isDir(path string) bool {
@@ -684,7 +715,7 @@ func askTools(ask *prompt.Prompt, opts Options, current plan) error {
 // second never share one; otherwise the path is only named, never created.
 func reserveBackup(home, stamp string, current plan) (string, error) {
 	parent := filepath.Join(home, ".jstack", "backup")
-	needed := false
+	needed := toolSkillCopyWillBeReplaced(current)
 	for _, entry := range current.harnesses {
 		if len(entry.skills.Changed) > 0 || entry.letter.Outcome == letter.Replace {
 			needed = true
@@ -710,6 +741,23 @@ func reserveBackup(home, stamp string, current plan) (string, error) {
 			return "", fmt.Errorf("[JSTACK-BACKUP-DIR] cannot create %q: %w; make %q writable and rerun", root, err, parent)
 		}
 	}
+}
+
+// toolSkillCopyWillBeReplaced is true when a tool's skill install will run
+// and a picked harness already has that skill, so the copy there may be
+// replaced and needs the backup folder.
+func toolSkillCopyWillBeReplaced(current plan) bool {
+	for _, status := range current.tools {
+		if status.tool.SkillFolder == "" || !(status.install || status.present && !status.skillPresent) {
+			continue
+		}
+		for _, entry := range current.harnesses {
+			if isDir(filepath.Join(entry.harness.SkillsDir(), status.tool.SkillFolder)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func applyHarnesses(opts Options, embedded assets, current plan, backupRoot string) error {

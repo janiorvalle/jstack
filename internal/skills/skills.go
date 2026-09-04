@@ -224,7 +224,7 @@ func Sync(skill Skill, dest, backupDir string) (bool, error) {
 	target := filepath.Join(dest, skill.Name)
 	replace := false
 	if info, err := os.Stat(target); err == nil && info.IsDir() {
-		same, err := dirSame(skill, target)
+		same, err := Same(skill, target)
 		if err != nil || same {
 			return false, err
 		}
@@ -320,6 +320,12 @@ func copyTree(source, target string) error {
 		}
 		return os.WriteFile(destination, content, info.Mode().Perm())
 	})
+}
+
+// Same reports whether the folder at target holds the skill as its source
+// has it, file for file, the files the desktop drops aside.
+func Same(skill Skill, target string) (bool, error) {
+	return dirSame(skill, target)
 }
 
 func dirSame(skill Skill, target string) (bool, error) {
