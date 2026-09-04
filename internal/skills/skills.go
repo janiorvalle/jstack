@@ -215,6 +215,27 @@ func Apply(dest string, plan Plan, backupDir string) error {
 	return nil
 }
 
+// Sync puts one skill into dest as it is at its source: copied when dest
+// lacks it, replaced with the old copy backed up when it differs, left alone
+// when it is the same. It reports whether dest changed. Setup uses it to
+// carry a tool's own skill, which the tool installs into Claude Code's and
+// Codex's folders, into the other picked harnesses.
+func Sync(skill Skill, dest, backupDir string) (bool, error) {
+	target := filepath.Join(dest, skill.Name)
+	replace := false
+	if info, err := os.Stat(target); err == nil && info.IsDir() {
+		same, err := dirSame(skill, target)
+		if err != nil || same {
+			return false, err
+		}
+		replace = true
+	}
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return false, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
+	}
+	return true, swapIn(skill, dest, replace, backupDir)
+}
+
 // rename is os.Rename behind a name the tests can point at a failing stand-in.
 var rename = os.Rename
 

@@ -502,3 +502,54 @@ func TestApplyFailureLeavesEachSkillWholeAndNoStaging(t *testing.T) {
 	}
 	assertNoWorkFolders(t, dest)
 }
+
+// installedRoast is a tool's own skill as the tool left it on disk, the
+// shape Sync reads from.
+func installedRoast(t *testing.T, content string) Skill {
+	t.Helper()
+	folder := t.TempDir()
+	write(t, filepath.Join(folder, "roast", "SKILL.md"), content)
+	return Skill{Name: "roast", Source: Source{Name: "roast", Files: os.DirFS(folder)}}
+}
+
+func TestSyncCopiesASkillTheDestLacks(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "skills")
+	changed, err := Sync(installedRoast(t, "roast v1\n"), dest, filepath.Join(t.TempDir(), "backup"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content, _ := os.ReadFile(filepath.Join(dest, "roast", "SKILL.md")); !changed || string(content) != "roast v1\n" {
+		t.Fatalf("changed = %v, roast = %q", changed, content)
+	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestSyncReplacesADifferentCopyAndBacksItUp(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "skills")
+	backup := filepath.Join(t.TempDir(), "backup")
+	write(t, filepath.Join(dest, "roast", "SKILL.md"), "roast v1\n")
+	changed, err := Sync(installedRoast(t, "roast v2\n"), dest, backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content, _ := os.ReadFile(filepath.Join(dest, "roast", "SKILL.md")); !changed || string(content) != "roast v2\n" {
+		t.Fatalf("changed = %v, roast = %q", changed, content)
+	}
+	if content, _ := os.ReadFile(filepath.Join(backup, "roast", "SKILL.md")); string(content) != "roast v1\n" {
+		t.Fatalf("backup = %q", content)
+	}
+	assertNoWorkFolders(t, dest)
+}
+
+func TestSyncLeavesTheSameCopyAlone(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "skills")
+	backup := filepath.Join(t.TempDir(), "backup")
+	write(t, filepath.Join(dest, "roast", "SKILL.md"), "roast v1\n")
+	changed, err := Sync(installedRoast(t, "roast v1\n"), dest, backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, statErr := os.Stat(backup); changed || statErr == nil {
+		t.Fatalf("changed = %v, backup made = %v", changed, statErr == nil)
+	}
+}

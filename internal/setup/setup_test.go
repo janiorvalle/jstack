@@ -52,9 +52,9 @@ func fixture() fstest.MapFS {
 // missing from latest is one whose lookup failed. The roast install line
 // lands 1.1.0, the way a real install line installs the newest release,
 // unless stuck is set: then an older roast keeps winning on PATH. The roast
-// skill line writes the skill into Claude Code's and Codex's folders under
-// home, the way the real tools do, creating those folders when they are
-// not there.
+// skill line writes the skill, its text the version line's output, into
+// Claude Code's and Codex's folders under home, the way the real tools do,
+// creating those folders when they are not there.
 type fakeShell struct {
 	home     string
 	getenv   func(string) string
@@ -120,7 +120,7 @@ func (f *fakeShell) installRoastSkill() error {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, []byte("roast\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(f.versions["version-roast"]+"\n"), 0o644); err != nil {
 			return err
 		}
 	}
@@ -689,7 +689,7 @@ func TestToolSkillIsCopiedIntoTheHarnessesTheToolSkipped(t *testing.T) {
 		filepath.Join(home, ".config", "opencode", "skills", "roast", "SKILL.md"),
 		filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md"),
 	} {
-		if got := read(t, path); got != "roast\n" {
+		if got := read(t, path); got != "roast 1.1.0\n" {
 			t.Fatalf("%s = %q", path, got)
 		}
 	}
@@ -719,6 +719,33 @@ func TestSecondRunLeavesTheCopiedToolSkillAloneAndSkipsTheReinstall(t *testing.T
 	expectAll(t, out.String(), "local    roast (untouched)", "ok roast 1.1.0, skill present")
 }
 
+func TestUpdatedToolSkillReplacesTheCopiesAndBacksThemUp(t *testing.T) {
+	home := homeWithOpenCodeAndPi(t)
+	shell := withRoast("1.0.0")
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.Harness = "opencode,pi"
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.UpdateTools = true
+	opts.Now = func() time.Time { return time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC) }
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "roast 1.1.0\n" {
+		t.Fatalf("pi roast = %q", got)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "backup", "20260903-110000", "pi", "skills", "roast", "SKILL.md")); got != "roast 1.0.0\n" {
+		t.Fatalf("pi roast backup = %q", got)
+	}
+	if !strings.Contains(out.String(), "ok roast 1.1.0, skill installed via roast install-skill, copied to OpenCode, Pi") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
 func TestToolSkillCopyPrefersTheSharedFolderOverClaudeCodes(t *testing.T) {
 	home := homeWithOpenCodeAndPi(t)
 	write(t, filepath.Join(home, ".agents", "skills", "roast", "SKILL.md"), "shared\n")
@@ -728,7 +755,7 @@ func TestToolSkillCopyPrefersTheSharedFolderOverClaudeCodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copied, err := carrySkill(opts, pi, "roast")
+	copied, err := carrySkill(opts, pi, filepath.Join(home, ".jstack", "backup", "run"), "roast")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -747,7 +774,7 @@ func TestToolSkillWrittenNowhereKnownIsNotCopied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copied, err := carrySkill(opts, pi, "roast")
+	copied, err := carrySkill(opts, pi, filepath.Join(home, ".jstack", "backup", "run"), "roast")
 	if err != nil {
 		t.Fatal(err)
 	}
