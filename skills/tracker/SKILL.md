@@ -48,6 +48,8 @@ Run the lint before filing. It reads a file or stdin and exits non-zero over 120
 python3 scripts/ticket-lint.py ticket.md
 ```
 
+On Windows, where `python3` isn't a command, `py -3 scripts/ticket-lint.py ticket.md`.
+
 One that passes:
 
 ```
@@ -61,7 +63,7 @@ Out of scope: The sidebar's thread list.
 
 ## Evidence
 
-What counts as evidence is in `prove-it`. Where it goes is here: on the ticket, as comments with links and attachments, in whatever form the backend has. GitHub comments take images, video, PDFs, and zips but not HTML, so on GitHub the walkthrough goes in a gist, `gh gist create walkthrough.html`, linked from the comment. A gist is readable by anyone who has the URL, so in a private repo zip the walkthrough and drop it on the comment instead, where the repo's access rules cover it. Nothing binary ever enters git, and the tasks folder is git too.
+What counts as evidence is in `prove-it`. Where it goes is here: on the ticket, as comments with links and attachments, in whatever form the backend has. GitHub comments take images, video, PDFs, and zips but not HTML, so on GitHub the walkthrough goes one of two ways. In a public repo, a gist, `gh gist create walkthrough.html`, linked from the comment. In a private repo, a zip dropped on the comment, never a gist, since a gist is readable by anyone who has the URL and the comment is covered by the repo's access rules. Nothing binary ever enters git, and the tasks folder is git too.
 
 ## Markdown tasks in the repo
 
@@ -77,7 +79,7 @@ pr: https://github.com/owner/repo/pull/12
 Problem: ...
 ```
 
-File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first and look for a remote branch named for the task; one already there means the task is taken, so pick another. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on your task branch, pushed, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist linked from one.
+File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first and look for a remote branch named for the task; one already there means the task is taken, so pick another. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on your task branch, pushed, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist or a zip the way Evidence says.
 
 ## GitHub Issues
 
@@ -85,7 +87,7 @@ File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first
 
 - File: `gh issue create --title "<outcome>" --body-file ticket.md`, after the lint.
 - Claim: `gh issue edit <n> --add-assignee @me`, then `gh issue comment <n> --body "Claimed. Files: src/thread.ts, src/thread.test.ts"`.
-- Turn in: `gh issue comment <n> --body-file turnin.md`, the ticket shape plus the PR link and the evidence links. Screenshots and recordings drop into that comment through the browser, since gh can't upload attachments. The walkthrough goes in a gist.
+- Turn in: `gh issue comment <n> --body-file turnin.md`, the ticket shape plus the PR link and the evidence links. Screenshots and recordings drop into that comment through the browser, since gh can't upload attachments. The walkthrough goes in a gist or a zip the way Evidence says.
 - Complete: `gh issue close <n>` after the merge, by the human.
 
 ## Linear
