@@ -108,6 +108,8 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 		fmt.Fprintln(out, output)
 	} else if strings.HasSuffix(command, "git rev-parse --abbrev-ref HEAD") {
 		fmt.Fprintln(out, "main")
+	} else if strings.HasSuffix(command, "git remote get-url origin") {
+		fmt.Fprintln(out, "git@github.com:me/bravo.git")
 	} else if strings.HasSuffix(command, "git symbolic-ref --short refs/remotes/origin/HEAD") {
 		fmt.Fprintln(out, "origin/main")
 	} else if strings.Contains(command, "git rev-parse HEAD ") {

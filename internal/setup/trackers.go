@@ -540,7 +540,7 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 	case !state.clean:
 		fmt.Fprintf(out, "  %s  has other uncommitted changes, so the line is left uncommitted with them\n", repo.name)
 		return nil
-	case !state.hasRemote:
+	case !state.hasRemote():
 		fmt.Fprintf(out, "  %s  has no origin remote, so the line is left uncommitted; commit it yourself\n", repo.name)
 		return nil
 	case state.defaultBranch == "":
@@ -561,7 +561,7 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 		fmt.Fprintf(out, "  %s  line left uncommitted; commit it yourself\n", repo.name)
 		return nil
 	}
-	return openTrackerPR(ctx, opts, repo, state.branch)
+	return openTrackerPR(ctx, opts, repo, state)
 }
 
 // repoState is what decides the PR offer, read through git before the
@@ -571,10 +571,14 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 // branch, so the PR carries no commit that was only ever local.
 type repoState struct {
 	clean         bool
-	hasRemote     bool
+	origin        string
 	branch        string
 	defaultBranch string
 	published     bool
+}
+
+func (s repoState) hasRemote() bool {
+	return s.origin != ""
 }
 
 func (s repoState) onDefaultBranch() bool {
@@ -582,10 +586,12 @@ func (s repoState) onDefaultBranch() bool {
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {
-	var status, branch, head bytes.Buffer
+	var status, origin, branch, head bytes.Buffer
 	state := repoState{}
 	state.clean = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git status --porcelain"), &status) == nil && strings.TrimSpace(status.String()) == ""
-	state.hasRemote = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url origin"), io.Discard) == nil
+	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url origin"), &origin) == nil {
+		state.origin = strings.TrimSpace(origin.String())
+	}
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse --abbrev-ref HEAD"), &branch) == nil {
 		state.branch = strings.TrimSpace(branch.String())
 	}
@@ -611,7 +617,8 @@ Done when:
 
 Opened by jstack setup.`
 
-// openTrackerPR checks that gh knows the origin, commits the line on its
+// openTrackerPR checks that gh knows the origin, by its URL so it is the
+// remote the push goes to and not one gh prefers, commits the line on its
 // own branch, pushes, opens the PR, and puts the repo back on the branch
 // it was on, whether or not a step failed after the branch was made. A
 // failure before the commit deletes the empty branch, so the next run
@@ -619,12 +626,13 @@ Opened by jstack setup.`
 // borrows gh as git's credential helper for that one command, and the PR
 // goes through gh, so gh's login is what reaches GitHub either way and
 // nothing in the person's git config changes.
-func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo, previous string) error {
+func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo, state repoState) error {
 	out := opts.Stdout
 	operatingSystem := runtime.GOOS
+	previous := state.branch
 	staged, _ := insideRepo(repo.dir, repo.file)
 	steps := []string{
-		"gh repo view --json name",
+		"gh repo view --json name " + quote(operatingSystem, state.origin),
 		"git checkout -b " + trackerBranch,
 		"git add " + quote(operatingSystem, staged),
 		"git commit -m " + quote(operatingSystem, "docs: name the tracker"),

@@ -222,7 +222,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "bravo", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "bravo", "git symbolic-ref --short refs/remotes/origin/HEAD"),
 		in(home, "bravo", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main")),
-		in(home, "bravo", "gh repo view --json name"),
+		in(home, "bravo", "gh repo view --json name "+quote(runtime.GOOS, "git@github.com:me/bravo.git")),
 		in(home, "bravo", "git checkout -b tracker-line"),
 		in(home, "bravo", "git add "+quote(runtime.GOOS, "AGENTS.md")),
 		in(home, "bravo", "git commit -m "+quote(runtime.GOOS, "docs: name the tracker")),
@@ -534,7 +534,7 @@ func TestOriginGhDoesNotKnowGetsNoBranchAndNoPush(t *testing.T) {
 	home := homeWithRepos(t)
 	savedRepos(t, home)
 	shell := withRoast("1.1.0")
-	shell.failing = map[string]bool{in(home, "bravo", "gh repo view --json name"): true}
+	shell.failing = map[string]bool{in(home, "bravo", "gh repo view --json name "+quote(runtime.GOOS, "git@github.com:me/bravo.git")): true}
 	opts, out := options(t, home, shell, "\n2\ny\ny\nn\n")
 	opts.Interactive = true
 	err := Run(context.Background(), opts)
@@ -545,5 +545,5 @@ func TestOriginGhDoesNotKnowGetsNoBranchAndNoPush(t *testing.T) {
 	if strings.Contains(commands, "checkout -b") || strings.Contains(commands, "push") {
 		t.Fatalf("commands:\n%s", commands)
 	}
-	expectAll(t, out.String(), "bravo  FAILED: `gh repo view --json name` failed")
+	expectAll(t, out.String(), "bravo  FAILED: `gh repo view --json name ")
 }
