@@ -21,31 +21,31 @@ import (
 // one the repo keeps, with a link followed one hop, since AGENTS.md is
 // often a link to CLAUDE.md and the write has to land in the file git
 // tracks. line is the whole Tracker line, or "" when the repo declares
-// none. pending is a repo whose line waits on the tracker-line branch an
-// earlier run made: the PR isn't merged, so the checkout has no line, and
-// asking again would make a second one.
+// none. hold is why an undeclared repo isn't asked about, "" when it is:
+// the line waits on the tracker-line branch an earlier run made, so
+// asking again would make a second one, or the file links to outside the
+// repo, where a line would speak for every repo that shares it.
 type trackerRepo struct {
-	dir     string
-	name    string
-	file    string
-	line    string
-	pending bool
+	dir  string
+	name string
+	file string
+	line string
+	hold string
 }
 
 func (r trackerRepo) declared() bool {
 	return r.line != ""
 }
 
-// askable is a repo the tracker question is for: no line, and none waiting
-// on a branch.
+// askable is a repo the tracker question is for this run.
 func (r trackerRepo) askable() bool {
-	return !r.declared() && !r.pending
+	return !r.declared() && r.hold == ""
 }
 
-// staged is the path git add takes for the file, relative to the checkout,
-// and false when the file is a link to somewhere outside it.
-func (r trackerRepo) staged() (string, bool) {
-	relative, err := filepath.Rel(r.dir, r.file)
+// insideRepo is the path git add takes for the file, relative to the
+// checkout, and false when the file is a link to somewhere outside it.
+func insideRepo(dir, file string) (string, bool) {
+	relative, err := filepath.Rel(dir, file)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", false
 	}
@@ -214,11 +214,25 @@ func scanDir(dir string) []trackerRepo {
 			continue
 		}
 		file, line := readTracker(checkout)
-		pending := line == "" && hasBranch(checkout, trackerBranch)
-		repos = append(repos, trackerRepo{dir: checkout, name: entry.Name(), file: file, line: line, pending: pending})
+		repos = append(repos, trackerRepo{dir: checkout, name: entry.Name(), file: file, line: line, hold: holdReason(checkout, file, line)})
 	}
 	sort.Slice(repos, func(left, right int) bool { return repos[left].name < repos[right].name })
 	return repos
+}
+
+// holdReason is why an undeclared repo isn't asked about, in the words the
+// report shows, or "" when it is.
+func holdReason(checkout, file, line string) string {
+	if line != "" {
+		return ""
+	}
+	if hasBranch(checkout, trackerBranch) {
+		return "the line waits on branch " + trackerBranch + " until its PR merges; delete the branch to be asked again"
+	}
+	if _, inside := insideRepo(checkout, file); !inside {
+		return filepath.Base(checkout) + "'s instructions file links to outside the repo, so setup leaves it alone"
+	}
+	return ""
 }
 
 func exists(path string) bool {
@@ -359,8 +373,8 @@ func printReposPlan(out io.Writer, home string, report reposReport) {
 			switch {
 			case repo.declared():
 				state = repo.line
-			case repo.pending:
-				state = "not declared, the line waits on branch " + trackerBranch + " until its PR merges"
+			case repo.hold != "":
+				state = "not declared, " + repo.hold
 			}
 			fmt.Fprintf(out, "  %-*s  %s\n", width, repo.name, state)
 		}
@@ -492,13 +506,13 @@ func askArgument(ask *prompt.Prompt, out io.Writer, chosen backend) (string, err
 }
 
 // declareTracker writes the line into the repo, then offers the PR when
-// the tree had nothing else pending and the repo has an origin to push to.
-// Both checks run before the write, so the line itself never counts as the
-// pending change.
+// the tree had nothing else pending, the repo has an origin to push to, and
+// it sits on its default branch, so the PR carries the line and nothing
+// else. Every check runs before the write, so the line itself never counts
+// as the pending change.
 func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo trackerRepo, line string) error {
 	out := opts.Stdout
-	clean := repoClean(ctx, opts, repo.dir)
-	hasRemote := opts.Shell(ctx, inRepo(runtime.GOOS, repo.dir, "git remote get-url origin"), io.Discard) == nil
+	state := readRepoState(ctx, opts, repo.dir)
 	content, err := os.ReadFile(repo.file)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("cannot read %q: %w; make it readable and rerun", repo.file, err)
@@ -507,16 +521,15 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 		return err
 	}
 	fmt.Fprintf(out, "  %s  wrote %q to %s\n", repo.name, line, display(opts.Home, repo.file))
-	_, inside := repo.staged()
 	switch {
-	case !inside:
-		fmt.Fprintf(out, "  %s  that file is a link to outside the repo, so there is nothing to commit here\n", repo.name)
-		return nil
-	case !clean:
+	case !state.clean:
 		fmt.Fprintf(out, "  %s  has other uncommitted changes, so the line is left uncommitted with them\n", repo.name)
 		return nil
-	case !hasRemote:
+	case !state.hasRemote:
 		fmt.Fprintf(out, "  %s  has no origin remote, so the line is left uncommitted; commit it yourself\n", repo.name)
+		return nil
+	case !state.onDefaultBranch():
+		fmt.Fprintf(out, "  %s  is on branch %s, not %s, so the line is left uncommitted; commit it yourself\n", repo.name, state.branch, state.defaultBranchName())
 		return nil
 	}
 	agreed, err := ask.Confirm(fmt.Sprintf("Open a PR for %s? branch %s, commit \"docs: name the tracker\", through gh", repo.name, trackerBranch), false)
@@ -527,15 +540,45 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 		fmt.Fprintf(out, "  %s  line left uncommitted; commit it yourself\n", repo.name)
 		return nil
 	}
-	return openTrackerPR(ctx, opts, repo)
+	return openTrackerPR(ctx, opts, repo, state.branch)
 }
 
-func repoClean(ctx context.Context, opts Options, dir string) bool {
-	var status bytes.Buffer
-	if err := opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git status --porcelain"), &status); err != nil {
-		return false
+// repoState is what decides the PR offer, read through git before the
+// write. defaultBranch is what origin/HEAD names, "" when the clone never
+// recorded one, in which case main or master counts.
+type repoState struct {
+	clean         bool
+	hasRemote     bool
+	branch        string
+	defaultBranch string
+}
+
+func (s repoState) onDefaultBranch() bool {
+	if s.defaultBranch != "" {
+		return s.branch == s.defaultBranch
 	}
-	return strings.TrimSpace(status.String()) == ""
+	return s.branch == "main" || s.branch == "master"
+}
+
+func (s repoState) defaultBranchName() string {
+	if s.defaultBranch != "" {
+		return s.defaultBranch
+	}
+	return "main or master"
+}
+
+func readRepoState(ctx context.Context, opts Options, dir string) repoState {
+	var status, branch, head bytes.Buffer
+	state := repoState{}
+	state.clean = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git status --porcelain"), &status) == nil && strings.TrimSpace(status.String()) == ""
+	state.hasRemote = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url origin"), io.Discard) == nil
+	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse --abbrev-ref HEAD"), &branch) == nil {
+		state.branch = strings.TrimSpace(branch.String())
+	}
+	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git symbolic-ref --short refs/remotes/origin/HEAD"), &head) == nil {
+		state.defaultBranch = strings.TrimPrefix(strings.TrimSpace(head.String()), "origin/")
+	}
+	return state
 }
 
 // trackerPRBody is the ticket shape the tracker skill asks for.
@@ -550,15 +593,10 @@ Opened by jstack setup.`
 // through gh so gh's login is what reaches GitHub, and puts the repo back
 // on the branch it was on, whether or not a step failed after the branch
 // was made.
-func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo) error {
+func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo, previous string) error {
 	out := opts.Stdout
 	operatingSystem := runtime.GOOS
-	var branch bytes.Buffer
-	if err := opts.Shell(ctx, inRepo(operatingSystem, repo.dir, "git rev-parse --abbrev-ref HEAD"), &branch); err != nil {
-		return fmt.Errorf("`git rev-parse --abbrev-ref HEAD` failed: %v; open the PR by hand from %s", err, repo.dir)
-	}
-	previous := strings.TrimSpace(branch.String())
-	staged, _ := repo.staged()
+	staged, _ := insideRepo(repo.dir, repo.file)
 	steps := []string{
 		"git checkout -b " + trackerBranch,
 		"git add " + quote(operatingSystem, staged),

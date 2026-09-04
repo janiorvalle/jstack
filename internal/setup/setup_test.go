@@ -106,6 +106,8 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 	}
 	if output, ok := f.versions[command]; ok {
 		fmt.Fprintln(out, output)
+	} else if strings.HasSuffix(command, "git rev-parse --abbrev-ref HEAD") {
+		fmt.Fprintln(out, "main")
 	}
 	return nil
 }
