@@ -42,13 +42,13 @@ Out of scope: Optional, one line.
 
 Design notes go in the PR, and the files you expect to touch go in the claim comment. Neither goes in the ticket body. The same shape is the PR description and the turn-in comment.
 
-Run the lint before filing. It reads a file or stdin and exits non-zero over 120 words, when a label is missing or has nothing after it, or when Done when isn't one to four lines starting with `- `, and it says what to cut:
+Run the lint before filing. It ships in this skill's `scripts/` folder, so give its full path from the skill's folder, wherever your harness installed it. It reads a file or stdin and exits non-zero over 120 words, when a label is missing or has nothing after it, or when Done when isn't one to four lines starting with `- `, and it says what to cut:
 
 ```sh
-python3 scripts/ticket-lint.py ticket.md
+python3 <skill folder>/scripts/ticket-lint.py ticket.md
 ```
 
-On Windows, where `python3` isn't a command, `py -3 scripts/ticket-lint.py ticket.md`.
+On Windows, where `python3` isn't a command, `py -3` in its place.
 
 One that passes:
 
@@ -79,7 +79,7 @@ pr: https://github.com/owner/repo/pull/12
 Problem: ...
 ```
 
-File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first and look for a remote branch named for the task; one already there means the task is taken, so pick another. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on your task branch, pushed, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist or a zip the way Evidence says.
+File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first and look for a remote branch named for the task; one already there means the task is taken, so pick another. A claim here is a commit, so the branch and worktree from `worktree` come before it. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on that branch, pushed before any project file changes, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist or a zip the way Evidence says.
 
 ## GitHub Issues
 
