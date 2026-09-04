@@ -22,7 +22,7 @@ The folder for markdown. Nothing for GitHub Issues, since gh reads the repo from
 
 ## The five verbs
 
-1. **Claim** before touching project files. Put your name on the ticket so nobody else picks it up, and open your first message with the ticket id.
+1. **Claim** before touching project files. A ticket that already has an owner is taken, so check first and pick another if it is. Then put your name on it, and open your first message with the ticket id.
 2. **Record the files** you expect to change, right after claiming, in the claim comment or the frontmatter, never in the ticket body. A reviewer reads them against the diff.
 3. **Turn in** with the PR link and the evidence. Then stop.
 4. **A human completes** after the merge. Never the agent that built it.
@@ -79,14 +79,14 @@ pr: https://github.com/owner/repo/pull/12
 Problem: ...
 ```
 
-File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first and look for a remote branch named for the task; one already there means the task is taken, so pick another. A claim here is a commit, so the branch and worktree from `worktree` come before it. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on that branch, pushed before any project file changes, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist or a zip the way Evidence says.
+File: write it under `tasks/open/`, lint it, and land it on the default branch through a small PR with only that file, on a branch named `file-<task>`. When you're about to do the task yourself, file and claim in one go instead. Claim: `git fetch` first and look for a remote branch named `<task>`, the task file's name; one already there means the task is taken, so pick another. A claim here is a commit, so the branch and worktree from `worktree` come before it. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on that branch, pushed before any project file changes, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist or a zip the way Evidence says.
 
 ## GitHub Issues
 
 `Tracker: github-issues`. gh does all of it, and the issue number is the ticket id.
 
 - File: `gh issue create --title "<outcome>" --body-file ticket.md`, after the lint.
-- Claim: `gh issue edit <n> --add-assignee @me`, then `gh issue comment <n> --body "Claimed. Files: src/thread.ts, src/thread.test.ts"`.
+- Claim: `gh issue view <n> --json assignees` first; an assignee there means it's taken. Then `gh issue edit <n> --add-assignee @me` and `gh issue comment <n> --body "Claimed. Files: src/thread.ts, src/thread.test.ts"`.
 - Turn in: `gh issue comment <n> --body-file turnin.md`, the ticket shape plus the PR link and the evidence links. Screenshots and recordings drop into that comment through the browser, since gh can't upload attachments. The walkthrough goes in a gist or a zip the way Evidence says.
 - Complete: `gh issue close <n>` after the merge, by the human.
 
@@ -95,7 +95,7 @@ File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first
 `Tracker: linear SR`, where `SR` is the team key. Connect Linear's MCP in your harness; every verb is a call on it.
 
 - File: create the issue in that team with the ticket shape as the description, after the lint.
-- Claim: assign yourself and move it to In Progress. Record the files in a comment.
+- Claim: read the issue first; an assignee there means it's taken. Then assign yourself and move it to In Progress. Record the files in a comment.
 - Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the status to In Review, or whatever the team calls the state between building and merging.
 - Complete: Done after the merge, by the human.
 
@@ -106,7 +106,7 @@ The PR title carries the issue key, `fix(web): SR-123 new threads respect the wo
 `Tracker: jira SR`, where `SR` is the project key. Connect Jira's MCP in your harness; every verb is a call on it.
 
 - File: create the issue in that project with the ticket shape as the description, after the lint.
-- Claim: assign yourself and transition it to In Progress. Record the files in a comment.
+- Claim: read the issue first; an assignee there means it's taken. Then assign yourself and transition it to In Progress. Record the files in a comment.
 - Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the transition to In Review, or whatever the project's workflow calls the state between building and merging. List the transitions the issue offers and pick by name, since the project may have renamed it.
 - Complete: Done after the merge, by the human.
 
