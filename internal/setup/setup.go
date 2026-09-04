@@ -156,7 +156,10 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		asked = true
 	}
-	reposDirs, reposAsked := chooseReposDirs(config, opts)
+	reposDirs, reposAsked, err := chooseReposDirs(config, opts)
+	if err != nil {
+		return err
+	}
 	if ask != nil && !reposAsked {
 		chosen, err := askReposDirs(ask, out, opts.Home, guessReposDirs(opts.Home))
 		if err != nil {
@@ -673,7 +676,7 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 		line += " --no-skill-repo"
 	}
 	for _, dir := range opts.ReposDirs {
-		line += " --repos-dir " + dir
+		line += " --repos-dir " + quote(runtime.GOOS, dir)
 	}
 	fmt.Fprintf(out, "  %s\n", line)
 	if !repoAsked {

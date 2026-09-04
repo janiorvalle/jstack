@@ -185,7 +185,7 @@ func TestNoFolderNamedHintsTheFlagWithTheGuesses(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "jstack setup --harness claude --yes --repos-dir "+filepath.Join(home, "code"))
+	expectAll(t, out.String(), "jstack setup --harness claude --yes --repos-dir "+quote(runtime.GOOS, filepath.Join(home, "code")))
 }
 
 func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
@@ -347,4 +347,99 @@ func TestRepoWhosePRIsStillOpenIsReportedAndNotAskedAgain(t *testing.T) {
 		t.Fatalf("asked about a repo whose PR is open:\n%s", out.String())
 	}
 	expectAll(t, out.String(), "charlie declares no tracker", "charlie  skipped")
+}
+
+func TestReposDirFlagIsResolvedFromTheWorkingDirectoryAndMustExist(t *testing.T) {
+	home := homeWithRepos(t)
+	t.Chdir(home)
+	opts, _ := options(t, home, withRoast("1.1.0"), "")
+	opts.Yes = true
+	opts.ReposDirs = []string{"code"}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)) || strings.Contains(got, `"code"`) {
+		t.Fatalf("config = %q", got)
+	}
+	opts, _ = options(t, home, withRoast("1.1.0"), "")
+	opts.ReposDirs = []string{"nowhere"}
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), `[JSTACK-REPOS-DIR] "nowhere" is not a folder`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLinkedAgentsMdIsWrittenThroughAndItsTargetStaged(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a symlink on Windows needs a privilege the test runner may not have")
+	}
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	bravo := filepath.Join(home, "code", "bravo")
+	write(t, filepath.Join(bravo, "CLAUDE.md"), "# Bravo\n\nSome text.\n")
+	if err := os.Remove(filepath.Join(bravo, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("CLAUDE.md", filepath.Join(bravo, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	shell := withRoast("1.1.0")
+	shell.versions[in(home, "bravo", "git rev-parse --abbrev-ref HEAD")] = "main"
+	opts, out := options(t, home, shell, "\n2\nn\ny\n5\n")
+	opts.Interactive = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  wrote "Tracker: github-issues" to ~/code/bravo/CLAUDE.md`, "bravo  PR opened, back on main")
+	if got := read(t, filepath.Join(bravo, "CLAUDE.md")); got != "# Bravo\n\nTracker: github-issues\n\nSome text.\n" {
+		t.Fatalf("CLAUDE.md = %q", got)
+	}
+	if info, err := os.Lstat(filepath.Join(bravo, "AGENTS.md")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("AGENTS.md is no longer a link")
+	}
+	if !strings.Contains(strings.Join(shell.commands, "\n"), in(home, "bravo", "git add "+quote(runtime.GOOS, "CLAUDE.md"))) {
+		t.Fatalf("commands:\n%s", strings.Join(shell.commands, "\n"))
+	}
+}
+
+func TestAgentsMdLinkedToOutsideTheRepoGetsNoPROffer(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a symlink on Windows needs a privilege the test runner may not have")
+	}
+	home := homeWithRepos(t)
+	charlie := filepath.Join(home, "code", "charlie")
+	write(t, filepath.Join(home, "dotfiles", "AGENTS.md"), "# Shared\n")
+	if err := os.Symlink(filepath.Join(home, "dotfiles", "AGENTS.md"), filepath.Join(charlie, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	file, _ := readTracker(charlie)
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	if err := declareTracker(context.Background(), opts, nil, trackerRepo{dir: charlie, name: "charlie", file: file}, "Tracker: jira SR"); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `charlie  wrote "Tracker: jira SR" to ~/dotfiles/AGENTS.md`, "charlie  that file is a link to outside the repo, so there is nothing to commit here")
+	if got := read(t, filepath.Join(home, "dotfiles", "AGENTS.md")); got != "# Shared\n\nTracker: jira SR\n" {
+		t.Fatalf("target = %q", got)
+	}
+}
+
+func TestPendingBranchIsSeenInPackedRefsAndFromALinkedWorktree(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	write(t, filepath.Join(home, "code", "bravo", ".git", "packed-refs"), "# pack-refs with: peeled fully-peeled sorted \n0123456789abcdef0123456789abcdef01234567 refs/heads/main\n89abcdef0123456789abcdef0123456789abcdef refs/heads/tracker-line\n")
+	main := filepath.Join(home, "elsewhere", "charlie-main")
+	write(t, filepath.Join(main, ".git", "refs", "heads", "tracker-line"), "0123456789abcdef0123456789abcdef01234567\n")
+	write(t, filepath.Join(main, ".git", "worktrees", "charlie", "commondir"), "../..\n")
+	if err := os.Remove(filepath.Join(home, "code", "charlie", ".git")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, "code", "charlie", ".git"), "gitdir: "+filepath.Join(main, ".git", "worktrees", "charlie")+"\n")
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "  bravo    not declared, the line waits on branch tracker-line until its PR merges\n  charlie  not declared, the line waits on branch tracker-line until its PR merges\n")
+	if strings.Contains(out.String(), "declare no tracker") {
+		t.Fatalf("a waiting repo counted as undeclared:\n%s", out.String())
+	}
 }

@@ -18,10 +18,12 @@ import (
 // trackerRepo is one git checkout under a repos folder, as found on this
 // run. file is the instructions file that carries the Tracker line, or the
 // one it would be written to: AGENTS.md, or CLAUDE.md when that is the only
-// one the repo keeps. line is the whole Tracker line, or "" when the repo
-// declares none. pending is a repo whose line waits on the tracker-line
-// branch an earlier run made: the PR isn't merged, so the checkout has no
-// line, and asking again would make a second one.
+// one the repo keeps, with a link followed one hop, since AGENTS.md is
+// often a link to CLAUDE.md and the write has to land in the file git
+// tracks. line is the whole Tracker line, or "" when the repo declares
+// none. pending is a repo whose line waits on the tracker-line branch an
+// earlier run made: the PR isn't merged, so the checkout has no line, and
+// asking again would make a second one.
 type trackerRepo struct {
 	dir     string
 	name    string
@@ -38,6 +40,16 @@ func (r trackerRepo) declared() bool {
 // on a branch.
 func (r trackerRepo) askable() bool {
 	return !r.declared() && !r.pending
+}
+
+// staged is the path git add takes for the file, relative to the checkout,
+// and false when the file is a link to somewhere outside it.
+func (r trackerRepo) staged() (string, bool) {
+	relative, err := filepath.Rel(r.dir, r.file)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.ToSlash(relative), true
 }
 
 // trackerBranch is the branch the PR offer commits the line on.
@@ -105,17 +117,23 @@ func guessReposDirs(home string) []string {
 }
 
 // chooseReposDirs is the folders this run scans: the saved ones, then the
-// ones --repos-dir names. A flag also settles the question, the way a
+// ones --repos-dir names, resolved and checked the way a typed answer is,
+// so the config never holds a path that means something else from another
+// working directory. A flag also settles the question, the way a
 // --skill-repo does.
-func chooseReposDirs(config Config, opts Options) (dirs []string, asked bool) {
+func chooseReposDirs(config Config, opts Options) (dirs []string, asked bool, err error) {
+	flagged, err := parseReposDirs(strings.Join(opts.ReposDirs, ","), opts.Home)
+	if err != nil {
+		return nil, false, err
+	}
 	seen := map[string]bool{}
-	for _, dir := range append(append([]string{}, config.ReposDirs...), opts.ReposDirs...) {
+	for _, dir := range append(append([]string{}, config.ReposDirs...), flagged...) {
 		if !seen[dir] {
 			seen[dir] = true
 			dirs = append(dirs, dir)
 		}
 	}
-	return dirs, config.ReposDirsAsked || len(opts.ReposDirs) > 0
+	return dirs, config.ReposDirsAsked || len(opts.ReposDirs) > 0, nil
 }
 
 // askReposDirs asks once where the repos live. Enter takes the first guess,
@@ -183,9 +201,7 @@ func scanRepos(dirs []string) []trackerRepo {
 }
 
 // scanDir lists the checkouts one level down: every folder with a .git in
-// it, a folder for a clone or a file for a worktree. The tracker-line
-// branch is read as the loose ref git writes for a new branch, so a repo
-// whose PR is still open is seen without running git.
+// it, a folder for a clone or a file for a worktree.
 func scanDir(dir string) []trackerRepo {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -198,7 +214,7 @@ func scanDir(dir string) []trackerRepo {
 			continue
 		}
 		file, line := readTracker(checkout)
-		pending := line == "" && exists(filepath.Join(checkout, ".git", "refs", "heads", trackerBranch))
+		pending := line == "" && hasBranch(checkout, trackerBranch)
 		repos = append(repos, trackerRepo{dir: checkout, name: entry.Name(), file: file, line: line, pending: pending})
 	}
 	sort.Slice(repos, func(left, right int) bool { return repos[left].name < repos[right].name })
@@ -210,13 +226,52 @@ func exists(path string) bool {
 	return err == nil
 }
 
+// hasBranch reads the branch off the disk, so a repo whose PR is still open
+// is seen without running git: the loose ref git writes for a new branch,
+// or the packed-refs file once gc has packed it, in the common git dir,
+// which a linked worktree names through its .git file and commondir.
+func hasBranch(checkout, name string) bool {
+	common := gitCommonDir(checkout)
+	if exists(filepath.Join(common, "refs", "heads", name)) {
+		return true
+	}
+	packed, err := os.ReadFile(filepath.Join(common, "packed-refs"))
+	return err == nil && strings.Contains(string(packed), " refs/heads/"+name+"\n")
+}
+
+// gitCommonDir is where a checkout's branches live: .git itself for a
+// clone, and for a linked worktree the folder its .git file names, then
+// the one that folder's commondir file names.
+func gitCommonDir(checkout string) string {
+	gitPath := filepath.Join(checkout, ".git")
+	content, err := os.ReadFile(gitPath)
+	if err != nil {
+		return gitPath
+	}
+	gitDir := resolveGitPath(checkout, strings.TrimPrefix(strings.TrimSpace(string(content)), "gitdir:"))
+	common, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
+	if err != nil {
+		return gitDir
+	}
+	return resolveGitPath(gitDir, string(common))
+}
+
+func resolveGitPath(base, path string) string {
+	path = strings.TrimSpace(path)
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(base, path)
+}
+
 // readTracker finds the Tracker line in AGENTS.md, then CLAUDE.md, and says
 // which file a missing line would go into: AGENTS.md when the repo has one
-// or has neither, CLAUDE.md when that is the only one it keeps.
+// or has neither, CLAUDE.md when that is the only one it keeps. A file
+// that is a link is named by what it points to.
 func readTracker(dir string) (file, line string) {
 	target := ""
 	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
-		path := filepath.Join(dir, name)
+		path := followLink(filepath.Join(dir, name))
 		content, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -232,6 +287,23 @@ func readTracker(dir string) (file, line string) {
 		target = filepath.Join(dir, "AGENTS.md")
 	}
 	return target, ""
+}
+
+// followLink is the file a link points to, one hop, relative to the link's
+// folder, and the path itself when it isn't a link.
+func followLink(path string) string {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return path
+	}
+	target, err := os.Readlink(path)
+	if err != nil {
+		return path
+	}
+	if filepath.IsAbs(target) {
+		return filepath.Clean(target)
+	}
+	return filepath.Join(filepath.Dir(path), target)
 }
 
 func findTrackerLine(content string) string {
@@ -435,7 +507,11 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 		return err
 	}
 	fmt.Fprintf(out, "  %s  wrote %q to %s\n", repo.name, line, display(opts.Home, repo.file))
+	_, inside := repo.staged()
 	switch {
+	case !inside:
+		fmt.Fprintf(out, "  %s  that file is a link to outside the repo, so there is nothing to commit here\n", repo.name)
+		return nil
 	case !clean:
 		fmt.Fprintf(out, "  %s  has other uncommitted changes, so the line is left uncommitted with them\n", repo.name)
 		return nil
@@ -482,9 +558,10 @@ func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo) error {
 		return fmt.Errorf("`git rev-parse --abbrev-ref HEAD` failed: %v; open the PR by hand from %s", err, repo.dir)
 	}
 	previous := strings.TrimSpace(branch.String())
+	staged, _ := repo.staged()
 	steps := []string{
 		"git checkout -b " + trackerBranch,
-		"git add " + quote(operatingSystem, filepath.Base(repo.file)),
+		"git add " + quote(operatingSystem, staged),
 		"git commit -m " + quote(operatingSystem, "docs: name the tracker"),
 		"git push -u origin " + trackerBranch,
 		"gh pr create --title " + quote(operatingSystem, "docs: name the tracker") + " --body " + quote(operatingSystem, trackerPRBody),
