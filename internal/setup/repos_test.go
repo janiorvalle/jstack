@@ -388,6 +388,39 @@ func TestFailedPullKeepsTheLastCopyAndTheSavedPick(t *testing.T) {
 	}
 }
 
+func TestLostCloneAndDeadNetworkKeepTheSkillAsInstalled(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRepo()
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.SkillRepos = []string{workSkills}
+	opts.Overrides = map[string]string{"voice": workSkills}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(home, ".jstack", "repos")); err != nil {
+		t.Fatal(err)
+	}
+	delete(shell.repos, workSkills)
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(),
+		"FAILED: `gh repo clone me/work-skills",
+		"voice  kept as installed, me/work-skills couldn't be reached this run\n",
+		"changed  -\n",
+		"local    deploy, mine, voice (untouched)",
+	)
+	if got := read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")); got != "voice, my way\n" {
+		t.Fatalf("voice reverted to jstack's: %q", got)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"voice": "me/work-skills"`) {
+		t.Fatalf("the pick was lost: %q", got)
+	}
+}
+
 func TestSavedPickOutlivesAFailedCloneButNotAGoneCollision(t *testing.T) {
 	saved := map[string]string{"voice": workSkills, "how": "jstack", "deploy": "me/down"}
 	got := rememberOverrides(saved, []skillRepo{{name: "me/down", failure: "no network"}}, map[string]string{"why": workSkills})

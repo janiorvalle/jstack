@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/janiorvalle/jstack/internal/prompt"
@@ -43,6 +44,7 @@ type catalog struct {
 	repos   []skillRepo
 	sources []skills.Source
 	picks   map[string]string
+	held    []string
 }
 
 // repoName normalizes what a person types or pastes for a repo to owner/name.
@@ -299,6 +301,38 @@ func printRepos(out io.Writer, home string, repos []skillRepo) {
 		for _, folder := range repo.oddNames {
 			fmt.Fprintf(out, "  %s  not a lowercase name, the copy in %s is left out; rename the folder\n", folder, repo.name)
 		}
+	}
+}
+
+// holdBack keeps a skill as installed when the saved pick for it names a
+// repo setup has no copy of this run: hidden from every source, the name is
+// local for the run, so a lost clone plus a dead network never hands the
+// skill back to jstack. The pick survives in the config the same way.
+func holdBack(skillSources catalog, saved map[string]string) catalog {
+	unreachable := map[string]bool{}
+	for _, repo := range skillSources.unreachable() {
+		unreachable[repo.name] = true
+	}
+	hidden := map[string]bool{}
+	for name, source := range saved {
+		if unreachable[source] {
+			hidden[name] = true
+			skillSources.held = append(skillSources.held, name)
+		}
+	}
+	if len(hidden) == 0 {
+		return skillSources
+	}
+	sort.Strings(skillSources.held)
+	for index := range skillSources.sources {
+		skillSources.sources[index].Files = withoutFolders{FS: skillSources.sources[index].Files, hidden: hidden}
+	}
+	return skillSources
+}
+
+func printHeld(out io.Writer, skillSources catalog, saved map[string]string) {
+	for _, name := range skillSources.held {
+		fmt.Fprintf(out, "  %s  kept as installed, %s couldn't be reached this run\n", name, saved[name])
 	}
 }
 

@@ -280,8 +280,9 @@ func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness,
 // more than one source holds, asking when there is a terminal and refusing
 // with the flag when there isn't.
 func gatherSources(ctx context.Context, opts Options, ask *prompt.Prompt, embedded assets, config Config, repoNames []string) (catalog, error) {
-	skillSources := buildCatalog(embedded, syncRepos(ctx, opts, repoNames))
+	skillSources := holdBack(buildCatalog(embedded, syncRepos(ctx, opts, repoNames)), config.SkillOverrides)
 	printRepos(opts.Stdout, opts.Home, skillSources.repos)
+	printHeld(opts.Stdout, skillSources, config.SkillOverrides)
 	collisions, err := skills.Collisions(skillSources.sources)
 	if err != nil {
 		return catalog{}, err
