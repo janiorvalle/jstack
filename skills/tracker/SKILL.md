@@ -42,7 +42,7 @@ Out of scope: Optional, one line.
 
 Design notes go in the PR, and the files you expect to touch go in the claim comment. Neither goes in the ticket body. The same shape is the PR description and the turn-in comment.
 
-Run the lint before filing. It reads a file or stdin and exits non-zero over 120 words, when a label is missing, or when Done when has no lines or more than four, and it says what to cut:
+Run the lint before filing. It reads a file or stdin and exits non-zero over 120 words, when a label is missing or has nothing after it, or when Done when isn't one to four lines starting with `- `, and it says what to cut:
 
 ```sh
 python3 scripts/ticket-lint.py ticket.md
