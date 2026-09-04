@@ -351,7 +351,7 @@ func holdBack(skillSources catalog, saved map[string]string) catalog {
 
 func printHeld(out io.Writer, skillSources catalog, saved map[string]string) {
 	for _, name := range skillSources.held {
-		fmt.Fprintf(out, "  %s  kept as installed, %s couldn't be reached this run\n", name, saved[name])
+		fmt.Fprintf(out, "  %s  left as it is in each harness, %s couldn't be reached this run; a harness without it gets it once the repo is reached\n", name, saved[name])
 	}
 }
 

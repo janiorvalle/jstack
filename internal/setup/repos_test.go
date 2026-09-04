@@ -436,7 +436,7 @@ func TestLostCloneAndDeadNetworkKeepTheSkillAsInstalled(t *testing.T) {
 	}
 	expectAll(t, out.String(),
 		"FAILED: `gh repo clone me/work-skills",
-		"voice  kept as installed, me/work-skills couldn't be reached this run\n",
+		"voice  left as it is in each harness, me/work-skills couldn't be reached this run; a harness without it gets it once the repo is reached\n",
 		"changed  -\n",
 		"local    deploy, mine, voice (untouched)",
 	)
