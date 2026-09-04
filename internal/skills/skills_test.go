@@ -154,6 +154,23 @@ func TestSourceDotfilesArePartOfTheSkillAndMachineDotfilesAreNot(t *testing.T) {
 	}
 }
 
+func TestLocalSkillDifferingOnlyInCaseIsNeverOverwritten(t *testing.T) {
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "Deploy", "SKILL.md"), "my local Deploy\n")
+	source := []Source{{Name: "me/work-skills", Files: fstest.MapFS{"deploy/SKILL.md": {Data: []byte("deploy\n")}}}}
+	if _, err := os.Stat(filepath.Join(dest, "deploy")); err != nil {
+		plan, err := PlanFor(source, nil, dest)
+		if err != nil || names(plan.New) != "deploy" || strings.Join(plan.Local, ",") != "Deploy" {
+			t.Fatalf("case-sensitive disk: plan = %+v, %v", plan, err)
+		}
+		return
+	}
+	_, err := PlanFor(source, nil, dest)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-CASE") || !strings.Contains(err.Error(), `local skill "Deploy"`) {
+		t.Fatalf("case-insensitive disk: err = %v", err)
+	}
+}
+
 func TestExtraFileMakesASkillChanged(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "how", "SKILL.md"), "how\n")

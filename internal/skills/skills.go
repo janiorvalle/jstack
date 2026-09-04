@@ -143,6 +143,14 @@ func PlanFor(sources []Source, picks map[string]string, dest string) (Plan, erro
 	if err != nil {
 		return Plan{}, err
 	}
+	entries, err := os.ReadDir(dest)
+	if err != nil && !os.IsNotExist(err) {
+		return Plan{}, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot read the skills folder %q: %w; make it readable and rerun", dest, err)
+	}
+	installed := map[string]bool{}
+	for _, entry := range entries {
+		installed[entry.Name()] = true
+	}
 	owned := map[string]bool{}
 	var plan Plan
 	for _, skill := range skills {
@@ -152,6 +160,11 @@ func PlanFor(sources []Source, picks map[string]string, dest string) (Plan, erro
 		switch {
 		case statErr != nil || !info.IsDir():
 			plan.New = append(plan.New, skill)
+		case !installed[skill.Name]:
+			// The folder is there under another casing, so this disk
+			// folds case and the two names are one folder. Installing
+			// would overwrite a skill no source owns.
+			return Plan{}, fmt.Errorf("[JSTACK-SKILLS-CASE] skill %q from %s and the local skill %q in %s are one folder on this disk, which ignores case; rename the local one and rerun", skill.Name, skill.Source.Name, caseTwin(entries, skill.Name), dest)
 		default:
 			same, err := dirSame(skill, target)
 			if err != nil {
@@ -164,16 +177,21 @@ func PlanFor(sources []Source, picks map[string]string, dest string) (Plan, erro
 			}
 		}
 	}
-	entries, err := os.ReadDir(dest)
-	if err != nil && !os.IsNotExist(err) {
-		return Plan{}, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot read the skills folder %q: %w; make it readable and rerun", dest, err)
-	}
 	for _, entry := range entries {
 		if entry.IsDir() && !owned[entry.Name()] && !strings.HasPrefix(entry.Name(), ".") {
 			plan.Local = append(plan.Local, entry.Name())
 		}
 	}
 	return plan, nil
+}
+
+func caseTwin(entries []os.DirEntry, name string) string {
+	for _, entry := range entries {
+		if strings.EqualFold(entry.Name(), name) {
+			return entry.Name()
+		}
+	}
+	return name
 }
 
 // Apply puts the new and changed skills into dest one skill at a time. Each

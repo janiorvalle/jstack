@@ -40,11 +40,12 @@ Setup asks once, with a terminal, and remembers the answer either way. Any time 
 ```sh
 jstack setup --skill-repo owner/name          # add a repo, more than one is fine
 jstack setup --forget-skill-repo owner/name   # stop installing from it
+jstack setup --no-skill-repo                  # there is none; setup stops asking and hinting
 ```
 
 Forgetting a repo leaves its skills in the harnesses: the ones jstack doesn't have stay as local skills, untouched from then on, and one that had replaced a jstack skill goes back to jstack's copy, with yours backed up.
 
-The clone lives in `~/.jstack/repos/<owner>/<name>` and is synced with `gh repo sync` on every run, plan-only runs included, so a skill you push shows up as changed on the next setup, with the old copy backed up. Both the clone and the sync go through gh, so a private repo needs nothing beyond `gh auth login`. A sync that fails keeps the copy from the last run and says so. A folder named after a tool's own skill, `quest`, `roast`, `bgr`, or `tokenomnom`, is left out of a repo and reported, because the tool installs that skill itself and keeps it matched to its binary. A skill folder that isn't a lowercase name is left out too, since `Voice` and `voice` are one folder on a Mac. A file in the repo that is a symlink pointing outside it is refused. A repo gh can't reach, private and not logged in, or a repo with no `skills/` folder, is reported with the reason and setup carries on with the rest. Check `gh auth status` for the private case.
+The clone lives in `~/.jstack/repos/<owner>/<name>` and is synced with `gh repo sync` on every run, plan-only runs included, so a skill you push shows up as changed on the next setup, with the old copy backed up. Both the clone and the sync go through gh, so a private repo needs nothing beyond `gh auth login`. A sync that fails keeps the copy from the last run and says so. A folder named after a tool's own skill, `quest`, `roast`, `bgr`, or `tokenomnom`, is left out of a repo and reported, because the tool installs that skill itself and keeps it matched to its binary. A skill folder that isn't a lowercase name is left out too, since `Voice` and `voice` are one folder on a Mac, and a local skill that differs from a source's only in case stops setup with the two names rather than being overwritten. A file in the repo that is a symlink pointing outside it is refused. A repo gh can't reach, private and not logged in, or a repo with no `skills/` folder, is reported with the reason and setup carries on with the rest. Check `gh auth status` for the private case.
 
 A skill named the same in jstack and your repo, or in two of your repos, stops setup. With a terminal it asks: keep jstack's, use yours, or rename it yourself. The pick is saved and printed on every later run as `overridden by owner/name` or `kept from jstack`, so the copy that isn't installed never goes unnoticed. Without a terminal it refuses and prints the flag:
 
@@ -61,7 +62,7 @@ You have no terminal, so `jstack setup` prints the plan and changes nothing. Rea
 **Options:** the harnesses the plan found, one line each with what changes there.
 **Recommendation:** the found ones, unless the plan shows an instructions file with other content, in which case say so and offer `--keep-instructions`.
 
-The plan ends with `add --skill-repo owner/name` until the human has answered the skills repo question once, so ask them in the same message whether they have one.
+The plan ends with `add --skill-repo owner/name` until the skills repo question has an answer, so ask them in the same message whether they have one, and pass `--no-skill-repo` on the rerun when the answer is no.
 
 Then rerun with what they chose:
 

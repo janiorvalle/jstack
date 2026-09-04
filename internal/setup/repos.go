@@ -32,6 +32,7 @@ type skillRepo struct {
 	count      int
 	toolSkills []string
 	oddNames   []string
+	roots      []*os.Root
 }
 
 func (r skillRepo) usable() bool {
@@ -46,6 +47,16 @@ type catalog struct {
 	sources []skills.Source
 	picks   map[string]string
 	held    []string
+}
+
+// close lets go of the clone folders. Windows won't remove a folder while
+// a handle on it is open, and the roots hold one each.
+func (c catalog) close() {
+	for _, repo := range c.repos {
+		for _, root := range repo.roots {
+			root.Close()
+		}
+	}
 }
 
 // repoName normalizes what a person types or pastes for a repo to owner/name.
@@ -162,6 +173,7 @@ func syncRepo(ctx context.Context, opts Options, name string) skillRepo {
 		repo.failure = fmt.Sprintf("cannot open %s: %v; make it readable, or delete the clone and rerun", display(opts.Home, repo.dir), err)
 		return repo
 	}
+	repo.roots = append(repo.roots, clone)
 	skillsRoot, err := clone.OpenRoot("skills")
 	if errors.Is(err, fs.ErrNotExist) {
 		repo.failure = "it has no skills/ folder; add one with a folder per skill, each with a SKILL.md, and push"
@@ -171,6 +183,7 @@ func syncRepo(ctx context.Context, opts Options, name string) skillRepo {
 		repo.failure = fmt.Sprintf("cannot open its skills/ folder: %v; it has to be a folder inside the repo, not a symlink out of it", err)
 		return repo
 	}
+	repo.roots = append(repo.roots, skillsRoot)
 	repo.source = skills.Source{Name: name, Files: skillsRoot.FS()}
 	found, err := skills.Names(repo.source)
 	if err != nil {

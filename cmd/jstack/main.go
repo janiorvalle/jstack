@@ -30,7 +30,7 @@ var version = "dev"
 const usage = `jstack puts the skills, the letter, and the tools into the coding agents on this machine.
 
   jstack setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
-               [--skill-repo owner/name] [--forget-skill-repo owner/name] [--override skill=source]
+               [--skill-repo owner/name] [--forget-skill-repo owner/name] [--no-skill-repo] [--override skill=source]
   jstack upgrade
   jstack version
 
@@ -109,6 +109,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		forgetSkillRepos = append(forgetSkillRepos, value)
 		return nil
 	})
+	noSkillRepo := flags.Bool("no-skill-repo", false, "record that there is no skills repo of your own, so setup stops asking")
 	flags.Func("override", "which source a skill in more than one source comes from, skill=jstack or skill=owner/name; repeatable", func(value string) error {
 		name, source, ok := strings.Cut(value, "=")
 		if !ok || name == "" || source == "" {
@@ -144,6 +145,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		Interactive:      deps.interactive(),
 		SkillRepos:       skillRepos,
 		ForgetSkillRepos: forgetSkillRepos,
+		NoSkillRepo:      *noSkillRepo,
 		Overrides:        overrides,
 		Stdin:            stdin,
 		Stdout:           stdout,

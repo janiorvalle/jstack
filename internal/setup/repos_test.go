@@ -89,6 +89,33 @@ func TestRepoQuestionIsAskedOnceAndRememberedWhenSkipped(t *testing.T) {
 	}
 }
 
+func TestNoSkillRepoFlagRecordsTheAnswerHeadlessly(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRoast("1.1.0")
+	opts, out := options(t, home, shell, "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "add --skill-repo owner/name to also install the skills from a repo of yours, or --no-skill-repo to say there is none")
+	opts, out = options(t, home, shell, "")
+	opts.Yes = true
+	opts.NoSkillRepo = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"skill_repos_asked": true`) {
+		t.Fatalf("config = %q", got)
+	}
+	opts, out = options(t, home, shell, "\n")
+	opts.Interactive = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "skills repo of your own") || strings.Contains(out.String(), "--no-skill-repo") {
+		t.Fatalf("asked or hinted after the answer was recorded:\n%s", out.String())
+	}
+}
+
 func TestRepoQuestionRejectsABadNameAndAsksAgain(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRepo()

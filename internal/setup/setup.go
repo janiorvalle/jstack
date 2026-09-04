@@ -46,6 +46,7 @@ type Options struct {
 	Interactive      bool
 	SkillRepos       []string
 	ForgetSkillRepos []string
+	NoSkillRepo      bool
 	Overrides        map[string]string
 	Stdin            io.Reader
 	Stdout           io.Writer
@@ -142,7 +143,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	asked := config.SkillReposAsked || len(repoNames) > 0
+	asked := config.SkillReposAsked || opts.NoSkillRepo || len(repoNames) > 0
 	if ask != nil && !asked {
 		name, err := askRepo(ask, out)
 		if err != nil {
@@ -157,6 +158,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
+	defer skillSources.close()
 	current, err := buildPlan(ctx, opts, embedded, skillSources, picked)
 	if err != nil {
 		return err
@@ -285,10 +287,12 @@ func gatherSources(ctx context.Context, opts Options, ask *prompt.Prompt, embedd
 	printHeld(opts.Stdout, skillSources, config.SkillOverrides)
 	collisions, err := skills.Collisions(skillSources.sources)
 	if err != nil {
+		skillSources.close()
 		return catalog{}, err
 	}
 	picks, err := resolveCollisions(ask, collisions, config.SkillOverrides, opts.Overrides)
 	if err != nil {
+		skillSources.close()
 		return catalog{}, err
 	}
 	printOverrides(opts.Stdout, collisions, picks)
@@ -551,9 +555,12 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 	for _, name := range sortedKeys(opts.Overrides) {
 		line += " --override " + name + "=" + opts.Overrides[name]
 	}
+	if opts.NoSkillRepo {
+		line += " --no-skill-repo"
+	}
 	fmt.Fprintf(out, "  %s\n", line)
 	if !repoAsked {
-		fmt.Fprintln(out, "  add --skill-repo owner/name to also install the skills from a repo of yours")
+		fmt.Fprintln(out, "  add --skill-repo owner/name to also install the skills from a repo of yours, or --no-skill-repo to say there is none")
 	}
 	missing, outdated := false, false
 	for _, status := range current.tools {
