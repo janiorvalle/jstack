@@ -59,6 +59,7 @@ type fakeShell struct {
 	latest   map[string]string
 	stuck    bool
 	commands []string
+	repos    map[string]map[string]string
 }
 
 func withRoast(version string) *fakeShell {
@@ -73,6 +74,9 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 	f.commands = append(f.commands, command)
 	if f.failing[command] {
 		return errors.New("exit status 1")
+	}
+	if strings.HasPrefix(command, "gh repo clone ") || strings.Contains(command, "gh repo sync") {
+		return f.gitHub(command, out)
 	}
 	if strings.HasPrefix(command, "check-") && !f.present[command] {
 		return errors.New("exit status 1")
@@ -94,6 +98,32 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 	}
 	if output, ok := f.versions[command]; ok {
 		fmt.Fprintln(out, output)
+	}
+	return nil
+}
+
+// gitHub stands in for gh: a clone writes the repo's files under the folder
+// named, a sync writes them again, and a repo that isn't in repos is one gh
+// can't reach. The repo name is read back from the clone folder,
+// ~/.jstack/repos/owner/name, so a sync finds the same files.
+func (f *fakeShell) gitHub(command string, out io.Writer) error {
+	dir := strings.Split(command, "'")[1]
+	name := filepath.ToSlash(filepath.Join(filepath.Base(filepath.Dir(dir)), filepath.Base(dir)))
+	files, ok := f.repos[name]
+	if !ok {
+		fmt.Fprintf(out, "GraphQL: Could not resolve to a Repository with the name '%s'. (repository)\n", name)
+		return errors.New("exit status 1")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		return err
+	}
+	for path, content := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, path)), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(content), 0o644); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -293,7 +323,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast\n")
 	write(t, filepath.Join(home, ".codex", "skills", "roast", "SKILL.md"), "roast\n")
 	shell.commands = nil
-	opts, out := options(t, home, shell, "\n")
+	opts, out := options(t, home, shell, "\n\n")
 	opts.Interactive = true
 	opts.Now = func() time.Time { return time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC) }
 	if err := Run(context.Background(), opts); err != nil {
@@ -315,7 +345,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
-	opts, out := options(t, home, shell, "3\n\ny\n")
+	opts, out := options(t, home, shell, "\n3\n\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -432,7 +462,7 @@ func TestTerminalYesToUpdateRunsTheInstallLineAndReinstallsTheSkill(t *testing.T
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
 	shell := withRoast("1.0.0")
-	opts, out := options(t, home, shell, "\ny\n")
+	opts, out := options(t, home, shell, "\n\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -456,7 +486,7 @@ func TestTerminalNoToUpdateLeavesItOutdated(t *testing.T) {
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
 	shell := withRoast("1.0.0")
-	opts, out := options(t, home, shell, "\nn\n")
+	opts, out := options(t, home, shell, "\n\nn\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -572,7 +602,7 @@ func TestUpdateThatLeavesTheOldVersionOnPathIsAnError(t *testing.T) {
 func TestTerminalNoToToolKeepsItMissing(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
-	opts, out := options(t, home, shell, "\nn\n")
+	opts, out := options(t, home, shell, "\n\nn\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -776,7 +806,7 @@ func TestNothingFoundWithYesChangesNothing(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "No harness picked. Nothing changed.") || exists(filepath.Join(home, ".jstack")) {
+	if !strings.Contains(out.String(), "No harness picked. Nothing changed in the harnesses.") || exists(filepath.Join(home, ".jstack")) {
 		t.Fatalf("output:\n%s", out.String())
 	}
 }
@@ -840,7 +870,7 @@ func TestMissingPrerequisiteIsNeverAskedAboutOrInstalled(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
 	shell.present["check-git"] = false
-	opts, out := options(t, home, shell, "\n")
+	opts, out := options(t, home, shell, "\n\n")
 	opts.Interactive = true
 	opts.InstallTools = true
 	if err := Run(context.Background(), opts); err != nil {
@@ -884,7 +914,7 @@ func TestNoTerminalRerunLineCarriesTheFlagsGiven(t *testing.T) {
 	if !strings.Contains(out.String(), "jstack setup --harness claude --yes --install-tools --keep-instructions") {
 		t.Fatalf("output:\n%s", out.String())
 	}
-	if strings.Contains(out.String(), "add --") {
+	if strings.Contains(out.String(), "add --install-tools") || strings.Contains(out.String(), "add --keep-instructions") {
 		t.Fatalf("hints for flags already given:\n%s", out.String())
 	}
 	if read(t, filepath.Join(home, ".claude", "CLAUDE.md")) != "# my own notes\n" {
@@ -955,7 +985,7 @@ func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plans, err := planHarnesses(opts, embedded, rows)
+	plans, err := planHarnesses(opts, embedded, buildCatalog(embedded, nil), rows)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -973,7 +1003,7 @@ func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
 
 func TestBackupFolderIsExclusivePerRun(t *testing.T) {
 	home := t.TempDir()
-	needing := plan{harnesses: []harnessPlan{{skills: skills.Plan{Changed: []string{"voice"}}}}}
+	needing := plan{harnesses: []harnessPlan{{skills: skills.Plan{Changed: []skills.Skill{{Name: "voice"}}}}}}
 	first, err := reserveBackup(home, "20260903-100405", needing)
 	if err != nil {
 		t.Fatal(err)

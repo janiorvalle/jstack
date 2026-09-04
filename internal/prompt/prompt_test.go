@@ -72,3 +72,33 @@ func TestConfirmReadsYesNoAndDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestChooseTakesOneNumberAndRejectsTheRest(t *testing.T) {
+	var out bytes.Buffer
+	p := New(strings.NewReader("\n4\nx\n2\n"), &out)
+	got, err := p.Choose("Which?", []string{"a", "b", "c"})
+	if err != nil || got != 1 {
+		t.Fatalf("got %d, %v", got, err)
+	}
+	if !strings.Contains(out.String(), "  2. b") || strings.Count(out.String(), "is not a number between 1 and 3") != 3 {
+		t.Fatalf("output = %q", out.String())
+	}
+	if _, err := New(strings.NewReader("q\n"), &out).Choose("Which?", []string{"a"}); !errors.Is(err, ErrQuit) {
+		t.Fatalf("q: err = %v", err)
+	}
+}
+
+func TestAskReturnsTheLineAndEnterAlone(t *testing.T) {
+	var out bytes.Buffer
+	p := New(strings.NewReader("  me/work-skills \n\n"), &out)
+	got, err := p.Ask("Repo?")
+	if err != nil || got != "me/work-skills" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if got, err := p.Ask("Repo?"); err != nil || got != "" {
+		t.Fatalf("enter alone: got %q, %v", got, err)
+	}
+	if !strings.HasPrefix(out.String(), "Repo? ") {
+		t.Fatalf("output = %q", out.String())
+	}
+}

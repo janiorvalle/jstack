@@ -1,5 +1,6 @@
-// Package setup is the whole flow: detect harnesses, plan what the skills, the
-// letter, and the tools need, ask the human, apply, and report.
+// Package setup is the whole flow: detect harnesses, fetch the skills repos
+// the human named, plan what the skills, the letter, and the tools need, ask
+// the human, apply, and report.
 package setup
 
 import (
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +44,10 @@ type Options struct {
 	KeepInstructions bool
 	Yes              bool
 	Interactive      bool
+	SkillRepos       []string
+	ForgetSkillRepos []string
+	NoSkillRepo      bool
+	Overrides        map[string]string
 	Stdin            io.Reader
 	Stdout           io.Writer
 	Shell            Shell
@@ -100,6 +106,7 @@ func (status toolStatus) actionable() bool {
 type plan struct {
 	harnesses []harnessPlan
 	tools     []toolStatus
+	catalog   catalog
 }
 
 type pickSource int
@@ -128,18 +135,41 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	out := opts.Stdout
 	printHarnesses(out, opts.Home, rows, picked)
-	current, err := buildPlan(ctx, opts, embedded, picked)
+	var ask *prompt.Prompt
+	if opts.Interactive && !opts.Yes {
+		ask = prompt.New(opts.Stdin, out)
+	}
+	repoNames, err := chooseRepos(config.SkillRepos, opts)
+	if err != nil {
+		return err
+	}
+	asked := config.SkillReposAsked || opts.NoSkillRepo || len(repoNames) > 0
+	if ask != nil && !asked {
+		name, err := askRepo(ask, out)
+		if err != nil {
+			return err
+		}
+		if name != "" {
+			repoNames = append(repoNames, name)
+		}
+		asked = true
+	}
+	skillSources, err := gatherSources(ctx, opts, ask, embedded, config, repoNames)
+	if err != nil {
+		return err
+	}
+	defer skillSources.close()
+	current, err := buildPlan(ctx, opts, embedded, skillSources, picked)
 	if err != nil {
 		return err
 	}
 	printPlan(out, opts.Home, embedded, current)
 	noted := noteInstallFolderOffPath(opts, out)
 	if !opts.Interactive && !opts.Yes {
-		printRerun(out, opts, picked, current)
+		printRerun(out, opts, picked, current, asked)
 		return nil
 	}
-	if opts.Interactive && !opts.Yes {
-		ask := prompt.New(opts.Stdin, out)
+	if ask != nil {
 		if source == fromDetect {
 			repicked, err := askHarnesses(ask, opts.Home, rows, picked)
 			if err != nil {
@@ -158,7 +188,7 @@ func Run(ctx context.Context, opts Options) error {
 				return err
 			}
 			if !apply {
-				fmt.Fprintln(out, "Nothing changed.")
+				fmt.Fprintln(out, "Nothing changed in the harnesses.")
 				return nil
 			}
 		}
@@ -172,7 +202,7 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 	if len(picked) == 0 {
-		fmt.Fprintln(out, "\nNo harness picked. Nothing changed. Pass --harness claude,codex to name one.")
+		fmt.Fprintln(out, "\nNo harness picked. Nothing changed in the harnesses. Pass --harness claude,codex to name one.")
 		return nil
 	}
 	backupRoot, err := reserveBackup(opts.Home, opts.Now().Format("20060102-150405"), current)
@@ -182,7 +212,8 @@ func Run(ctx context.Context, opts Options) error {
 	if err := applyHarnesses(opts, embedded, current, backupRoot); err != nil {
 		return err
 	}
-	if err := saveConfig(opts.Home, Config{Harnesses: harness.Keys(picked)}); err != nil {
+	saved := Config{Harnesses: harness.Keys(picked), SkillRepos: repoNames, SkillReposAsked: asked, SkillOverrides: rememberOverrides(config.SkillOverrides, current.catalog.unreachable(), current.catalog.picks)}
+	if err := saveConfig(opts.Home, saved); err != nil {
 		return err
 	}
 	if err := writeScripts(embedded, opts.Home); err != nil {
@@ -247,12 +278,34 @@ func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness,
 	return rows.Found(), fromDetect, nil
 }
 
-func buildPlan(ctx context.Context, opts Options, embedded assets, picked []harness.Harness) (plan, error) {
-	harnessPlans, err := planHarnesses(opts, embedded, picked)
+// gatherSources fetches the repos, prints them, and settles every skill name
+// more than one source holds, asking when there is a terminal and refusing
+// with the flag when there isn't.
+func gatherSources(ctx context.Context, opts Options, ask *prompt.Prompt, embedded assets, config Config, repoNames []string) (catalog, error) {
+	skillSources := holdBack(buildCatalog(embedded, syncRepos(ctx, opts, repoNames)), config.SkillOverrides)
+	printRepos(opts.Stdout, opts.Home, skillSources.repos)
+	printHeld(opts.Stdout, skillSources, config.SkillOverrides)
+	collisions, err := skills.Collisions(skillSources.sources)
+	if err != nil {
+		skillSources.close()
+		return catalog{}, err
+	}
+	picks, err := resolveCollisions(ask, collisions, config.SkillOverrides, opts.Overrides)
+	if err != nil {
+		skillSources.close()
+		return catalog{}, err
+	}
+	printOverrides(opts.Stdout, collisions, picks)
+	skillSources.picks = picks
+	return skillSources, nil
+}
+
+func buildPlan(ctx context.Context, opts Options, embedded assets, skillSources catalog, picked []harness.Harness) (plan, error) {
+	harnessPlans, err := planHarnesses(opts, embedded, skillSources, picked)
 	if err != nil {
 		return plan{}, err
 	}
-	current := plan{harnesses: harnessPlans}
+	current := plan{harnesses: harnessPlans, catalog: skillSources}
 	for _, tool := range embedded.tools {
 		status := toolStatus{tool: tool, present: opts.Shell(ctx, tool.Check, io.Discard) == nil}
 		if status.present {
@@ -315,7 +368,7 @@ func agreedByFlag(opts Options, status toolStatus) bool {
 // replan redoes the harness half after a new pick. The tool checks already ran
 // and their answers don't depend on the pick, only the skill presence does.
 func replan(opts Options, embedded assets, picked []harness.Harness, current plan) (plan, error) {
-	harnessPlans, err := planHarnesses(opts, embedded, picked)
+	harnessPlans, err := planHarnesses(opts, embedded, current.catalog, picked)
 	if err != nil {
 		return plan{}, err
 	}
@@ -324,10 +377,10 @@ func replan(opts Options, embedded assets, picked []harness.Harness, current pla
 	return current, nil
 }
 
-func planHarnesses(opts Options, embedded assets, picked []harness.Harness) ([]harnessPlan, error) {
+func planHarnesses(opts Options, embedded assets, skillSources catalog, picked []harness.Harness) ([]harnessPlan, error) {
 	var plans []harnessPlan
 	for _, entry := range picked {
-		skillPlan, err := skills.PlanFor(embedded.skills, entry.SkillsDir())
+		skillPlan, err := skills.PlanFor(skillSources.sources, skillSources.picks, entry.SkillsDir())
 		if err != nil {
 			return nil, err
 		}
@@ -388,8 +441,8 @@ func printHarnesses(out io.Writer, home string, rows harness.Table, picked []har
 func printPlan(out io.Writer, home string, embedded assets, current plan) {
 	for _, entry := range current.harnesses {
 		fmt.Fprintf(out, "\n%s  %s\n", entry.harness.Name, display(home, entry.harness.SkillsDir()))
-		fmt.Fprintf(out, "  new      %s\n", list(entry.skills.New))
-		fmt.Fprintf(out, "  changed  %s\n", list(entry.skills.Changed))
+		fmt.Fprintf(out, "  new      %s\n", skillList(entry.skills.New))
+		fmt.Fprintf(out, "  changed  %s\n", skillList(entry.skills.Changed))
 		fmt.Fprintf(out, "  same     %d skills\n", len(entry.skills.Same))
 		fmt.Fprintf(out, "  local    %s (untouched)\n", list(entry.skills.Local))
 		fmt.Fprintf(out, "  letter   %s %s\n", display(home, entry.harness.InstructionsPath()), letterIntent(entry.letter.Outcome))
@@ -477,8 +530,8 @@ func reference(status toolStatus) string {
 	return "latest"
 }
 
-func printRerun(out io.Writer, opts Options, picked []harness.Harness, current plan) {
-	fmt.Fprintln(out, "\nNo terminal, so nothing changed. Rerun with the flags to apply:")
+func printRerun(out io.Writer, opts Options, picked []harness.Harness, current plan, repoAsked bool) {
+	fmt.Fprintln(out, "\nNo terminal, so nothing changed in the harnesses. Rerun with the flags to apply:")
 	keys := strings.Join(harness.Keys(picked), ",")
 	if keys == "" {
 		keys = "claude,codex"
@@ -493,7 +546,22 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 	if opts.KeepInstructions {
 		line += " --keep-instructions"
 	}
+	for _, repo := range opts.SkillRepos {
+		line += " --skill-repo " + repo
+	}
+	for _, repo := range opts.ForgetSkillRepos {
+		line += " --forget-skill-repo " + repo
+	}
+	for _, name := range sortedKeys(opts.Overrides) {
+		line += " --override " + name + "=" + opts.Overrides[name]
+	}
+	if opts.NoSkillRepo {
+		line += " --no-skill-repo"
+	}
 	fmt.Fprintf(out, "  %s\n", line)
+	if !repoAsked {
+		fmt.Fprintln(out, "  add --skill-repo owner/name to also install the skills from a repo of yours, or --no-skill-repo to say there is none")
+	}
 	missing, outdated := false, false
 	for _, status := range current.tools {
 		if !status.actionable() {
@@ -603,7 +671,7 @@ func applyHarnesses(opts Options, embedded assets, current plan, backupRoot stri
 	for _, entry := range current.harnesses {
 		backup := filepath.Join(backupRoot, entry.harness.Key)
 		fmt.Fprintf(out, "\n%s\n", entry.harness.Name)
-		if err := applySkills(embedded, entry, opts.Home, backup, out); err != nil {
+		if err := applySkills(current.catalog, entry, opts.Home, backup, out); err != nil {
 			return err
 		}
 		if err := applyLetter(opts, embedded, entry, backup); err != nil {
@@ -654,26 +722,26 @@ func noteInstallFolderOffPath(opts Options, out io.Writer) bool {
 	return true
 }
 
-func applySkills(embedded assets, entry harnessPlan, home, backup string, out io.Writer) error {
+func applySkills(skillSources catalog, entry harnessPlan, home, backup string, out io.Writer) error {
 	dest := entry.harness.SkillsDir()
 	if !entry.skills.Pending() {
 		fmt.Fprintf(out, "  skills   up to date in %s\n", display(home, dest))
 		return nil
 	}
 	skillsBackup := filepath.Join(backup, "skills")
-	if err := skills.Apply(embedded.skills, dest, entry.skills, skillsBackup); err != nil {
+	if err := skills.Apply(dest, entry.skills, skillsBackup); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "  skills   %d installed, %d updated in %s\n", len(entry.skills.New), len(entry.skills.Changed), display(home, dest))
 	if len(entry.skills.Changed) > 0 {
 		fmt.Fprintf(out, "  backup   %s\n", display(home, skillsBackup))
 	}
-	after, err := skills.PlanFor(embedded.skills, dest)
+	after, err := skills.PlanFor(skillSources.sources, skillSources.picks, dest)
 	if err != nil {
 		return err
 	}
 	if after.Pending() {
-		fmt.Fprintf(out, "  remaining drift: %s\n", list(append(after.New, after.Changed...)))
+		fmt.Fprintf(out, "  remaining drift: %s\n", skillList(append(after.New, after.Changed...)))
 	}
 	return nil
 }
@@ -860,6 +928,31 @@ func list(items []string) string {
 		return "-"
 	}
 	return strings.Join(items, ", ")
+}
+
+// skillList names skills, each with its source when that isn't jstack.
+func skillList(items []skills.Skill) string {
+	if len(items) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(items))
+	for _, skill := range items {
+		part := skill.Name
+		if skill.Source.Name != "jstack" {
+			part += " (" + skill.Source.Name + ")"
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func sortedKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func names(picked []harness.Harness) string {
