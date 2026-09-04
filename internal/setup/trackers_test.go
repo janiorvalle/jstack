@@ -221,7 +221,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "bravo", "git remote get-url origin"),
 		in(home, "bravo", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "bravo", "git symbolic-ref --short refs/remotes/origin/HEAD"),
-		in(home, "bravo", "git rev-parse HEAD refs/remotes/origin/main"),
+		in(home, "bravo", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main")),
 		in(home, "bravo", "git checkout -b tracker-line"),
 		in(home, "bravo", "git add "+quote(runtime.GOOS, "AGENTS.md")),
 		in(home, "bravo", "git commit -m "+quote(runtime.GOOS, "docs: name the tracker")),
@@ -232,7 +232,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "charlie", "git remote get-url origin"),
 		in(home, "charlie", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "charlie", "git symbolic-ref --short refs/remotes/origin/HEAD"),
-		in(home, "charlie", "git rev-parse HEAD refs/remotes/origin/main"),
+		in(home, "charlie", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main")),
 	}
 	if got := strings.Join(shell.commands[4:], "\n"); got != strings.Join(expected, "\n") {
 		t.Fatalf("commands:\n%s\nwant:\n%s", got, strings.Join(expected, "\n"))
@@ -437,14 +437,14 @@ func TestPRIsOfferedOnlyFromTheDefaultBranch(t *testing.T) {
 	shell := withRoast("1.1.0")
 	shell.versions[in(home, "bravo", "git rev-parse --abbrev-ref HEAD")] = "feature"
 	shell.versions[in(home, "bravo", "git symbolic-ref --short refs/remotes/origin/HEAD")] = "origin/main"
-	shell.versions[in(home, "charlie", "git rev-parse --abbrev-ref HEAD")] = "master"
-	opts, out := options(t, home, shell, "\n2\ny\nn\n")
+	shell.failing = map[string]bool{in(home, "charlie", "git symbolic-ref --short refs/remotes/origin/HEAD"): true}
+	opts, out := options(t, home, shell, "\n2\ny\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo  is on branch feature, not main, so the line is left uncommitted; commit it yourself", "Open a PR for charlie?", "charlie  line left uncommitted")
-	if strings.Contains(out.String(), "Open a PR for bravo?") || strings.Contains(strings.Join(shell.commands, "\n"), "checkout -b") {
+	expectAll(t, out.String(), "bravo  is on branch feature, not main, so the line is left uncommitted; commit it yourself", "charlie  has no origin/HEAD, so setup can't tell its default branch and the line is left uncommitted; run `git remote set-head origin -a` there, then rerun")
+	if strings.Contains(out.String(), "Open a PR for") || strings.Contains(strings.Join(shell.commands, "\n"), "checkout -b") {
 		t.Fatalf("offered or opened a PR off the default branch:\n%s", out.String())
 	}
 }
@@ -474,7 +474,7 @@ func TestPRIsOfferedOnlyWhenTheDefaultBranchIsAtItsRemote(t *testing.T) {
 	home := homeWithRepos(t)
 	savedRepos(t, home)
 	shell := withRoast("1.1.0")
-	shell.versions[in(home, "bravo", "git rev-parse HEAD refs/remotes/origin/main")] = "1111111111111111111111111111111111111111\n2222222222222222222222222222222222222222"
+	shell.versions[in(home, "bravo", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main"))] = "1111111111111111111111111111111111111111\n2222222222222222222222222222222222222222"
 	opts, out := options(t, home, shell, "\n2\ny\nn\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {

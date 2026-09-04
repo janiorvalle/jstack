@@ -543,8 +543,11 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 	case !state.hasRemote:
 		fmt.Fprintf(out, "  %s  has no origin remote, so the line is left uncommitted; commit it yourself\n", repo.name)
 		return nil
+	case state.defaultBranch == "":
+		fmt.Fprintf(out, "  %s  has no origin/HEAD, so setup can't tell its default branch and the line is left uncommitted; run `git remote set-head origin -a` there, then rerun\n", repo.name)
+		return nil
 	case !state.onDefaultBranch():
-		fmt.Fprintf(out, "  %s  is on branch %s, not %s, so the line is left uncommitted; commit it yourself\n", repo.name, state.branch, state.defaultBranchName())
+		fmt.Fprintf(out, "  %s  is on branch %s, not %s, so the line is left uncommitted; commit it yourself\n", repo.name, state.branch, state.defaultBranch)
 		return nil
 	case !state.published:
 		fmt.Fprintf(out, "  %s  is on %s but not at origin/%s, so the line is left uncommitted; push or pull first, then rerun\n", repo.name, state.branch, state.branch)
@@ -563,9 +566,9 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 
 // repoState is what decides the PR offer, read through git before the
 // write. defaultBranch is what origin/HEAD names, "" when the clone never
-// recorded one, in which case main or master counts. published is HEAD at
-// the remote's copy of that branch, so the PR carries no commit that was
-// only ever local.
+// recorded one, and a guess would decide which commits the PR carries, so
+// there is no guess. published is HEAD at the remote's copy of that
+// branch, so the PR carries no commit that was only ever local.
 type repoState struct {
 	clean         bool
 	hasRemote     bool
@@ -575,17 +578,7 @@ type repoState struct {
 }
 
 func (s repoState) onDefaultBranch() bool {
-	if s.defaultBranch != "" {
-		return s.branch == s.defaultBranch
-	}
-	return s.branch == "main" || s.branch == "master"
-}
-
-func (s repoState) defaultBranchName() string {
-	if s.defaultBranch != "" {
-		return s.defaultBranch
-	}
-	return "main or master"
+	return s.defaultBranch != "" && s.branch == s.defaultBranch
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {
@@ -603,7 +596,7 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 		return state
 	}
 	var commits bytes.Buffer
-	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse HEAD refs/remotes/origin/"+state.branch), &commits) == nil {
+	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/"+state.branch)), &commits) == nil {
 		lines := strings.Fields(commits.String())
 		state.published = len(lines) == 2 && lines[0] == lines[1]
 	}

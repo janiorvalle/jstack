@@ -108,7 +108,9 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 		fmt.Fprintln(out, output)
 	} else if strings.HasSuffix(command, "git rev-parse --abbrev-ref HEAD") {
 		fmt.Fprintln(out, "main")
-	} else if strings.Contains(command, "git rev-parse HEAD refs/remotes/origin/") {
+	} else if strings.HasSuffix(command, "git symbolic-ref --short refs/remotes/origin/HEAD") {
+		fmt.Fprintln(out, "origin/main")
+	} else if strings.Contains(command, "git rev-parse HEAD ") {
 		fmt.Fprintln(out, "0123456789abcdef0123456789abcdef01234567\n0123456789abcdef0123456789abcdef01234567")
 	}
 	return nil
