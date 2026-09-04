@@ -154,6 +154,32 @@ func TestSourceDotfilesArePartOfTheSkillAndMachineDotfilesAreNot(t *testing.T) {
 	}
 }
 
+func TestDotfileTheSourceDroppedLeavesTheHarness(t *testing.T) {
+	dest := t.TempDir()
+	sources := []Source{{Name: "me/work-skills", Files: fstest.MapFS{"deploy/SKILL.md": {Data: []byte("deploy\n")}}}}
+	write(t, filepath.Join(dest, "deploy", "SKILL.md"), "deploy\n")
+	write(t, filepath.Join(dest, "deploy", ".env.example"), "TOKEN=\n")
+	write(t, filepath.Join(dest, "deploy", ".DS_Store"), "noise")
+	plan, err := PlanFor(sources, nil, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(plan.Changed) != "deploy" {
+		t.Fatalf("a dotfile the source no longer has is not drift: %+v", plan)
+	}
+	if err := Apply(dest, plan, filepath.Join(t.TempDir(), "backup")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "deploy", ".env.example")); !os.IsNotExist(err) {
+		t.Fatal("the dropped dotfile is still installed")
+	}
+	write(t, filepath.Join(dest, "deploy", ".DS_Store"), "noise")
+	after, err := PlanFor(sources, nil, dest)
+	if err != nil || names(after.Same) != "deploy" {
+		t.Fatalf("machine noise counts as drift: %+v, %v", after, err)
+	}
+}
+
 func TestLocalSkillDifferingOnlyInCaseIsNeverOverwritten(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "Deploy", "SKILL.md"), "my local Deploy\n")

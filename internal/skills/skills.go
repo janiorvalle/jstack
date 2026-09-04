@@ -328,10 +328,7 @@ func dirSame(skill Skill, target string) (bool, error) {
 		key := filepath.ToSlash(relative)
 		want, ok := wanted[key]
 		if !ok {
-			// A hidden file the source doesn't have, .DS_Store say, is
-			// the machine's, not drift. A hidden file the source does
-			// have is part of the skill and compared like any other.
-			if hidden(key) {
+			if machineNoise(entry.Name()) {
 				return nil
 			}
 			same = false
@@ -354,14 +351,15 @@ func dirSame(skill Skill, target string) (bool, error) {
 	return same && seen == len(wanted), nil
 }
 
-// hidden reports whether any part of a slash path starts with a dot.
-func hidden(key string) bool {
-	for _, part := range strings.Split(key, "/") {
-		if strings.HasPrefix(part, ".") {
-			return true
-		}
+// machineNoise is a file the desktop drops into folders it browses. It is
+// the machine's, not drift; any other file the source lacks, hidden or not,
+// makes the skill changed, so a file a repo deletes leaves the harness too.
+func machineNoise(name string) bool {
+	switch name {
+	case ".DS_Store", "Thumbs.db", "desktop.ini", ".directory":
+		return true
 	}
-	return false
+	return strings.HasPrefix(name, "._")
 }
 
 func copyDir(skill Skill, target string) error {
