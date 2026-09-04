@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -131,6 +132,7 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	printPlan(out, opts.Home, embedded, current)
+	noted := noteInstallFolderOffPath(opts, out)
 	if !opts.Interactive && !opts.Yes {
 		printRerun(out, opts, picked, current)
 		return nil
@@ -183,6 +185,9 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	toolsErr := applyTools(ctx, opts, current)
+	if !noted {
+		noteInstallFolderOffPath(opts, out)
+	}
 	fmt.Fprintf(out, "\nharness picks saved to %s\nrestart the harness so the skills load.\n", display(opts.Home, configPath(opts.Home)))
 	return toolsErr
 }
@@ -617,6 +622,30 @@ func applyTools(ctx context.Context, opts Options, current plan) error {
 	return fmt.Errorf("[JSTACK-TOOLS] the skills and the letter are in place, but %d tool step(s) failed:\n%w", len(failures), errors.Join(failures...))
 }
 
+// noteInstallFolderOffPath says that ~/.local/bin exists but is not on the
+// PATH this process started with, and reports whether it did. The shell that
+// runs the tools.md lines puts the folder on PATH itself, which is why a tool
+// there is found and why its installer printed no hint. The person's next
+// terminal has no such help, so setup says it on every run until the profile
+// does: after the plan, so a run that only prints the plan says it too, and
+// again after the tools when the first install of the run created the folder.
+func noteInstallFolderOffPath(opts Options, out io.Writer) bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	folder := filepath.Join(opts.Home, ".local", "bin")
+	if _, err := os.Stat(folder); err != nil {
+		return false
+	}
+	for _, entry := range filepath.SplitList(opts.Getenv("PATH")) {
+		if entry == folder {
+			return false
+		}
+	}
+	fmt.Fprintf(out, "  %s is not on PATH; setup looks there, a new terminal won't until this line is in your shell profile, ~/.zshrc or ~/.bashrc (fish: fish_add_path ~/.local/bin):\n    export PATH=\"$HOME/.local/bin:$PATH\"\n", display(opts.Home, folder))
+	return true
+}
+
 func applySkills(embedded assets, entry harnessPlan, home, backup string, out io.Writer) error {
 	dest := entry.harness.SkillsDir()
 	if !entry.skills.Pending() {
@@ -729,7 +758,7 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	}
 	if err := opts.Shell(ctx, tool.Check, io.Discard); err != nil {
 		fmt.Fprintf(out, "  FAILED %s: %s, but its check still fails\n", tool.Title, done)
-		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; finish the install line by hand (%s), then rerun jstack setup", tool.Title, tool.Command, tool.Check, tool.Install)
+		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; read the install output above: if the download failed, run the install line again; if it put %s in a folder that is not on PATH, add that folder to PATH in your shell profile and open a new terminal; then rerun jstack setup", tool.Title, tool.Command, tool.Check, tool.Title)
 	}
 	status.present = true
 	status.installed = installedVersion(ctx, opts, tool)

@@ -99,7 +99,7 @@ transaction_active=false
 printf 'Installed jstack to %s\n' "$install_dir"
 case ":$PATH:" in
   *":$install_dir:"*) ;;
-  *) printf 'Add %s to PATH to run jstack from any directory.\n' "$install_dir" ;;
+  *) printf 'Add %s to PATH to run jstack from any directory: put this line in your shell profile, ~/.zshrc or ~/.bashrc (fish: fish_add_path %s), then open a new terminal.\n  export PATH="%s:$PATH"\n' "$install_dir" "$install_dir" "$install_dir" ;;
 esac
 
 # Piped through sh, stdin is the script itself. The terminal is still there as

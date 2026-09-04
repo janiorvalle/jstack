@@ -620,6 +620,82 @@ func TestInstallToolsWithYesInstallsMissingTools(t *testing.T) {
 	}
 }
 
+func pathOnly(path string) func(string) string {
+	return func(name string) string {
+		if name == "PATH" {
+			return path
+		}
+		return ""
+	}
+}
+
+func TestLocalBinOffPathSaysWhatToAddToTheProfile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a Windows installer puts its folder on the user PATH itself")
+	}
+	home := homeWithClaude(t)
+	write(t, filepath.Join(home, ".local", "bin", "roast"), "an older roast the terminal cannot see\n")
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	opts.Getenv = pathOnly("/usr/bin:/bin")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "  ok roast 1.1.0, skill missing, would run: roast install-skill\n  ~/.local/bin is not on PATH; setup looks there, a new terminal won't until this line is in your shell profile, ~/.zshrc or ~/.bashrc (fish: fish_add_path ~/.local/bin):\n    export PATH=\"$HOME/.local/bin:$PATH\"\n") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestInstallThatCreatesLocalBinSaysWhatToAddToTheProfile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a Windows installer puts its folder on the user PATH itself")
+	}
+	home := homeWithClaude(t)
+	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
+	opts, out := options(t, home, shell, "")
+	opts.Getenv = pathOnly("/usr/bin:/bin")
+	opts.Yes = true
+	opts.InstallTools = true
+	opts.Shell = func(ctx context.Context, command string, output io.Writer) error {
+		if command == "curl roast | sh" {
+			write(t, filepath.Join(home, ".local", "bin", "roast"), "roast\n")
+		}
+		return shell.run(ctx, command, output)
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), "is not on PATH") != 1 || !strings.Contains(out.String(), "  ok roast 1.1.0, skill installed via roast install-skill\n  ~/.local/bin is not on PATH") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestLocalBinOnPathGetsNoProfileNote(t *testing.T) {
+	home := homeWithClaude(t)
+	write(t, filepath.Join(home, ".local", "bin", "roast"), "roast\n")
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	opts.Getenv = pathOnly("/usr/bin:/bin" + string(filepath.ListSeparator) + filepath.Join(home, ".local", "bin"))
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "is not on PATH") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
+func TestNoLocalBinFolderGetsNoProfileNote(t *testing.T) {
+	home := homeWithClaude(t)
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	opts.Getenv = pathOnly("/usr/bin:/bin")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "is not on PATH") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+}
+
 func TestKeepInstructionsAppendsTheLetter(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
@@ -703,7 +779,7 @@ func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	opts.Yes = true
 	opts.InstallTools = true
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "roast: `curl roast | sh` ran, but the check `check-roast` still fails") {
+	if err == nil || !strings.Contains(err.Error(), "roast: `curl roast | sh` ran, but the check `check-roast` still fails; read the install output above: if the download failed, run the install line again; if it put roast in a folder that is not on PATH") {
 		t.Fatalf("err = %v", err)
 	}
 	if !strings.Contains(out.String(), "FAILED roast: installed, but its check still fails") {

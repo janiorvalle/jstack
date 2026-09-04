@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -108,12 +111,56 @@ func TestVersionAndHelpAndUpgrade(t *testing.T) {
 
 func TestShellIsPickedByOS(t *testing.T) {
 	for goos, want := range map[string]string{
-		"darwin":  "sh -c command -v quest",
-		"linux":   "sh -c command -v quest",
+		"darwin":  "sh -c " + posixInstallFolderOnPath + "; command -v quest",
+		"linux":   "sh -c " + posixInstallFolderOnPath + "; command -v quest",
 		"windows": "powershell -NoProfile -Command " + windowsRefreshPath + "; command -v quest",
 	} {
 		if got := strings.Join(shellArguments(goos, "command -v quest"), " "); got != want {
 			t.Errorf("%s: shell = %q, want %q", goos, got, want)
 		}
+	}
+}
+
+// A tool that a curl installer just put in ~/.local/bin is found by the check
+// that follows, even when that folder is not on the PATH setup started with.
+func TestShellFindsAToolJustInstalledInLocalBin(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh only")
+	}
+	home := t.TempDir()
+	folder := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "quest"), []byte("#!/bin/sh\necho 0.1.0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	var output bytes.Buffer
+	if err := runShell(context.Background(), "command -v quest && quest --version", &output); err != nil {
+		t.Fatalf("check failed: %v, output %q", err, output.String())
+	}
+	if !strings.Contains(output.String(), folder+"/quest\n0.1.0\n") {
+		t.Fatalf("output = %q, want the tool in %s", output.String(), folder)
+	}
+}
+
+// The folder goes first only when it is missing, so a PATH that already has
+// it, wherever it sits, is left alone.
+func TestShellKeepsAPathThatHasLocalBin(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh only")
+	}
+	home := t.TempDir()
+	path := "/usr/bin:/bin:" + filepath.Join(home, ".local", "bin")
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", path)
+	var output bytes.Buffer
+	if err := runShell(context.Background(), "printf '%s' \"$PATH\"", &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != path {
+		t.Fatalf("PATH = %q, want %q unchanged", output.String(), path)
 	}
 }
