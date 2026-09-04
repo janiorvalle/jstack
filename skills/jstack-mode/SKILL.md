@@ -17,7 +17,7 @@ The short version. Claim the work. Get a clean workspace. Understand before you 
 
 ## The flow
 
-1. **Claim.** Work lives in the tracker. Claim the task before touching project files, record the files you expect to change, and open with the task id. No task, no work. If the repo names no tracker, say so and stop. `tracker` has the five verbs, the ticket shape, and the commands for the backend the repo's `Tracker:` line names.
+1. **Claim.** Work lives in the tracker. Claim the task before touching project files, record the files you expect to change, and open with the task id. No task, no work. If the repo names no tracker, say so and stop. `tracker` has the five verbs, the ticket shape, and the commands for the backend the repo's `Tracker:` line names. In a repo that tracks in markdown tasks the claim is a commit, so the branch and worktree from step 2 come first there; creating them touches no project file.
 2. **Workspace.** One task, one branch, one worktree, one owner. Never work on the default branch. `worktree` is the whole setup, from checking the registry to a running baseline.
 3. **Understand.** `how` for what the code does today. `why` for why it's shaped that way. `pickup` if you're resuming something that's been sitting. For a bug, reproduce it first and capture the broken state. That's `fix-the-cause`.
 4. **Design.** Name the data shape before writing logic. That's `structure-first`. If the change crosses a module boundary, `architect`. If there's no precedent, `design-it-twice`. If it's big and nothing fits, `figure-it-out`.
