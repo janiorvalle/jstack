@@ -183,11 +183,13 @@ func lastLine(output string) string {
 	return ", " + last
 }
 
-// pullLine fast-forwards the clone from the repo itself: without --source,
-// gh syncs a fork from its parent instead. gh has no flag for the folder to
-// work in, so the line changes into it first, and stops there when it
-// can't: a sync that ran in whatever folder setup was started from would
-// move that repo instead.
+// pullLine fast-forwards the clone. Run inside a clone, `gh repo sync`
+// fetches from GitHub with gh's login and fast-forwards the local branch,
+// which is what the plan reads; --source names the repo itself, since
+// without it gh syncs a fork from its parent instead. gh has no flag for
+// the folder to work in, so the line changes into it first, and stops there
+// when it can't: a sync that ran in whatever folder setup was started from
+// would move that repo instead.
 func pullLine(operatingSystem, name, dir string) string {
 	if operatingSystem == "windows" {
 		return "Set-Location " + quote(operatingSystem, dir) + " -ErrorAction Stop; gh repo sync --source " + name

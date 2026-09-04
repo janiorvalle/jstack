@@ -806,7 +806,7 @@ func TestNothingFoundWithYesChangesNothing(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "No harness picked. Nothing changed.") || exists(filepath.Join(home, ".jstack")) {
+	if !strings.Contains(out.String(), "No harness picked. Nothing changed in the harnesses.") || exists(filepath.Join(home, ".jstack")) {
 		t.Fatalf("output:\n%s", out.String())
 	}
 }

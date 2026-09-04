@@ -186,7 +186,7 @@ func Run(ctx context.Context, opts Options) error {
 				return err
 			}
 			if !apply {
-				fmt.Fprintln(out, "Nothing changed.")
+				fmt.Fprintln(out, "Nothing changed in the harnesses.")
 				return nil
 			}
 		}
@@ -200,7 +200,7 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 	if len(picked) == 0 {
-		fmt.Fprintln(out, "\nNo harness picked. Nothing changed. Pass --harness claude,codex to name one.")
+		fmt.Fprintln(out, "\nNo harness picked. Nothing changed in the harnesses. Pass --harness claude,codex to name one.")
 		return nil
 	}
 	backupRoot, err := reserveBackup(opts.Home, opts.Now().Format("20060102-150405"), current)
@@ -526,7 +526,7 @@ func reference(status toolStatus) string {
 }
 
 func printRerun(out io.Writer, opts Options, picked []harness.Harness, current plan, repoAsked bool) {
-	fmt.Fprintln(out, "\nNo terminal, so nothing changed. Rerun with the flags to apply:")
+	fmt.Fprintln(out, "\nNo terminal, so nothing changed in the harnesses. Rerun with the flags to apply:")
 	keys := strings.Join(harness.Keys(picked), ",")
 	if keys == "" {
 		keys = "claude,codex"
