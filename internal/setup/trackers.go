@@ -521,7 +521,8 @@ func askArgument(ask *prompt.Prompt, out io.Writer, chosen backend) (string, err
 }
 
 // declareTracker writes the line into the repo, then offers the PR when
-// the tree had nothing else pending, the repo has an origin to push to, and
+// the tree had nothing else pending, the repo has an origin to push to, its
+// push URL since that is where the branch goes, and
 // it sits on its default branch, so the PR carries the line and nothing
 // else. Every check runs before the write, so the line itself never counts
 // as the pending change.
@@ -589,7 +590,7 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 	var status, origin, branch, head bytes.Buffer
 	state := repoState{}
 	state.clean = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git status --porcelain"), &status) == nil && strings.TrimSpace(status.String()) == ""
-	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url origin"), &origin) == nil {
+	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url --push origin"), &origin) == nil {
 		state.origin = strings.TrimSpace(origin.String())
 	}
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse --abbrev-ref HEAD"), &branch) == nil {

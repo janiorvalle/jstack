@@ -80,7 +80,7 @@ func TestLineGoesIntoClaudeMdWhenThatIsTheOnlyFile(t *testing.T) {
 		t.Fatalf("file = %s, line = %q", file, line)
 	}
 	shell := withRoast("1.1.0")
-	shell.failing = map[string]bool{in(home, "echo", "git remote get-url origin"): true}
+	shell.failing = map[string]bool{in(home, "echo", "git remote get-url --push origin"): true}
 	opts, out := options(t, home, shell, "")
 	if err := declareTracker(context.Background(), opts, nil, trackerRepo{dir: dir, name: "echo", file: file}, "Tracker: github-issues"); err != nil {
 		t.Fatal(err)
@@ -193,7 +193,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 	savedRepos(t, home)
 	shell := withRoast("1.1.0")
 	shell.versions[in(home, "bravo", "git rev-parse --abbrev-ref HEAD")] = "main"
-	shell.failing = map[string]bool{in(home, "charlie", "git remote get-url origin"): true}
+	shell.failing = map[string]bool{in(home, "charlie", "git remote get-url --push origin"): true}
 	opts, out := options(t, home, shell, "\n3\nSR\nn\ny\n1\n\n")
 	opts.Interactive = true
 	if err := Run(context.Background(), opts); err != nil {
@@ -218,7 +218,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 	body := quote(runtime.GOOS, trackerPRBody)
 	expected := []string{
 		in(home, "bravo", "git status --porcelain"),
-		in(home, "bravo", "git remote get-url origin"),
+		in(home, "bravo", "git remote get-url --push origin"),
 		in(home, "bravo", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "bravo", "git symbolic-ref --short refs/remotes/origin/HEAD"),
 		in(home, "bravo", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main")),
@@ -230,7 +230,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "bravo", "gh pr create --title "+quote(runtime.GOOS, "docs: name the tracker")+" --body "+body),
 		in(home, "bravo", "git checkout "+quote(runtime.GOOS, "main")),
 		in(home, "charlie", "git status --porcelain"),
-		in(home, "charlie", "git remote get-url origin"),
+		in(home, "charlie", "git remote get-url --push origin"),
 		in(home, "charlie", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "charlie", "git symbolic-ref --short refs/remotes/origin/HEAD"),
 		in(home, "charlie", "git rev-parse HEAD "+quote(runtime.GOOS, "refs/remotes/origin/main")),
@@ -522,7 +522,7 @@ func TestFailedCommitPutsTheBranchBackAndDeletesTheEmptyOne(t *testing.T) {
 	commands := strings.Join(shell.commands, "\n")
 	checkoutBack := in(home, "bravo", "git checkout "+quote(runtime.GOOS, "main"))
 	deleted := in(home, "bravo", "git branch -D tracker-line")
-	if !strings.Contains(commands, checkoutBack+"\n"+deleted) || strings.Contains(commands, "push") {
+	if !strings.Contains(commands, checkoutBack+"\n"+deleted) || strings.Contains(commands, "push -u origin") {
 		t.Fatalf("commands:\n%s", commands)
 	}
 	if got := read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")); got != "# Bravo\n\nTracker: github-issues\n\nSome text.\n" {
@@ -542,7 +542,7 @@ func TestOriginGhDoesNotKnowGetsNoBranchAndNoPush(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	commands := strings.Join(shell.commands, "\n")
-	if strings.Contains(commands, "checkout -b") || strings.Contains(commands, "push") {
+	if strings.Contains(commands, "checkout -b") || strings.Contains(commands, "push -u origin") {
 		t.Fatalf("commands:\n%s", commands)
 	}
 	expectAll(t, out.String(), "bravo  FAILED: `gh repo view --json name ")
