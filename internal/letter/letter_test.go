@@ -1,6 +1,9 @@
 package letter
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const text = "# letter\n\nhello\n"
 
@@ -29,6 +32,8 @@ func TestPlanDecidesFromWhatTheFileHolds(t *testing.T) {
 		{name: "keep on a file that starts with the lead appends", current: "lead\nmine\n", lead: "lead\n", keep: true, outcome: Append, content: "lead\nmine\n\n" + block},
 		{name: "a marked file that lost the lead is replaced", current: "---\nalwaysApply: false\n---\n" + Block("old"), lead: "lead\n", outcome: Replace, content: "lead\n" + block},
 		{name: "keep on a file without the lead is replaced", current: "---\nalwaysApply: false\n---\nmine\n", lead: "lead\n", keep: true, outcome: Replace, content: "lead\n" + block},
+		{name: "a CRLF file with an old block is updated and written with LF", current: "# mine\r\n" + strings.ReplaceAll(Block("old"), "\n", "\r\n"), outcome: Update, content: "# mine\n" + block},
+		{name: "a CRLF file with the current block is the same", current: strings.ReplaceAll(block, "\n", "\r\n"), outcome: Same, content: block},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

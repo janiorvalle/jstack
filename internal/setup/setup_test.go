@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -713,7 +714,7 @@ func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	}
 }
 
-const missingGit = "missing git, a prerequisite setup never installs. get it by hand, see https://github.com/janiorvalle/jstack/blob/main/tools.md#git"
+const missingGit = "missing git, which setup doesn't install. get it by hand, see https://github.com/janiorvalle/jstack/blob/main/tools.md#git"
 
 func TestMissingPrerequisiteIsReportedWithoutAnInstallOffer(t *testing.T) {
 	home := homeWithClaude(t)
@@ -800,9 +801,13 @@ func TestLetterWriteKeepsModeAndLeavesNoStagedFile(t *testing.T) {
 	if got := read(t, path); got != "new\n" {
 		t.Fatalf("content = %q", got)
 	}
-	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("mode = %v, %v", info.Mode().Perm(), err)
+	// Windows has no permission bits to keep; the staging contract holds
+	// there, the mode one doesn't apply.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("mode = %v, %v", info.Mode().Perm(), err)
+		}
 	}
 	entries, err := os.ReadDir(filepath.Dir(path))
 	if err != nil || len(entries) != 1 {

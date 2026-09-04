@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -165,14 +166,30 @@ func runUpgradeCleanup(ctx context.Context, args []string, stderr io.Writer) int
 	return 0
 }
 
-// runShell runs one tools.md line. Those lines are POSIX shell, and so is the
-// installer, which is why the release only builds for macOS and Linux.
+// runShell runs one tools.md line in the shell the OS ships with.
 func runShell(ctx context.Context, command string, output io.Writer) error {
-	process := exec.CommandContext(ctx, "sh", "-c", command)
+	arguments := shellArguments(runtime.GOOS, command)
+	process := exec.CommandContext(ctx, arguments[0], arguments[1:]...)
 	process.Stdin = os.Stdin
 	process.Stdout = output
 	process.Stderr = output
 	return process.Run()
+}
+
+// windowsRefreshPath adds the user PATH from the registry to the one this
+// process inherited. A Windows installer puts its folder on the user PATH,
+// which only new terminals see, so without this the check that follows an
+// install would not find the tool it just installed.
+const windowsRefreshPath = "$env:Path += ';' + [Environment]::GetEnvironmentVariable('Path', 'User')"
+
+// shellArguments is sh on macOS and Linux and Windows PowerShell on Windows,
+// the two shells the lines in tools.md are written for. The installer and
+// the lines pick the same way, so this is the one place the OS decides.
+func shellArguments(operatingSystem, command string) []string {
+	if operatingSystem == "windows" {
+		return []string{"powershell", "-NoProfile", "-Command", windowsRefreshPath + "; " + command}
+	}
+	return []string{"sh", "-c", command}
 }
 
 // stdinIsTerminal is true for a real terminal. /dev/null is a character

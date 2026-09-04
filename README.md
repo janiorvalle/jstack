@@ -18,6 +18,14 @@ curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh 
 
 That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup finds the coding agents on the machine, shows what it would do, and asks which ones to install into. Then it copies the skills, puts the letter in each harness's instructions file, and offers to install the tools the flow needs. It never touches a skill it doesn't own, and everything it overwrites is backed up under `~/.jstack/backup/`.
 
+On Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex
+```
+
+That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, adds the folder to your user PATH, and runs `jstack setup` the same way. Setup runs the tool checks in Windows PowerShell there. quest installs from its own PowerShell line; roast, bgr, tokenomnom, and TruffleHog ship no PowerShell installer yet, so on Windows setup shows the archive to download and leaves that step to you.
+
 Run `jstack setup` again any time. It remembers the harnesses you picked. `jstack upgrade` fetches the newest release and reruns setup.
 
 Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing:
@@ -49,7 +57,7 @@ Each tool ships its own skill and installs it. `tools.md` has the check, version
 - `skills/jstack-mode/` is the front door. The flow, the rules, and an index of every skill, generated from their description lines.
 - `skills/*/` with `kind: principle` in the frontmatter are the principles. One rule each.
 - The rest are workflows. `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.
-- `tools.md` names the tools the flow expects to find installed and how to get them. The agent-browser install line pins the CLI version, because its skill text ships inside the CLI; `scripts/tool-bump.py` and the same weekly workflow move that pin through a PR.
+- `tools.md` names the tools the flow expects to find installed and how to get them. A line suffixed `(windows)` is what setup runs there, in PowerShell; the plain line is POSIX shell for macOS and Linux. The agent-browser install line pins the CLI version, because its skill text ships inside the CLI; `scripts/tool-bump.py` and the same weekly workflow move that pin through a PR.
 - `vendor.json` pins the third-party skills that live in `skills/`. A skill lives in this repo when jstack doesn't control the tool that owns it, so a change to the skill text goes through a reviewed PR. `scripts/vendor-bump.py` copies each one in at its pinned commit, and a weekly workflow opens a bump PR when upstream moves. Our own tools (quest, roast, bgr, tokenomnom) keep shipping their skill with the binary.
 - `cmd/jstack` and `internal/` are the binary. The skills, the letter, `tools.md`, and `vendor.json` are embedded at build time, so setup runs from anywhere.
 - `decisions.md` is the record of choices made while building this, so nobody relitigates them.
