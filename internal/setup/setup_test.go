@@ -114,9 +114,6 @@ func (f *fakeShell) gitHub(command string, out io.Writer) error {
 		fmt.Fprintf(out, "GraphQL: Could not resolve to a Repository with the name '%s'. (repository)\n", name)
 		return errors.New("exit status 1")
 	}
-	if err := os.RemoveAll(filepath.Join(dir, "skills")); err != nil {
-		return err
-	}
 	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
 		return err
 	}

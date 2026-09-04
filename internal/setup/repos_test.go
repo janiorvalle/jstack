@@ -357,3 +357,92 @@ func TestTwoReposCollidingAskBetweenThem(t *testing.T) {
 		t.Fatalf("clones = %v", entries)
 	}
 }
+
+func TestFailedPullKeepsTheLastCopyAndTheSavedPick(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRepo()
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.SkillRepos = []string{workSkills}
+	opts.Overrides = map[string]string{"voice": workSkills}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	clone := filepath.Join(home, ".jstack", "repos", "me", "work-skills")
+	shell.failing = map[string]bool{pullLine(runtime.GOOS, clone): true}
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(),
+		"me/work-skills  ~/.jstack/repos/me/work-skills, not pulled, using the copy from the last run: `"+pullLine(runtime.GOOS, clone)+"` failed: exit status 1; if the repo is private, check `gh auth status`, 2 skills",
+		"voice  overridden by me/work-skills, not installed from jstack",
+		"changed  -\n",
+	)
+	if got := read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")); got != "voice, my way\n" {
+		t.Fatalf("voice reverted to jstack's: %q", got)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"voice": "me/work-skills"`) {
+		t.Fatalf("the pick was lost: %q", got)
+	}
+}
+
+func TestSavedPickOutlivesAFailedCloneButNotAForgottenRepo(t *testing.T) {
+	saved := map[string]string{"voice": workSkills, "how": "jstack", "deploy": "me/old"}
+	got := rememberOverrides(saved, []string{workSkills}, map[string]string{"why": workSkills})
+	if len(got) != 3 || got["voice"] != workSkills || got["how"] != "jstack" || got["why"] != workSkills {
+		t.Fatalf("remembered = %v", got)
+	}
+}
+
+func TestToolSkillFoldersInARepoAreLeftOut(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := withRepo()
+	shell.repos[workSkills]["skills/roast/SKILL.md"] = "roast, my copy\n"
+	shell.repos[workSkills]["skills/roast/refs/notes.md"] = "notes\n"
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.SkillRepos = []string{workSkills}
+	opts.Overrides = map[string]string{"voice": "jstack"}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(),
+		"me/work-skills  ~/.jstack/repos/me/work-skills, cloned, 2 skills\n  roast  installed by the roast tool itself, the copy in me/work-skills is left out\n",
+		"new      deploy (me/work-skills), how\n",
+		"ok roast 1.1.0, skill installed via roast install-skill",
+	)
+	if exists(filepath.Join(home, ".claude", "skills", "roast", "refs")) {
+		t.Fatal("the repo's roast folder was installed")
+	}
+}
+
+func TestRepoSymlinkPointingOutsideTheCloneIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need a privilege on windows")
+	}
+	home := homeWithClaude(t)
+	shell := withRepo()
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.SkillRepos = []string{workSkills}
+	opts.Overrides = map[string]string{"voice": "jstack"}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".aws", "credentials"), "aws_secret_access_key = hunter2\n")
+	clone := filepath.Join(home, ".jstack", "repos", "me", "work-skills")
+	if err := os.Symlink(filepath.Join(home, ".aws", "credentials"), filepath.Join(clone, "skills", "deploy", "creds")); err != nil {
+		t.Fatal(err)
+	}
+	opts, _ = options(t, home, shell, "")
+	opts.Yes = true
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-SOURCE") || !strings.Contains(err.Error(), `skill "deploy" from me/work-skills`) || !strings.Contains(err.Error(), "symlink pointing outside") {
+		t.Fatalf("err = %v", err)
+	}
+	if exists(filepath.Join(home, ".claude", "skills", "deploy", "creds")) {
+		t.Fatal("the credentials file was copied into the harness")
+	}
+}

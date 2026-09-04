@@ -210,7 +210,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := applyHarnesses(opts, embedded, current, backupRoot); err != nil {
 		return err
 	}
-	saved := Config{Harnesses: harness.Keys(picked), SkillRepos: repoNames, SkillReposAsked: asked, SkillOverrides: current.catalog.picks}
+	saved := Config{Harnesses: harness.Keys(picked), SkillRepos: repoNames, SkillReposAsked: asked, SkillOverrides: rememberOverrides(config.SkillOverrides, repoNames, current.catalog.picks)}
 	if err := saveConfig(opts.Home, saved); err != nil {
 		return err
 	}
@@ -280,9 +280,8 @@ func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness,
 // more than one source holds, asking when there is a terminal and refusing
 // with the flag when there isn't.
 func gatherSources(ctx context.Context, opts Options, ask *prompt.Prompt, embedded assets, config Config, repoNames []string) (catalog, error) {
-	repos := syncRepos(ctx, opts, repoNames)
-	printRepos(opts.Stdout, opts.Home, repos)
-	skillSources := buildCatalog(embedded, repos)
+	skillSources := buildCatalog(embedded, syncRepos(ctx, opts, repoNames))
+	printRepos(opts.Stdout, opts.Home, skillSources.repos)
 	collisions, err := skills.Collisions(skillSources.sources)
 	if err != nil {
 		return catalog{}, err

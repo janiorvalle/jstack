@@ -28,7 +28,7 @@ That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, adds the folder to y
 
 Run `jstack setup` again any time. It remembers the harnesses you picked. `jstack upgrade` fetches the newest release and reruns setup.
 
-Setup also asks, once, for a skills repo of your own, `owner/name` on GitHub with a `skills/` folder in it. It clones the repo with gh, keeps it pulled under `~/.jstack/repos`, and installs its skills beside jstack's in every harness you picked, with the same backups. `--skill-repo owner/name` adds one later, `--forget-skill-repo` drops one. A skill named the same in two places stops setup and asks which one you want; `--override name=owner/name` answers without a terminal.
+Setup also asks, once, for a skills repo of your own, `owner/name` on GitHub with a `skills/` folder in it. It clones the repo with gh, keeps it pulled under `~/.jstack/repos`, and installs its skills beside jstack's in every harness you picked, with the same backups. `--skill-repo owner/name` adds one later, `--forget-skill-repo` drops one. A skill named the same in two places stops setup and asks which one you want; `--override name=owner/name` answers without a terminal. The clone is refreshed on every run, plan-only ones included; it is jstack's own folder, so without a terminal the harnesses still change nothing.
 
 Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing:
 

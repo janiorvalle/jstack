@@ -74,7 +74,7 @@ func sourceFix(source Source) string {
 	if source.Name == "jstack" {
 		return "this binary was built without its skills folder, reinstall it"
 	}
-	return "make its clone under ~/.jstack/repos readable, or delete the clone and rerun"
+	return "its clone under ~/.jstack/repos is unreadable, or a file in the repo is a symlink pointing outside it; fix the repo or delete the clone and rerun"
 }
 
 // Collisions finds the names held by more than one source, sorted by name.

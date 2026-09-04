@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/janiorvalle/jstack/internal/prompt"
@@ -15,15 +17,18 @@ import (
 )
 
 // skillRepo is one skills repo the human named, as found on this run. Its
-// clone lives under ~/.jstack/repos/owner/name. failure says why it can't be
-// installed from this run; a usable repo has none and carries its source.
+// clone lives under ~/.jstack/repos/owner/name. verb says what happened to
+// the clone; failure says why it can't be installed from this run, and a
+// usable repo has none and carries its source. toolSkills are the folders
+// in it that a tool installs itself, left out of the source.
 type skillRepo struct {
-	name    string
-	dir     string
-	verb    string
-	failure string
-	source  skills.Source
-	count   int
+	name       string
+	dir        string
+	verb       string
+	failure    string
+	source     skills.Source
+	count      int
+	toolSkills []string
 }
 
 func (r skillRepo) usable() bool {
@@ -114,8 +119,9 @@ func askRepo(ask *prompt.Prompt, out io.Writer) (string, error) {
 // syncRepos clones each repo that isn't on the machine yet and pulls each
 // one that is, both through gh so its login is what reaches GitHub: plain
 // git has no credentials for a private clone until someone runs `gh auth
-// setup-git`, and would stop at a username prompt. A repo that fails is
-// reported and left out; setup carries on with the rest.
+// setup-git`, and would stop at a username prompt. A pull that fails keeps
+// the copy from the last run, so a dead network never changes the plan; a
+// clone that fails is reported and left out, and setup carries on.
 func syncRepos(ctx context.Context, opts Options, names []string) []skillRepo {
 	repos := make([]skillRepo, 0, len(names))
 	for _, name := range names {
@@ -134,17 +140,29 @@ func syncRepo(ctx context.Context, opts Options, name string) skillRepo {
 		return repo
 	}
 	var output bytes.Buffer
-	if err := opts.Shell(ctx, command, &output); err != nil {
-		repo.failure = fmt.Sprintf("`%s` failed: %v%s; if the repo is private, check `gh auth status`", command, err, lastLine(output.String()))
-		return repo
-	}
 	repo.verb = verb
+	if err := opts.Shell(ctx, command, &output); err != nil {
+		reason := fmt.Sprintf("`%s` failed: %v%s; if the repo is private, check `gh auth status`", command, err, lastLine(output.String()))
+		if verb == "cloned" {
+			repo.failure = reason
+			return repo
+		}
+		repo.verb = "not pulled, using the copy from the last run: " + reason
+	}
 	skillsDir := filepath.Join(repo.dir, "skills")
 	if !isDir(skillsDir) {
 		repo.failure = "it has no skills/ folder; add one with a folder per skill, each with a SKILL.md, and push"
 		return repo
 	}
-	repo.source = skills.Source{Name: name, Files: os.DirFS(skillsDir)}
+	// A repo can hold a symlink that points outside the clone. Reading
+	// through a root refuses those, so nothing outside the repo is ever
+	// copied into a harness.
+	root, err := os.OpenRoot(skillsDir)
+	if err != nil {
+		repo.failure = fmt.Sprintf("cannot open %s: %v; make it readable, or delete the clone and rerun", display(opts.Home, skillsDir), err)
+		return repo
+	}
+	repo.source = skills.Source{Name: name, Files: root.FS()}
 	found, err := skills.Names(repo.source)
 	if err != nil {
 		repo.failure = err.Error()
@@ -185,14 +203,72 @@ func quote(operatingSystem, path string) string {
 	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 }
 
+// buildCatalog lines the sources up, jstack first. A folder a tool installs
+// itself, quest or roast say, is left out of every repo: a repo built from
+// a whole skills folder carries those along, and the tool's own install
+// keeps them matched to its binary.
 func buildCatalog(embedded assets, repos []skillRepo) catalog {
-	sources := []skills.Source{{Name: "jstack", Files: embedded.skills}}
-	for _, repo := range repos {
-		if repo.usable() {
-			sources = append(sources, repo.source)
+	toolFolders := map[string]bool{}
+	for _, tool := range embedded.tools {
+		if tool.SkillFolder != "" {
+			toolFolders[tool.SkillFolder] = true
 		}
 	}
+	sources := []skills.Source{{Name: "jstack", Files: embedded.skills}}
+	for index := range repos {
+		repo := &repos[index]
+		if !repo.usable() {
+			continue
+		}
+		repo.toolSkills, repo.source.Files = leaveOutToolSkills(repo.source.Files, toolFolders)
+		repo.count -= len(repo.toolSkills)
+		sources = append(sources, repo.source)
+	}
 	return catalog{repos: repos, sources: sources}
+}
+
+func leaveOutToolSkills(files fs.FS, toolFolders map[string]bool) ([]string, fs.FS) {
+	var found []string
+	for folder := range toolFolders {
+		if _, err := fs.Stat(files, folder+"/SKILL.md"); err == nil {
+			found = append(found, folder)
+		}
+	}
+	if len(found) == 0 {
+		return nil, files
+	}
+	sort.Strings(found)
+	return found, withoutFolders{FS: files, hidden: toolFolders}
+}
+
+// withoutFolders is a skills folder with some top-level folders hidden.
+type withoutFolders struct {
+	fs.FS
+	hidden map[string]bool
+}
+
+func (w withoutFolders) Open(name string) (fs.File, error) {
+	if w.hidden[strings.SplitN(name, "/", 2)[0]] {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
+	return w.FS.Open(name)
+}
+
+func (w withoutFolders) ReadDir(name string) ([]fs.DirEntry, error) {
+	if w.hidden[strings.SplitN(name, "/", 2)[0]] {
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrNotExist}
+	}
+	entries, err := fs.ReadDir(w.FS, name)
+	if name != "." || err != nil {
+		return entries, err
+	}
+	kept := make([]fs.DirEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !w.hidden[entry.Name()] {
+			kept = append(kept, entry)
+		}
+	}
+	return kept, nil
 }
 
 func printRepos(out io.Writer, home string, repos []skillRepo) {
@@ -206,7 +282,30 @@ func printRepos(out io.Writer, home string, repos []skillRepo) {
 			continue
 		}
 		fmt.Fprintf(out, "  %s  %s, %s, %d skills\n", repo.name, display(home, repo.dir), repo.verb, repo.count)
+		for _, folder := range repo.toolSkills {
+			fmt.Fprintf(out, "  %s  installed by the %s tool itself, the copy in %s is left out\n", folder, folder, repo.name)
+		}
 	}
+}
+
+// rememberOverrides is what the config keeps: this run's picks over the
+// saved ones, minus any pick for a repo that is no longer named. A pick for
+// a repo that failed to sync this run survives it.
+func rememberOverrides(saved map[string]string, repoNames []string, picks map[string]string) map[string]string {
+	known := map[string]bool{"jstack": true}
+	for _, name := range repoNames {
+		known[name] = true
+	}
+	kept := map[string]string{}
+	for name, source := range saved {
+		if known[source] {
+			kept[name] = source
+		}
+	}
+	for name, source := range picks {
+		kept[name] = source
+	}
+	return kept
 }
 
 // printOverrides says where each colliding skill name comes from on every
