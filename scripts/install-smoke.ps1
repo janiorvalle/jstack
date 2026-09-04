@@ -26,7 +26,9 @@ function Invoke-Installer([string]$Dist, [string]$Bin) {
   $env:JSTACK_INSTALL_VERSION = $version
   $env:JSTACK_INSTALL_DIR = $Bin
   $env:JSTACK_INSTALL_SKIP_PATH = "1"
-  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "install.ps1")
+  # The installer's output goes to the host, not into this function's
+  # return value, so the caller compares one exit code and not a list.
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "install.ps1") | Out-Host
   return $LASTEXITCODE
 }
 
