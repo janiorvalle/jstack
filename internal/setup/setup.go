@@ -51,6 +51,7 @@ type Options struct {
 
 type assets struct {
 	skills   fs.FS
+	scripts  fs.FS
 	letter   string
 	tools    []tools.Tool
 	vendored []string
@@ -184,6 +185,9 @@ func Run(ctx context.Context, opts Options) error {
 	if err := saveConfig(opts.Home, Config{Harnesses: harness.Keys(picked)}); err != nil {
 		return err
 	}
+	if err := writeScripts(embedded, opts.Home); err != nil {
+		return err
+	}
 	toolsErr := applyTools(ctx, opts, current)
 	if !noted {
 		noteInstallFolderOffPath(opts, out)
@@ -196,6 +200,10 @@ func loadAssets(files fs.FS) (assets, error) {
 	skillsFS, err := fs.Sub(files, "skills")
 	if err != nil {
 		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no skills folder embedded: %w; reinstall it", err)
+	}
+	scriptsFS, err := fs.Sub(files, "scripts")
+	if err != nil {
+		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no scripts folder embedded: %w; reinstall it", err)
 	}
 	letterText, err := fs.ReadFile(files, "AGENTS.md")
 	if err != nil {
@@ -221,7 +229,7 @@ func loadAssets(files fs.FS) (assets, error) {
 	for _, entry := range vendor.Skills {
 		vendored = append(vendored, entry.Name)
 	}
-	return assets{skills: skillsFS, letter: string(letterText), tools: tools.Parse(string(toolsText)), vendored: vendored}, nil
+	return assets{skills: skillsFS, scripts: scriptsFS, letter: string(letterText), tools: tools.Parse(string(toolsText)), vendored: vendored}, nil
 }
 
 func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness, pickSource, error) {

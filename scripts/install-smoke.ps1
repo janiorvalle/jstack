@@ -1,7 +1,9 @@
 # The Windows half of install-smoke.sh. Builds jstack.exe from this checkout,
 # zips it the way goreleaser does, then runs install.ps1 against that zip
 # twice, refuses a bad checksum, and runs setup for real into a throwaway
-# profile folder so the PowerShell lines in tools.md are exercised.
+# profile folder so the PowerShell lines in tools.md are exercised, including
+# the install lines: setup --install-tools downloads every tool's release and
+# each one's check has to pass afterwards.
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -77,6 +79,43 @@ try {
     Assert ($report.Contains("ok git and gh")) "the Windows check line for git and gh did not pass"
   }
   Assert ($report.Contains("irm https://raw.githubusercontent.com/janiorvalle/quest/main/install.ps1 | iex")) "the report does not show the Windows install line for quest"
+
+  # Every installer registers its folder on the user PATH in the registry.
+  # Setup reads that PATH back before each line it runs, so the check after
+  # an install finds the tool with nothing on this process's PATH.
+  $programs = Join-Path $env:LOCALAPPDATA "Programs"
+  $report = & $installed setup --harness claude,codex --yes --install-tools | Out-String
+  Write-Output $report
+  Assert ($LASTEXITCODE -eq 0) "jstack setup --install-tools exited with $LASTEXITCODE"
+  foreach ($tool in @("The work tracker", "roast", "TruffleHog", "bgr", "tokenomnom")) {
+    Assert ($report -match "(?m)^\s+ok $tool\b") "setup did not report $tool ok after installing it"
+  }
+  foreach ($executable in @("quest\quest.exe", "roast\roast.exe", "trufflehog\trufflehog.exe", "bgr\bgr.exe", "bgr\better-git-review.exe", "tokenomnom\tokenomnom.exe", "tokenomnom\nomnom.exe")) {
+    Assert (Test-Path (Join-Path $programs $executable)) "$executable is not where its installer puts it"
+  }
+  foreach ($skill in @("quest", "roast", "bgr", "tokenomnom")) {
+    Assert (Test-Path (Join-Path $profileHome ".claude\skills\$skill\SKILL.md")) "setup did not install the $skill skill after installing the tool"
+  }
+  $writtenTruffleInstaller = Join-Path $profileHome ".jstack\scripts\install-trufflehog.ps1"
+  Assert (Test-Path $writtenTruffleInstaller) "setup did not write the embedded TruffleHog installer under the profile"
+
+  # The TruffleHog installer ships in the binary, so the copy setup wrote is
+  # what refuses a bad checksum here, against a tarball that never gets opened.
+  $badTruffleDist = Join-Path $work "bad-trufflehog"
+  New-Item -ItemType Directory -Force $badTruffleDist | Out-Null
+  $truffleArchiveName = "trufflehog_0.0.0-smoke_windows_${arch}.tar.gz"
+  Set-Content -Path (Join-Path $badTruffleDist "not-trufflehog.txt") -Value "not a release" -Encoding ascii
+  & tar -czf (Join-Path $badTruffleDist $truffleArchiveName) -C $badTruffleDist "not-trufflehog.txt"
+  Assert ($LASTEXITCODE -eq 0) "tar could not build the bad TruffleHog archive"
+  Set-Content -Path (Join-Path $badTruffleDist "trufflehog_0.0.0-smoke_checksums.txt") -Value ("0" * 64 + "  $truffleArchiveName") -Encoding ascii
+  $badTruffleBin = Join-Path $work "bad-trufflehog-bin"
+  $env:TRUFFLEHOG_INSTALL_BASE_URL = $badTruffleDist
+  $env:TRUFFLEHOG_INSTALL_VERSION = "0.0.0-smoke"
+  $env:TRUFFLEHOG_INSTALL_DIR = $badTruffleBin
+  $env:TRUFFLEHOG_INSTALL_SKIP_PATH = "1"
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $writtenTruffleInstaller | Out-Host
+  Assert ($LASTEXITCODE -ne 0) "the TruffleHog installer accepted a checksum mismatch"
+  Assert (-not (Test-Path (Join-Path $badTruffleBin "trufflehog.exe"))) "the TruffleHog checksum failure left a binary behind"
 
   $badDist = Join-Path $work "bad-dist"
   New-Item -ItemType Directory -Force $badDist | Out-Null
