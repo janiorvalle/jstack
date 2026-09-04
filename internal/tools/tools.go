@@ -4,6 +4,7 @@ package tools
 
 import (
 	"regexp"
+	"runtime"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -33,46 +34,73 @@ type Tool struct {
 }
 
 var (
-	checkLine        = regexp.MustCompile("(?m)^- Check: `([^`]+)`")
-	versionLine      = regexp.MustCompile("(?m)^- Version: `([^`]+)`")
-	repoLine         = regexp.MustCompile(`(?m)^- Repo: (\S+)$`)
-	versionToken     = regexp.MustCompile(`v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?`)
-	installLine      = regexp.MustCompile(`(?m)^- Install: (.+)$`)
-	npmPin           = regexp.MustCompile(`^npm install -g [^@\s]+@(\S+)`)
-	skillInstallLine = regexp.MustCompile("(?m)^- Skill install: `([^`]+)`")
-	skillFolderLine  = regexp.MustCompile("(?m)^- Skill folder: `([^`]+)`")
-	backtickSpan     = regexp.MustCompile("`([^`]+)`")
+	versionToken = regexp.MustCompile(`v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?`)
+	npmPin       = regexp.MustCompile(`^npm install -g [^@\s]+@(\S+)`)
+	backtickSpan = regexp.MustCompile("`([^`]+)`")
 )
 
-// Parse returns the tools in tools.md order. Sections without a Check line
-// are prose and are skipped.
+// Parse returns the tools in tools.md order for the OS the binary runs on.
+// Sections without a Check line are prose and are skipped.
 func Parse(markdown string) []Tool {
+	return parseFor(markdown, runtime.GOOS)
+}
+
+// parseFor reads each section's lines for one OS. A line such as
+// "- Check (windows): ..." wins on that OS over the plain "- Check: ..." line,
+// which is what every other OS gets.
+func parseFor(markdown, operatingSystem string) []Tool {
 	var parsed []Tool
 	for _, section := range regexp.MustCompile(`(?m)^## `).Split(markdown, -1)[1:] {
 		title, _, _ := strings.Cut(section, "\n")
-		check := first(checkLine, section)
+		check := quoted(lineFor(section, "Check", operatingSystem))
 		if check == "" {
 			continue
 		}
 		install := "see " + Doc + "#" + anchor(title)
 		command := ""
-		if match := installLine.FindStringSubmatch(section); match != nil {
-			install = strings.ReplaceAll(strings.TrimSpace(match[1]), "`", "")
-			command = commandFrom(match[1])
+		if line := lineFor(section, "Install", operatingSystem); line != "" {
+			install = strings.ReplaceAll(strings.TrimSpace(line), "`", "")
+			command = commandFrom(line)
 		}
 		parsed = append(parsed, Tool{
 			Title:        strings.TrimSpace(title),
 			Check:        check,
-			Version:      first(versionLine, section),
-			Repo:         first(repoLine, section),
+			Version:      quoted(lineFor(section, "Version", operatingSystem)),
+			Repo:         strings.TrimSpace(lineFor(section, "Repo", operatingSystem)),
 			Install:      install,
 			Command:      command,
 			Pin:          pinFrom(command),
-			SkillInstall: first(skillInstallLine, section),
-			SkillFolder:  first(skillFolderLine, section),
+			SkillInstall: quoted(lineFor(section, "Skill install", operatingSystem)),
+			SkillFolder:  quoted(lineFor(section, "Skill folder", operatingSystem)),
 		})
 	}
 	return parsed
+}
+
+// lineFor is the text after "- <kind>: " in a section, for one OS: the line
+// suffixed with that OS wins, otherwise the plain line, otherwise "".
+func lineFor(section, kind, operatingSystem string) string {
+	pattern := regexp.MustCompile(`(?m)^- ` + regexp.QuoteMeta(kind) + `(?: \(([a-z0-9]+)\))?: (.+)$`)
+	plain := ""
+	for _, match := range pattern.FindAllStringSubmatch(section, -1) {
+		switch match[1] {
+		case operatingSystem:
+			return match[2]
+		case "":
+			plain = match[2]
+		}
+	}
+	return plain
+}
+
+// quoted is the text inside a line's first backtick span, the way Check,
+// Version, and the skill lines carry one command each.
+func quoted(line string) string {
+	match := backtickSpan.FindStringSubmatch(line)
+	if match == nil {
+		return ""
+	}
+	return match[1]
 }
 
 // anchor is the fragment GitHub gives a heading, so "git and gh" links to
@@ -82,7 +110,8 @@ func anchor(title string) string {
 }
 
 // commandFrom joins the backtick spans of an Install line into one shell
-// line, so "`brew install git gh`, then `gh auth login`" runs both steps.
+// line, so "`brew install git gh`, then `gh auth login`" runs both steps. A
+// line with no backticks is a step for a person and gives no command.
 func commandFrom(line string) string {
 	var steps []string
 	for _, match := range backtickSpan.FindAllStringSubmatch(line, -1) {
@@ -128,12 +157,4 @@ func Outdated(installed, latest string) bool {
 // Display shows a version the way the tools print it, without the leading v.
 func Display(version string) string {
 	return strings.TrimPrefix(version, "v")
-}
-
-func first(pattern *regexp.Regexp, text string) string {
-	match := pattern.FindStringSubmatch(text)
-	if match == nil {
-		return ""
-	}
-	return match[1]
 }

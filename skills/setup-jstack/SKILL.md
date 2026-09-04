@@ -13,7 +13,13 @@ description: "Use to put jstack on a machine or bring it up to date. Runs the js
 curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh
 ```
 
-The installer verifies the checksum, puts `jstack` in `~/.local/bin`, and runs `jstack setup` once. When it's already installed, `jstack upgrade` fetches the newest release and reruns setup with the saved picks.
+On Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex
+```
+
+The installer verifies the checksum, puts `jstack` in `~/.local/bin`, or `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack` on your user PATH, and runs `jstack setup` once. When it's already installed, `jstack upgrade` fetches the newest release and reruns setup with the saved picks.
 
 ## What setup does, in order
 
@@ -54,7 +60,7 @@ Read the report back to them. If a tool is still missing or outdated, quote its 
 | `cursor` | Cursor | `~/.cursor` | `~/.cursor/skills` | `~/.cursor/rules/jstack.mdc`, with `alwaysApply` | |
 | `pi` | Pi | `~/.pi/agent` | `~/.pi/agent/skills` | `~/.pi/agent/AGENTS.md` | |
 
-When a row's variable is set and non-empty, that harness is found, and its skills and letter land, under the folder it names instead of the one under `~`. That is where the harness reads from, so setup follows it. The plan shows the folder with the variable next to it, `/work/codex (CODEX_HOME)`. An empty variable means the default.
+On Windows `~` is `%USERPROFILE%`, which is where Claude Code and Codex read their folders from, so the rows resolve there without any change. When a row's variable is set and non-empty, that harness is found, and its skills and letter land, under the folder it names instead of the one under `~`. That is where the harness reads from, so setup follows it. The plan shows the folder with the variable next to it, `/work/codex (CODEX_HOME)`. An empty variable means the default.
 
 OpenCode, Cursor, and Pi also read skills from Claude Code's folder or the shared `~/.agents/skills` folder. OpenCode was checked with the same skill in both folders and lists it once, keyed by name. Cursor and Pi are unverified. `decisions.md` has what was checked.
 
@@ -64,7 +70,7 @@ One entry in `vendor.json`: repo, path inside it, pinned commit, license, and wh
 
 ## Adding a tool
 
-One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. Leave the `Install` line out for a prerequisite setup should check but never install, and list how to get it as prose instead; setup then reports it missing with a link to that section. Add a `Version` line with the command that prints the installed version and a `Repo` line with the GitHub page when setup should offer updates; the latest version is read from that repo's releases, or from the npm registry when the install line is `npm install -g`. Pin the package, `npm install -g name@1.2.3`, when the tool carries text agents execute, as agent-browser does; setup then treats the pin as the latest, offers the install line to any machine not at the pin, and the weekly vendor-bump workflow opens a PR when npm moves past it. The binary parses those lines. Keep the format. The next release carries the new tool.
+One section in `tools.md` with a `Check` line, an `Install` line, and `Skill install` and `Skill folder` lines if the tool ships a skill. Leave the `Install` line out for a prerequisite setup should check but never install, and list how to get it as prose instead; setup then reports it missing with a link to that section. Add a `Version` line with the command that prints the installed version and a `Repo` line with the GitHub page when setup should offer updates; the latest version is read from that repo's releases, or from the npm registry when the install line is `npm install -g`. Pin the package, `npm install -g name@1.2.3`, when the tool carries text agents execute, as agent-browser does; setup then treats the pin as the latest, offers the install line to any machine not at the pin, and the weekly vendor-bump workflow opens a PR when npm moves past it. Every line is POSIX shell unless it carries an OS suffix, and setup runs it in `sh` on macOS and Linux and in Windows PowerShell on Windows. Give the tool a `Check (windows)` line, `Get-Command name`, since PowerShell has no `command -v`, and an `Install (windows)` line when the install differs: a PowerShell command in backticks, `irm https://.../install.ps1 | iex`, or a sentence with no backticks when the tool has no PowerShell installer, which setup shows and never runs. A line with the suffix wins on that OS; the plain line is what every other OS gets. Windows lines use `;` between steps and single quotes. The binary parses those lines. Keep the format. The next release carries the new tool.
 
 ## Developing the binary
 

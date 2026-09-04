@@ -46,6 +46,31 @@ jobs:
       - name: Release config and installer smoke
         run: make release-check install-smoke
 
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build, vet, test
+        run: |
+          go build -buildvcs=false ./...
+          go vet ./...
+          go test -buildvcs=false ./...
+      - name: Installer and setup smoke
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }} # makes gh auth status pass, so the Windows check line for git and gh is exercised
+        run: .\scripts\install-smoke.ps1
+
   workflow-lint:
     name: Workflow lint
     runs-on: ubuntu-latest

@@ -105,3 +105,15 @@ func TestVersionAndHelpAndUpgrade(t *testing.T) {
 		t.Fatalf("upgrade: code = %d, upgraded = %t", code, upgraded)
 	}
 }
+
+func TestShellIsPickedByOS(t *testing.T) {
+	for goos, want := range map[string]string{
+		"darwin":  "sh -c command -v quest",
+		"linux":   "sh -c command -v quest",
+		"windows": "powershell -NoProfile -Command command -v quest",
+	} {
+		if got := strings.Join(shellArguments(goos, "command -v quest"), " "); got != want {
+			t.Errorf("%s: shell = %q, want %q", goos, got, want)
+		}
+	}
+}

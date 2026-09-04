@@ -26,17 +26,18 @@ import (
 )
 
 const (
-	latestReleaseURL = "https://api.github.com/repos/janiorvalle/jstack/releases/latest"
-	installerCommand = "curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh"
-	maximumMetadata  = 2 << 20
-	maximumChecksums = 1 << 20
-	maximumArchive   = 100 << 20
-	maximumBinary    = 100 << 20
+	latestReleaseURL        = "https://api.github.com/repos/janiorvalle/jstack/releases/latest"
+	installerCommand        = "curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh"
+	installerCommandWindows = "irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex"
+	maximumMetadata         = 2 << 20
+	maximumChecksums        = 1 << 20
+	maximumArchive          = 100 << 20
+	maximumBinary           = 100 << 20
 )
 
 func fallbackInstruction() string {
 	if runtime.GOOS == "windows" {
-		return "download the matching release zip and checksums.txt from https://github.com/janiorvalle/jstack/releases, verify its SHA-256, then replace jstack.exe after it exits"
+		return fmt.Sprintf("run `%s` in PowerShell", installerCommandWindows)
 	}
 	return fmt.Sprintf("run `%s`", installerCommand)
 }

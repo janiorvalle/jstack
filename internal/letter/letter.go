@@ -44,6 +44,10 @@ func Block(text string) string {
 // choice made with keepExisting holds on every later run. The one exception is
 // a lead the file has lost, since without it the harness won't read the file.
 func Plan(current, text, lead string, keepExisting bool) Change {
+	// An editor on Windows saves the file with CRLF. The block is written
+	// with LF, so a CRLF file would count as changed on every run and end
+	// up with both endings; the whole file goes back with LF instead.
+	current = strings.ReplaceAll(current, "\r\n", "\n")
 	block := Block(text)
 	startAt := strings.Index(current, Start)
 	endAt := strings.Index(current, End)

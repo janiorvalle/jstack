@@ -713,7 +713,7 @@ func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	}
 }
 
-const missingGit = "missing git, a prerequisite setup never installs. get it by hand, see https://github.com/janiorvalle/jstack/blob/main/tools.md#git"
+const missingGit = "missing git, which setup doesn't install. get it by hand, see https://github.com/janiorvalle/jstack/blob/main/tools.md#git"
 
 func TestMissingPrerequisiteIsReportedWithoutAnInstallOffer(t *testing.T) {
 	home := homeWithClaude(t)
