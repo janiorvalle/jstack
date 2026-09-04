@@ -176,12 +176,18 @@ func runShell(ctx context.Context, command string, output io.Writer) error {
 	return process.Run()
 }
 
+// windowsRefreshPath adds the user PATH from the registry to the one this
+// process inherited. A Windows installer puts its folder on the user PATH,
+// which only new terminals see, so without this the check that follows an
+// install would not find the tool it just installed.
+const windowsRefreshPath = "$env:Path += ';' + [Environment]::GetEnvironmentVariable('Path', 'User')"
+
 // shellArguments is sh on macOS and Linux and Windows PowerShell on Windows,
 // the two shells the lines in tools.md are written for. The installer and
 // the lines pick the same way, so this is the one place the OS decides.
 func shellArguments(operatingSystem, command string) []string {
 	if operatingSystem == "windows" {
-		return []string{"powershell", "-NoProfile", "-Command", command}
+		return []string{"powershell", "-NoProfile", "-Command", windowsRefreshPath + "; " + command}
 	}
 	return []string{"sh", "-c", command}
 }

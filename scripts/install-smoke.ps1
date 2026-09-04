@@ -90,3 +90,6 @@ try {
   $env:USERPROFILE = $savedProfile
   Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 }
+# The last native command above is the installer refusing the bad checksum,
+# and Windows PowerShell would hand its exit code to whoever ran this script.
+exit 0

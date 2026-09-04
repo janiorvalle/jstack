@@ -142,8 +142,11 @@ try {
     Move-Item -Force $stage $destination
     Assert-JstackVersion $destination "installed"
   } catch {
-    if ($hadPrevious -and -not (Test-Path -LiteralPath $destination) -and (Test-Path -LiteralPath $previous)) {
-      Copy-Item $previous $destination
+    # Whatever failed, the folder ends up as it was: the staged and the
+    # unusable new file go, the previous binary comes back.
+    Remove-Item -Force $stage, $destination -ErrorAction SilentlyContinue
+    if ($hadPrevious -and -not (Test-Path -LiteralPath $destination)) {
+      Copy-Item $previous $destination -ErrorAction SilentlyContinue
     }
     throw
   }
