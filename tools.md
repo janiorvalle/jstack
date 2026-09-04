@@ -43,6 +43,16 @@ The independent code review gate. Reviews the current diff on a different model 
 - Skill install: `roast install-skill --force`
 - Skill folder: `roast`
 - The skill covers the scope fence and the loop until well done. roast also installs it on its own the first time it runs in a repo.
+- roast refuses to run without TruffleHog on PATH, its `ROAST-SECRET-BINARY` error. roast's installer doesn't bring it, so setup installs it from the section below.
+
+## TruffleHog
+
+Secret scanner. roast runs it over the diff before review and refuses to start without it. Its official installer drops one binary into `~/.local/bin`, the folder the jstack installer already put on your PATH, on macOS and Linux with no sudo. It ships no skill.
+
+- Repo: https://github.com/trufflesecurity/trufflehog
+- Check: `command -v trufflehog`
+- Version: `trufflehog --version`
+- Install: `curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin`
 
 ## bgr
 

@@ -13,7 +13,7 @@ import (
 // Lookup finds the newest published version of a tool. Our own tools come
 // from the GitHub releases of their Repo line; a tool installed with npm
 // comes from the npm registry. One HTTP call per tool, so a run of setup
-// makes as many calls as tools.md has Version lines, five today, well inside
+// makes as many calls as tools.md has Version lines, six today, well inside
 // GitHub's sixty an hour for unauthenticated callers.
 type Lookup struct {
 	Client *http.Client
