@@ -23,7 +23,7 @@ The folder for markdown. Nothing for GitHub Issues, since gh reads the repo from
 ## The five verbs
 
 1. **Claim** before touching project files. Put your name on the ticket so nobody else picks it up, and open your first message with the ticket id.
-2. **Record the files** you expect to change, on the ticket, right after claiming. A reviewer reads them against the diff.
+2. **Record the files** you expect to change, right after claiming, in the claim comment or the frontmatter, never in the ticket body. A reviewer reads them against the diff.
 3. **Turn in** with the PR link and the evidence. Then stop.
 4. **A human completes** after the merge. Never the agent that built it.
 5. **Evidence lives on the ticket.** Never in git.
@@ -40,7 +40,7 @@ Done when:
 Out of scope: Optional, one line.
 ```
 
-Files to touch and design notes go in the PR, not the ticket. The same shape is the PR description and the turn-in comment.
+Design notes go in the PR, and the files you expect to touch go in the claim comment. Neither goes in the ticket body. The same shape is the PR description and the turn-in comment.
 
 Run the lint before filing. It reads a file or stdin and exits non-zero over 120 words, when a label is missing, or when Done when has no lines or more than four, and it says what to cut:
 
@@ -61,11 +61,11 @@ Out of scope: The sidebar's thread list.
 
 ## Evidence
 
-What counts as evidence is in `prove-it`. Where it goes is here: on the ticket, as comments with links and attachments, in whatever form the backend has. GitHub comments take images, video, and PDFs but not HTML, so on GitHub the walkthrough goes in a gist, `gh gist create walkthrough.html`, linked from the comment. Nothing binary ever enters git, and a `tasks/` folder is git too.
+What counts as evidence is in `prove-it`. Where it goes is here: on the ticket, as comments with links and attachments, in whatever form the backend has. GitHub comments take images, video, PDFs, and zips but not HTML, so on GitHub the walkthrough goes in a gist, `gh gist create walkthrough.html`, linked from the comment. A gist is readable by anyone who has the URL, so in a private repo zip the walkthrough and drop it on the comment instead, where the repo's access rules cover it. Nothing binary ever enters git, and the tasks folder is git too.
 
 ## Markdown tasks in the repo
 
-`Tracker: markdown tasks/`. One file per task, named for the task, under `tasks/open/`, `tasks/doing/`, and `tasks/done/`. The folder is the status, and the frontmatter carries it too, with the owner, the files, and the PR:
+`Tracker: markdown tasks/`. The word after `markdown` is the folder, `tasks/` here. One file per task, named for the task, under `tasks/open/`, `tasks/doing/`, and `tasks/done/`. The folder is the status, and the frontmatter carries it too, with the owner, the files, and the PR:
 
 ```
 ---
@@ -77,7 +77,7 @@ pr: https://github.com/owner/repo/pull/12
 Problem: ...
 ```
 
-File: write it under `tasks/open/`, lint it, commit it. Claim: move it to `tasks/doing/` with your owner and files in the frontmatter, the first commit on your task branch, pushed, so the branch tells anyone else the task is taken. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist linked from one.
+File: write it under `tasks/open/`, lint it, commit it. Claim: `git fetch` first and look for a remote branch named for the task; one already there means the task is taken, so pick another. Then move the file to `tasks/doing/` with your owner and files in the frontmatter, the first commit on your task branch, pushed, so the branch is what the next agent finds. Turn in: the PR link in the frontmatter and the file moved to `tasks/done/`, in the same PR as the work. Complete: the merge, since the PR moves the file. The PR is the turn-in comment: screenshots and recordings as PR comment attachments, the walkthrough as a gist linked from one.
 
 ## GitHub Issues
 
@@ -94,7 +94,7 @@ File: write it under `tasks/open/`, lint it, commit it. Claim: move it to `tasks
 
 - File: create the issue in that team with the ticket shape as the description, after the lint.
 - Claim: assign yourself and move it to In Progress. Record the files in a comment.
-- Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the status to In Review.
+- Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the status to In Review, or whatever the team calls the state between building and merging.
 - Complete: Done after the merge, by the human.
 
 The PR title carries the issue key, `fix(web): SR-123 new threads respect the worktree default`, so Linear links the PR to the issue.
@@ -105,7 +105,7 @@ The PR title carries the issue key, `fix(web): SR-123 new threads respect the wo
 
 - File: create the issue in that project with the ticket shape as the description, after the lint.
 - Claim: assign yourself and transition it to In Progress. Record the files in a comment.
-- Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the transition to In Review.
+- Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the transition to In Review, or whatever the project's workflow calls the state between building and merging. List the transitions the issue offers and pick by name, since the project may have renamed it.
 - Complete: Done after the merge, by the human.
 
 The PR title carries the issue key, `fix(web): SR-123 new threads respect the worktree default`, so Jira links the PR to the issue.
@@ -114,6 +114,6 @@ The PR title carries the issue key, `fix(web): SR-123 new threads respect the wo
 
 - Touch project files before the claim.
 - File a ticket the lint rejects.
-- Put files to touch or design notes in the ticket. They go in the PR.
+- Put a file list or design notes in the ticket body. Files go in the claim comment, design notes in the PR.
 - Complete a ticket you built.
 - Commit a screenshot, a recording, or a walkthrough.
