@@ -95,7 +95,7 @@ File: write it under `tasks/open/`, lint it, and land it on the default branch t
 `Tracker: linear SR`, where `SR` is the team key. Connect Linear's MCP in your harness; every verb is a call on it.
 
 - File: create the issue in that team with the ticket shape as the description, after the lint.
-- Claim: read the issue first; an assignee there means it's taken. Then assign yourself, move it to In Progress, and read it back: the assignee is one person, so if it isn't you, someone else won. Record the files in a comment.
+- Claim: read the issue first; an assignee there means it's taken. Then post the claim comment with the files, assign yourself, move it to In Progress, and read the comments back: the earliest claim comment wins, comments can't be reordered, so if it isn't yours, drop the assignment and pick another.
 - Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the status to In Review, or whatever the team calls the state between building and merging.
 - Complete: Done after the merge, by the human.
 
@@ -106,7 +106,7 @@ The PR title carries the issue key, `fix(web): SR-123 new threads respect the wo
 `Tracker: jira SR`, where `SR` is the project key. Connect Jira's MCP in your harness; every verb is a call on it.
 
 - File: create the issue in that project with the ticket shape as the description, after the lint.
-- Claim: read the issue first; an assignee there means it's taken. Then assign yourself, transition it to In Progress, and read it back: the assignee is one person, so if it isn't you, someone else won. Record the files in a comment.
+- Claim: read the issue first; an assignee there means it's taken. Then post the claim comment with the files, assign yourself, transition it to In Progress, and read the comments back: the earliest claim comment wins, comments can't be reordered, so if it isn't yours, drop the assignment and pick another.
 - Turn in: a comment with the PR link and the evidence, screenshots, recordings, and the walkthrough attached, then the transition to In Review, or whatever the project's workflow calls the state between building and merging. List the transitions the issue offers and pick by name, since the project may have renamed it.
 - Complete: Done after the merge, by the human.
 
