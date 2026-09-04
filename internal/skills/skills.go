@@ -303,21 +303,19 @@ func dirSame(skill Skill, target string) (bool, error) {
 	seen := 0
 	same := true
 	err = filepath.WalkDir(target, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
+		if err != nil || entry.IsDir() {
 			return err
 		}
-		if strings.HasPrefix(entry.Name(), ".") && path != target {
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if entry.IsDir() {
-			return nil
-		}
 		relative, _ := filepath.Rel(target, path)
-		want, ok := wanted[filepath.ToSlash(relative)]
+		key := filepath.ToSlash(relative)
+		want, ok := wanted[key]
 		if !ok {
+			// A hidden file the source doesn't have, .DS_Store say, is
+			// the machine's, not drift. A hidden file the source does
+			// have is part of the skill and compared like any other.
+			if hidden(key) {
+				return nil
+			}
 			same = false
 			return filepath.SkipAll
 		}
@@ -336,6 +334,16 @@ func dirSame(skill Skill, target string) (bool, error) {
 		return false, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot read the installed skill %q: %w; make it readable and rerun", target, err)
 	}
 	return same && seen == len(wanted), nil
+}
+
+// hidden reports whether any part of a slash path starts with a dot.
+func hidden(key string) bool {
+	for _, part := range strings.Split(key, "/") {
+		if strings.HasPrefix(part, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func copyDir(skill Skill, target string) error {

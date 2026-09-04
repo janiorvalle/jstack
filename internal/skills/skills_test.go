@@ -125,6 +125,35 @@ func TestPlanGroupsByWhatWouldChange(t *testing.T) {
 	}
 }
 
+func TestSourceDotfilesArePartOfTheSkillAndMachineDotfilesAreNot(t *testing.T) {
+	dest := t.TempDir()
+	sources := []Source{{Name: "me/work-skills", Files: fstest.MapFS{
+		"deploy/SKILL.md":         {Data: []byte("deploy\n")},
+		"deploy/.env.example":     {Data: []byte("TOKEN=\n")},
+		"deploy/.config/rules.md": {Data: []byte("rules\n")},
+	}}}
+	write(t, filepath.Join(dest, "deploy", "SKILL.md"), "deploy\n")
+	write(t, filepath.Join(dest, "deploy", ".env.example"), "TOKEN=\n")
+	write(t, filepath.Join(dest, "deploy", ".config", "rules.md"), "rules\n")
+	write(t, filepath.Join(dest, "deploy", ".DS_Store"), "noise")
+	write(t, filepath.Join(dest, "deploy", ".config", ".DS_Store"), "noise")
+	plan, err := PlanFor(sources, nil, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(plan.Same) != "deploy" {
+		t.Fatalf("an identical skill with a tracked dotfile is not same: %+v", plan)
+	}
+	write(t, filepath.Join(dest, "deploy", ".env.example"), "TOKEN=changed\n")
+	plan, err = PlanFor(sources, nil, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(plan.Changed) != "deploy" {
+		t.Fatalf("a changed tracked dotfile is not a change: %+v", plan)
+	}
+}
+
 func TestExtraFileMakesASkillChanged(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "how", "SKILL.md"), "how\n")

@@ -3,6 +3,7 @@ package setup
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -152,20 +153,25 @@ func syncRepo(ctx context.Context, opts Options, name string) skillRepo {
 		}
 		repo.verb = "not pulled, using the copy from the last run: " + reason
 	}
-	skillsDir := filepath.Join(repo.dir, "skills")
-	if !isDir(skillsDir) {
+	// A repo can hold a symlink that points outside the clone, skills/
+	// itself included. Everything is read through a root opened on the
+	// clone, which refuses those, so nothing outside the repo is ever
+	// copied into a harness.
+	clone, err := os.OpenRoot(repo.dir)
+	if err != nil {
+		repo.failure = fmt.Sprintf("cannot open %s: %v; make it readable, or delete the clone and rerun", display(opts.Home, repo.dir), err)
+		return repo
+	}
+	skillsRoot, err := clone.OpenRoot("skills")
+	if errors.Is(err, fs.ErrNotExist) {
 		repo.failure = "it has no skills/ folder; add one with a folder per skill, each with a SKILL.md, and push"
 		return repo
 	}
-	// A repo can hold a symlink that points outside the clone. Reading
-	// through a root refuses those, so nothing outside the repo is ever
-	// copied into a harness.
-	root, err := os.OpenRoot(skillsDir)
 	if err != nil {
-		repo.failure = fmt.Sprintf("cannot open %s: %v; make it readable, or delete the clone and rerun", display(opts.Home, skillsDir), err)
+		repo.failure = fmt.Sprintf("cannot open its skills/ folder: %v; it has to be a folder inside the repo, not a symlink out of it", err)
 		return repo
 	}
-	repo.source = skills.Source{Name: name, Files: root.FS()}
+	repo.source = skills.Source{Name: name, Files: skillsRoot.FS()}
 	found, err := skills.Names(repo.source)
 	if err != nil {
 		repo.failure = err.Error()
@@ -337,20 +343,19 @@ func printHeld(out io.Writer, skillSources catalog, saved map[string]string) {
 }
 
 // rememberOverrides is what the config keeps: this run's picks, one per
-// skill that collides today, plus the saved picks for a repo that couldn't
-// be reached this run, so a clone that failed doesn't lose them. A pick for
-// a name that no longer collides is dropped.
+// skill that collides today, over the saved ones. A saved pick whose name
+// no longer collides is dropped, but only on a run that reached every repo:
+// with one unreachable there is no telling which collisions are gone and
+// which are only out of sight, so every saved pick stays.
 func rememberOverrides(saved map[string]string, unreachable []skillRepo, picks map[string]string) map[string]string {
 	kept := map[string]string{}
+	if len(unreachable) > 0 {
+		for name, source := range saved {
+			kept[name] = source
+		}
+	}
 	for name, source := range picks {
 		kept[name] = source
-	}
-	for _, repo := range unreachable {
-		for name, source := range saved {
-			if source == repo.name {
-				kept[name] = source
-			}
-		}
 	}
 	return kept
 }

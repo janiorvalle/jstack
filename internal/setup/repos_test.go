@@ -421,11 +421,43 @@ func TestLostCloneAndDeadNetworkKeepTheSkillAsInstalled(t *testing.T) {
 	}
 }
 
-func TestSavedPickOutlivesAFailedCloneButNotAGoneCollision(t *testing.T) {
+func TestSavedPicksArePrunedOnlyOnARunThatReachedEveryRepo(t *testing.T) {
 	saved := map[string]string{"voice": workSkills, "how": "jstack", "deploy": "me/down"}
 	got := rememberOverrides(saved, []skillRepo{{name: "me/down", failure: "no network"}}, map[string]string{"why": workSkills})
-	if len(got) != 2 || got["deploy"] != "me/down" || got["why"] != workSkills {
-		t.Fatalf("remembered = %v", got)
+	if len(got) != 4 || got["deploy"] != "me/down" || got["how"] != "jstack" || got["why"] != workSkills {
+		t.Fatalf("remembered with a repo down = %v", got)
+	}
+	got = rememberOverrides(saved, nil, map[string]string{"voice": "jstack"})
+	if len(got) != 1 || got["voice"] != "jstack" {
+		t.Fatalf("remembered with every repo reached = %v", got)
+	}
+}
+
+func TestSkillsFolderThatIsASymlinkOutOfTheCloneIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need a privilege on windows")
+	}
+	home := homeWithClaude(t)
+	shell := withRepo()
+	shell.repos["me/sneaky"] = map[string]string{"README.md": "skills is a link\n"}
+	opts, _ := options(t, home, shell, "")
+	opts.Yes = true
+	opts.SkillRepos = []string{"me/sneaky"}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	clone := filepath.Join(home, ".jstack", "repos", "me", "sneaky")
+	if err := os.Symlink(filepath.Join(home, ".claude", "skills"), filepath.Join(clone, "skills")); err != nil {
+		t.Fatal(err)
+	}
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "me/sneaky  ~/.jstack/repos/me/sneaky, FAILED: cannot open its skills/ folder: ", "not a symlink out of it; setup carries on without it")
+	if strings.Contains(out.String(), "mine (me/sneaky)") {
+		t.Fatalf("the harness's own skills were taken as the repo's:\n%s", out.String())
 	}
 }
 
