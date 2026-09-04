@@ -44,12 +44,27 @@ func (r trackerRepo) askable() bool {
 
 // insideRepo is the path git add takes for the file, relative to the
 // checkout, and false when the file is a link to somewhere outside it.
+// Both sides are resolved all the way, the way the write resolves the
+// file, so a chain of links ends where the write would land.
 func insideRepo(dir, file string) (string, bool) {
-	relative, err := filepath.Rel(dir, file)
+	relative, err := filepath.Rel(canonical(dir), canonical(file))
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", false
 	}
 	return filepath.ToSlash(relative), true
+}
+
+// canonical is the path with every link followed. A file that isn't there
+// yet resolves through its folder, so it compares with a folder that is.
+func canonical(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	parent := filepath.Dir(path)
+	if parent == path {
+		return path
+	}
+	return filepath.Join(canonical(parent), filepath.Base(path))
 }
 
 // trackerBranch is the branch the PR offer commits the line on.
@@ -531,6 +546,9 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 	case !state.onDefaultBranch():
 		fmt.Fprintf(out, "  %s  is on branch %s, not %s, so the line is left uncommitted; commit it yourself\n", repo.name, state.branch, state.defaultBranchName())
 		return nil
+	case !state.published:
+		fmt.Fprintf(out, "  %s  is on %s but not at origin/%s, so the line is left uncommitted; push or pull first, then rerun\n", repo.name, state.branch, state.branch)
+		return nil
 	}
 	agreed, err := ask.Confirm(fmt.Sprintf("Open a PR for %s? branch %s, commit \"docs: name the tracker\", through gh", repo.name, trackerBranch), false)
 	if err != nil {
@@ -545,12 +563,15 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 
 // repoState is what decides the PR offer, read through git before the
 // write. defaultBranch is what origin/HEAD names, "" when the clone never
-// recorded one, in which case main or master counts.
+// recorded one, in which case main or master counts. published is HEAD at
+// the remote's copy of that branch, so the PR carries no commit that was
+// only ever local.
 type repoState struct {
 	clean         bool
 	hasRemote     bool
 	branch        string
 	defaultBranch string
+	published     bool
 }
 
 func (s repoState) onDefaultBranch() bool {
@@ -578,6 +599,14 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git symbolic-ref --short refs/remotes/origin/HEAD"), &head) == nil {
 		state.defaultBranch = strings.TrimPrefix(strings.TrimSpace(head.String()), "origin/")
 	}
+	if !state.onDefaultBranch() {
+		return state
+	}
+	var commits bytes.Buffer
+	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse HEAD refs/remotes/origin/"+state.branch), &commits) == nil {
+		lines := strings.Fields(commits.String())
+		state.published = len(lines) == 2 && lines[0] == lines[1]
+	}
 	return state
 }
 
@@ -589,10 +618,12 @@ Done when:
 
 Opened by jstack setup.`
 
-// openTrackerPR commits the line on its own branch, pushes, opens the PR
-// through gh so gh's login is what reaches GitHub, and puts the repo back
-// on the branch it was on, whether or not a step failed after the branch
-// was made.
+// openTrackerPR commits the line on its own branch, pushes, opens the PR,
+// and puts the repo back on the branch it was on, whether or not a step
+// failed after the branch was made. The push borrows gh as git's
+// credential helper for that one command, and the PR goes through gh, so
+// gh's login is what reaches GitHub either way and nothing in the
+// person's git config changes.
 func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo, previous string) error {
 	out := opts.Stdout
 	operatingSystem := runtime.GOOS
@@ -601,7 +632,7 @@ func openTrackerPR(ctx context.Context, opts Options, repo trackerRepo, previous
 		"git checkout -b " + trackerBranch,
 		"git add " + quote(operatingSystem, staged),
 		"git commit -m " + quote(operatingSystem, "docs: name the tracker"),
-		"git push -u origin " + trackerBranch,
+		"git -c credential.helper=" + quote(operatingSystem, "!gh auth git-credential") + " push -u origin " + trackerBranch,
 		"gh pr create --title " + quote(operatingSystem, "docs: name the tracker") + " --body " + quote(operatingSystem, trackerPRBody),
 	}
 	var failed error

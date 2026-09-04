@@ -221,16 +221,18 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "bravo", "git remote get-url origin"),
 		in(home, "bravo", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "bravo", "git symbolic-ref --short refs/remotes/origin/HEAD"),
+		in(home, "bravo", "git rev-parse HEAD refs/remotes/origin/main"),
 		in(home, "bravo", "git checkout -b tracker-line"),
 		in(home, "bravo", "git add "+quote(runtime.GOOS, "AGENTS.md")),
 		in(home, "bravo", "git commit -m "+quote(runtime.GOOS, "docs: name the tracker")),
-		in(home, "bravo", "git push -u origin tracker-line"),
+		in(home, "bravo", "git -c credential.helper="+quote(runtime.GOOS, "!gh auth git-credential")+" push -u origin tracker-line"),
 		in(home, "bravo", "gh pr create --title "+quote(runtime.GOOS, "docs: name the tracker")+" --body "+body),
 		in(home, "bravo", "git checkout "+quote(runtime.GOOS, "main")),
 		in(home, "charlie", "git status --porcelain"),
 		in(home, "charlie", "git remote get-url origin"),
 		in(home, "charlie", "git rev-parse --abbrev-ref HEAD"),
 		in(home, "charlie", "git symbolic-ref --short refs/remotes/origin/HEAD"),
+		in(home, "charlie", "git rev-parse HEAD refs/remotes/origin/main"),
 	}
 	if got := strings.Join(shell.commands[4:], "\n"); got != strings.Join(expected, "\n") {
 		t.Fatalf("commands:\n%s\nwant:\n%s", got, strings.Join(expected, "\n"))
@@ -302,14 +304,14 @@ func TestFailedPushGoesBackToTheBranchAndIsReportedAtTheEnd(t *testing.T) {
 	savedRepos(t, home)
 	shell := withRoast("1.1.0")
 	shell.versions[in(home, "bravo", "git rev-parse --abbrev-ref HEAD")] = "main"
-	shell.failing = map[string]bool{in(home, "bravo", "git push -u origin tracker-line"): true}
+	shell.failing = map[string]bool{in(home, "bravo", "git -c credential.helper="+quote(runtime.GOOS, "!gh auth git-credential")+" push -u origin tracker-line"): true}
 	opts, out := options(t, home, shell, "\n2\ny\ny\nn\n")
 	opts.Interactive = true
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "[JSTACK-TRACKERS] the harnesses are done, but 1 repo step(s) failed") || !strings.Contains(err.Error(), "bravo: `git push -u origin tracker-line` failed") {
+	if err == nil || !strings.Contains(err.Error(), "[JSTACK-TRACKERS] the harnesses are done, but 1 repo step(s) failed") || !strings.Contains(err.Error(), "push -u origin tracker-line` failed") {
 		t.Fatalf("err = %v", err)
 	}
-	expectAll(t, out.String(), "bravo  FAILED: `git push -u origin tracker-line` failed: exit status 1; finish the PR by hand from", `charlie  wrote "Tracker: github-issues"`)
+	expectAll(t, out.String(), "push -u origin tracker-line` failed: exit status 1; finish the PR by hand from", `charlie  wrote "Tracker: github-issues"`)
 	commands := strings.Join(shell.commands, "\n")
 	if strings.Contains(commands, "gh pr create") || !strings.Contains(commands, in(home, "bravo", "git checkout "+quote(runtime.GOOS, "main"))) {
 		t.Fatalf("commands:\n%s", commands)
@@ -466,4 +468,41 @@ func TestPendingBranchIsSeenInPackedRefsAndFromALinkedWorktree(t *testing.T) {
 	if strings.Contains(out.String(), "declare no tracker") {
 		t.Fatalf("a waiting repo counted as undeclared:\n%s", out.String())
 	}
+}
+
+func TestPRIsOfferedOnlyWhenTheDefaultBranchIsAtItsRemote(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	shell := withRoast("1.1.0")
+	shell.versions[in(home, "bravo", "git rev-parse HEAD refs/remotes/origin/main")] = "1111111111111111111111111111111111111111\n2222222222222222222222222222222222222222"
+	opts, out := options(t, home, shell, "\n2\ny\nn\n")
+	opts.Interactive = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "bravo  is on main but not at origin/main, so the line is left uncommitted; push or pull first, then rerun", "Open a PR for charlie?")
+	if strings.Contains(out.String(), "Open a PR for bravo?") {
+		t.Fatalf("offered a PR with local commits ahead:\n%s", out.String())
+	}
+}
+
+func TestLinkChainEndingOutsideTheRepoIsLeftAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a symlink on Windows needs a privilege the test runner may not have")
+	}
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	charlie := filepath.Join(home, "code", "charlie")
+	write(t, filepath.Join(home, "dotfiles", "AGENTS.md"), "# Shared\n")
+	if err := os.Symlink(filepath.Join(home, "dotfiles", "AGENTS.md"), filepath.Join(charlie, "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("link.md", filepath.Join(charlie, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "  charlie  not declared, charlie's instructions file links to outside the repo, so setup leaves it alone\n")
 }
