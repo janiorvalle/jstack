@@ -412,11 +412,10 @@ func markSkillPresence(opts Options, picked []harness.Harness, statuses []toolSt
 // failed copy left in place, and counts as missing so the tool's install runs
 // again and the copy is replaced. So does a copy with nothing left to compare
 // it with, the tool's own folders deleted: the install runs again and writes
-// them back.
+// them back. A copy in the shared ~/.agents/skills alone is a source like
+// the others, not presence everywhere: Claude Code and Codex don't read
+// that folder, and a copy an older tool left there would hide a newer one.
 func skillPresent(opts Options, picked []harness.Harness, folder string) bool {
-	if isDir(filepath.Join(opts.Home, ".agents", "skills", folder)) {
-		return true
-	}
 	skill, found := toolSkill(opts, folder)
 	if !found {
 		return false

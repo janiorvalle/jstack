@@ -828,6 +828,26 @@ func TestToolSkillCopyWithItsSourceDeletedCountsAsMissing(t *testing.T) {
 	expectAll(t, out.String(), "skill missing, would run: roast install-skill", "ok roast 1.1.0, skill installed via roast install-skill\n")
 }
 
+func TestOlderToolSkillInTheSharedFolderDoesNotCountAsPresent(t *testing.T) {
+	home := homeWithOpenCodeAndPi(t)
+	shared := filepath.Join(home, ".agents", "skills", "roast", "SKILL.md")
+	write(t, shared, "roast 1.0.0\n")
+	if err := os.Chtimes(shared, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	shell := withRoast("1.1.0")
+	opts, out := options(t, home, shell, "")
+	opts.Yes = true
+	opts.Harness = "pi"
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "roast 1.1.0\n" {
+		t.Fatalf("pi roast = %q", got)
+	}
+	expectAll(t, out.String(), "skill missing, would run: roast install-skill", "ok roast 1.1.0, skill installed via roast install-skill, copied to Pi")
+}
+
 func TestToolSkillWrittenNowhereKnownIsNotCopied(t *testing.T) {
 	home := homeWithOpenCodeAndPi(t)
 	opts, _ := options(t, home, withRoast("1.1.0"), "")
