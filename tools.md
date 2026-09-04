@@ -6,7 +6,7 @@ If a tool is missing, run the check, show the install command, and install only 
 
 `jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. When that install line pins a version, `npm install -g name@1.2.3`, the pin is the latest: setup reports the tool outdated when it's behind the pin and ahead when it's past it, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one. A section with a `Check` line and no `Install` line is a prerequisite: setup checks for it and points here when it's missing, but never installs or updates it. git and gh are the prerequisites.
 
-Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `quest --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it.
+Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `quest --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it. An `Install` line that fetches a script downloads it to a file first and runs the file only once the download succeeded, so a failed download fails the line: `curl | sh` runs nothing and exits zero when curl gets nothing, and setup would report the tool installed.
 
 ## git and gh
 
@@ -30,7 +30,7 @@ Where tasks live. Claim before you touch project files, record the files you exp
 - Check: `command -v quest`
 - Check (windows): `Get-Command quest`
 - Version: `quest --version`
-- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/quest/main/install.sh | sh`
+- Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/janiorvalle/quest/main/install.sh && sh "$script"`
 - Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/quest/main/install.ps1 | iex`
 - Skill install: `quest skill install --force`
 - Skill folder: `quest`
@@ -46,7 +46,7 @@ The independent code review gate. Reviews the current diff on a different model 
 - Check: `command -v roast`
 - Check (windows): `Get-Command roast`
 - Version: `roast --version`
-- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/roast/main/install.sh | sh`
+- Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/janiorvalle/roast/main/install.sh && sh "$script"`
 - Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/roast/main/install.ps1 | iex`
 - Skill install: `roast install-skill --force`
 - Skill folder: `roast`
@@ -61,7 +61,7 @@ Secret scanner. roast runs it over the diff before review and refuses to start w
 - Check: `command -v trufflehog`
 - Check (windows): `Get-Command trufflehog`
 - Version: `trufflehog --version`
-- Install: `curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin`
+- Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh && sh "$script" -b ~/.local/bin`
 - Install (windows): `Get-Content -Raw (Join-Path $env:USERPROFILE '.jstack\scripts\install-trufflehog.ps1') | iex`
 
 ## bgr
@@ -72,7 +72,7 @@ Turns a PR, commit, or diff into a review walkthrough. The HTML output is attach
 - Check: `command -v bgr`
 - Check (windows): `Get-Command bgr`
 - Version: `bgr --version`
-- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/better-git-review/main/install.sh | sh`
+- Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/janiorvalle/better-git-review/main/install.sh && sh "$script"`
 - Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/better-git-review/main/install.ps1 | iex`
 - Skill install: `bgr install-skill`
 - Skill folder: `bgr`
@@ -86,7 +86,7 @@ Token usage and spend across your coding agents, plus transcript search. Not par
 - Check: `command -v tokenomnom`
 - Check (windows): `Get-Command tokenomnom`
 - Version: `tokenomnom --version`
-- Install: `curl -fsSL https://raw.githubusercontent.com/janiorvalle/tokenomnom/main/install.sh | sh`
+- Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/janiorvalle/tokenomnom/main/install.sh && sh "$script"`
 - Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/tokenomnom/main/install.ps1 | iex`
 - Skill install: `tokenomnom install-skill`
 - Skill folder: `tokenomnom`

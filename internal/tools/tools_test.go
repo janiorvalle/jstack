@@ -168,3 +168,21 @@ func TestEveryRealToolHasAWindowsCheckLine(t *testing.T) {
 		}
 	}
 }
+
+// A curl line that pipes into sh reports installed when the download fails:
+// sh runs nothing and exits zero. Every real line downloads to a file and
+// runs the file, so curl's failure is the line's.
+func TestEveryRealCurlInstallLineDownloadsBeforeItRuns(t *testing.T) {
+	markdown, err := fs.ReadFile(jstack.Files, "tools.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range parseFor(string(markdown), "linux") {
+		if !strings.Contains(tool.Command, "curl ") {
+			continue
+		}
+		if strings.Contains(tool.Command, "| sh") || !strings.Contains(tool.Command, `curl -fsSL -o "$script"`) {
+			t.Errorf("%s: install line pipes into sh instead of downloading first: %q", tool.Title, tool.Command)
+		}
+	}
+}
