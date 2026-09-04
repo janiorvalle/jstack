@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,12 +30,15 @@ var version = "dev"
 const usage = `jstack puts the skills, the letter, and the tools into the coding agents on this machine.
 
   jstack setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
+               [--skill-repo owner/name] [--forget-skill-repo owner/name] [--override skill=source]
   jstack upgrade
   jstack version
 
 setup prints the plan first. With a terminal it asks which harnesses and which tools, then applies.
 Without one it changes nothing unless --yes is passed. Picks are saved in ~/.jstack/config.json.
 Each tool is missing, outdated, or current; the latest versions come from GitHub and npm.
+A skills repo of your own is cloned with gh and its skills/ folder installs beside jstack's.
+A skill named the same in two sources stops setup until --override says which one to install.
 `
 
 func main() {
@@ -95,6 +99,24 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	updateTools := flags.Bool("update-tools", false, "update the outdated tools without asking")
 	keepInstructions := flags.Bool("keep-instructions", false, "append the letter to an instructions file that has other content instead of replacing it")
 	yes := flags.Bool("yes", false, "apply without asking; without a terminal nothing changes unless this is set")
+	var skillRepos, forgetSkillRepos []string
+	overrides := map[string]string{}
+	flags.Func("skill-repo", "a GitHub repo of your own, owner/name, whose skills/ folder setup installs too; repeatable", func(value string) error {
+		skillRepos = append(skillRepos, value)
+		return nil
+	})
+	flags.Func("forget-skill-repo", "stop installing from this repo, owner/name; its installed skills stay as local skills; repeatable", func(value string) error {
+		forgetSkillRepos = append(forgetSkillRepos, value)
+		return nil
+	})
+	flags.Func("override", "which source a skill in more than one source comes from, skill=jstack or skill=owner/name; repeatable", func(value string) error {
+		name, source, ok := strings.Cut(value, "=")
+		if !ok || name == "" || source == "" {
+			return fmt.Errorf("[JSTACK-CLI-OVERRIDE] --override needs skill=source, got %q; example: --override land-pr=janiorvalle/work-skills", value)
+		}
+		overrides[name] = source
+		return nil
+	})
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -120,6 +142,9 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		KeepInstructions: *keepInstructions,
 		Yes:              *yes,
 		Interactive:      deps.interactive(),
+		SkillRepos:       skillRepos,
+		ForgetSkillRepos: forgetSkillRepos,
+		Overrides:        overrides,
 		Stdin:            stdin,
 		Stdout:           stdout,
 		Shell:            runShell,

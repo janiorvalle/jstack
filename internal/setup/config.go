@@ -8,9 +8,14 @@ import (
 	"path/filepath"
 )
 
-// Config is what setup remembers between runs: the harnesses the human picked.
+// Config is what setup remembers between runs: the harnesses the human
+// picked, the skills repos they named, whether they were asked for one, and
+// which source each colliding skill name comes from, "jstack" or "owner/name".
 type Config struct {
-	Harnesses []string `json:"harnesses"`
+	Harnesses       []string          `json:"harnesses"`
+	SkillRepos      []string          `json:"skill_repos,omitempty"`
+	SkillReposAsked bool              `json:"skill_repos_asked,omitempty"`
+	SkillOverrides  map[string]string `json:"skill_overrides,omitempty"`
 }
 
 func configPath(home string) string {

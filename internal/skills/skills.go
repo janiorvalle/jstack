@@ -1,6 +1,6 @@
-// Package skills copies the embedded skill folders into a harness's skills
-// folder, backing up what it overwrites and never touching a skill it doesn't
-// own.
+// Package skills copies skill folders from their sources into a harness's
+// skills folder, backing up what it overwrites and never touching a skill no
+// source owns.
 package skills
 
 import (
@@ -14,12 +14,33 @@ import (
 	"strings"
 )
 
-// Plan groups the embedded skills by what applying them to dest would do.
-// Local lists folders in dest that jstack doesn't own; they are never touched.
+// Source is one folder of skills: jstack's embedded folder, or the skills/
+// folder of a repo the human named. Name is what the report calls it,
+// "jstack" or "owner/name". Files holds one folder per skill at its root.
+type Source struct {
+	Name  string
+	Files fs.FS
+}
+
+// Skill is one skill folder and the source it comes from.
+type Skill struct {
+	Name   string
+	Source Source
+}
+
+// Collision is one skill name that more than one source holds, with the
+// sources holding it in source order.
+type Collision struct {
+	Name    string
+	Sources []string
+}
+
+// Plan groups the skills by what applying them to dest would do. Local lists
+// folders in dest that no source owns; they are never touched.
 type Plan struct {
-	New     []string
-	Changed []string
-	Same    []string
+	New     []Skill
+	Changed []Skill
+	Same    []Skill
 	Local   []string
 }
 
@@ -29,17 +50,17 @@ func (p Plan) Pending() bool {
 }
 
 // Names lists the skill folders in source, the ones with a SKILL.md.
-func Names(source fs.FS) ([]string, error) {
-	entries, err := fs.ReadDir(source, ".")
+func Names(source Source) ([]string, error) {
+	entries, err := fs.ReadDir(source.Files, ".")
 	if err != nil {
-		return nil, fmt.Errorf("[JSTACK-SKILLS-EMBED] cannot list the embedded skills: %w; this binary was built without its skills folder, reinstall it", err)
+		return nil, fmt.Errorf("[JSTACK-SKILLS-SOURCE] cannot list the skills in %s: %w; %s", source.Name, err, sourceFix(source))
 	}
 	var names []string
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		if _, err := fs.Stat(source, entry.Name()+"/SKILL.md"); err == nil {
+		if _, err := fs.Stat(source.Files, entry.Name()+"/SKILL.md"); err == nil {
 			names = append(names, entry.Name())
 		}
 	}
@@ -47,30 +68,99 @@ func Names(source fs.FS) ([]string, error) {
 	return names, nil
 }
 
-// PlanFor compares every embedded skill with its copy under dest.
-func PlanFor(source fs.FS, dest string) (Plan, error) {
-	names, err := Names(source)
+// sourceFix is the next step when a source can't be read: the embedded
+// folder means a broken binary, a repo means its clone under ~/.jstack.
+func sourceFix(source Source) string {
+	if source.Name == "jstack" {
+		return "this binary was built without its skills folder, reinstall it"
+	}
+	return "make its clone under ~/.jstack/repos readable, or delete the clone and rerun"
+}
+
+// Collisions finds the names held by more than one source, sorted by name.
+func Collisions(sources []Source) ([]Collision, error) {
+	holders := map[string][]string{}
+	for _, source := range sources {
+		names, err := Names(source)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range names {
+			holders[name] = append(holders[name], source.Name)
+		}
+	}
+	var collisions []Collision
+	for name, held := range holders {
+		if len(held) > 1 {
+			collisions = append(collisions, Collision{Name: name, Sources: held})
+		}
+	}
+	sort.Slice(collisions, func(i, j int) bool { return collisions[i].Name < collisions[j].Name })
+	return collisions, nil
+}
+
+// owners picks one source per skill name. A name held by several sources
+// comes from the one picks names, or from the first source that holds it
+// when picks has no entry.
+func owners(sources []Source, picks map[string]string) ([]Skill, error) {
+	bySource := map[string]Source{}
+	for _, source := range sources {
+		bySource[source.Name] = source
+	}
+	owned := map[string]Source{}
+	var names []string
+	for _, source := range sources {
+		found, err := Names(source)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range found {
+			if _, seen := owned[name]; !seen {
+				names = append(names, name)
+				owned[name] = source
+			}
+		}
+	}
+	for name, pick := range picks {
+		if source, ok := bySource[pick]; ok {
+			if _, held := fs.Stat(source.Files, name+"/SKILL.md"); held == nil {
+				owned[name] = source
+			}
+		}
+	}
+	sort.Strings(names)
+	skills := make([]Skill, 0, len(names))
+	for _, name := range names {
+		skills = append(skills, Skill{Name: name, Source: owned[name]})
+	}
+	return skills, nil
+}
+
+// PlanFor compares every skill in sources with its copy under dest. picks
+// names the source for each name more than one source holds.
+func PlanFor(sources []Source, picks map[string]string, dest string) (Plan, error) {
+	skills, err := owners(sources, picks)
 	if err != nil {
 		return Plan{}, err
 	}
 	owned := map[string]bool{}
 	var plan Plan
-	for _, name := range names {
-		owned[name] = true
-		target := filepath.Join(dest, name)
+	for _, skill := range skills {
+		owned[skill.Name] = true
+		target := filepath.Join(dest, skill.Name)
 		info, statErr := os.Stat(target)
 		switch {
 		case statErr != nil || !info.IsDir():
-			plan.New = append(plan.New, name)
+			plan.New = append(plan.New, skill)
 		default:
-			same, err := dirSame(source, name, target)
+			same, err := dirSame(skill, target)
 			if err != nil {
 				return Plan{}, err
 			}
 			if same {
-				plan.Same = append(plan.Same, name)
+				plan.Same = append(plan.Same, skill)
 			} else {
-				plan.Changed = append(plan.Changed, name)
+				plan.Changed = append(plan.Changed, skill)
 			}
 		}
 	}
@@ -90,16 +180,17 @@ func PlanFor(source fs.FS, dest string) (Plan, error) {
 // one is staged beside its destination first, then swapped in, so a copy that
 // fails leaves that skill as it was and every earlier skill fully replaced.
 // A changed skill is copied to backupDir before the swap.
-func Apply(source fs.FS, dest string, plan Plan, backupDir string) error {
+func Apply(dest string, plan Plan, backupDir string) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
 	}
-	changed := map[string]bool{}
-	for _, name := range plan.Changed {
-		changed[name] = true
+	for _, skill := range plan.New {
+		if err := swapIn(skill, dest, false, backupDir); err != nil {
+			return err
+		}
 	}
-	for _, name := range append(append([]string{}, plan.New...), plan.Changed...) {
-		if err := swapIn(source, dest, name, changed[name], backupDir); err != nil {
+	for _, skill := range plan.Changed {
+		if err := swapIn(skill, dest, true, backupDir); err != nil {
 			return err
 		}
 	}
@@ -113,14 +204,15 @@ var rename = os.Rename
 // filesystem, where a rename fails with EXDEV, so the old folder is retired
 // beside its replacement first, copied from there into the backup, and only
 // removed once the swap has succeeded.
-func swapIn(source fs.FS, dest, name string, replace bool, backupDir string) error {
+func swapIn(skill Skill, dest string, replace bool, backupDir string) error {
+	name := skill.Name
 	staged, err := os.MkdirTemp(dest, ".jstack-staging-"+name+"-")
 	if err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot stage skill %q in %q: %w; make the folder writable and rerun", name, dest, err)
 	}
 	defer os.RemoveAll(staged)
 	final := filepath.Join(dest, name)
-	if err := copyDir(source, name, staged); err != nil {
+	if err := copyDir(skill, staged); err != nil {
 		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot write skill %q into %q: %w; the installed copy is untouched, fix the permissions or free space and rerun", name, dest, err)
 	}
 	if !replace {
@@ -191,21 +283,22 @@ func copyTree(source, target string) error {
 	})
 }
 
-func dirSame(source fs.FS, name, target string) (bool, error) {
-	embedded := map[string][]byte{}
-	err := fs.WalkDir(source, name, func(path string, entry fs.DirEntry, err error) error {
+func dirSame(skill Skill, target string) (bool, error) {
+	name := skill.Name
+	wanted := map[string][]byte{}
+	err := fs.WalkDir(skill.Source.Files, name, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		content, err := fs.ReadFile(source, path)
+		content, err := fs.ReadFile(skill.Source.Files, path)
 		if err != nil {
 			return err
 		}
-		embedded[strings.TrimPrefix(path, name+"/")] = content
+		wanted[strings.TrimPrefix(path, name+"/")] = content
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("[JSTACK-SKILLS-EMBED] cannot read embedded skill %q: %w; reinstall the binary", name, err)
+		return false, fmt.Errorf("[JSTACK-SKILLS-SOURCE] cannot read skill %q from %s: %w; %s", name, skill.Source.Name, err, sourceFix(skill.Source))
 	}
 	seen := 0
 	same := true
@@ -223,7 +316,7 @@ func dirSame(source fs.FS, name, target string) (bool, error) {
 			return nil
 		}
 		relative, _ := filepath.Rel(target, path)
-		want, ok := embedded[filepath.ToSlash(relative)]
+		want, ok := wanted[filepath.ToSlash(relative)]
 		if !ok {
 			same = false
 			return filepath.SkipAll
@@ -242,11 +335,12 @@ func dirSame(source fs.FS, name, target string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot read the installed skill %q: %w; make it readable and rerun", target, err)
 	}
-	return same && seen == len(embedded), nil
+	return same && seen == len(wanted), nil
 }
 
-func copyDir(source fs.FS, name, target string) error {
-	return fs.WalkDir(source, name, func(path string, entry fs.DirEntry, err error) error {
+func copyDir(skill Skill, target string) error {
+	name := skill.Name
+	return fs.WalkDir(skill.Source.Files, name, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -258,7 +352,7 @@ func copyDir(source fs.FS, name, target string) error {
 			}
 			return os.MkdirAll(destination, 0o755)
 		}
-		content, err := fs.ReadFile(source, path)
+		content, err := fs.ReadFile(skill.Source.Files, path)
 		if err != nil {
 			return err
 		}
@@ -266,8 +360,9 @@ func copyDir(source fs.FS, name, target string) error {
 	})
 }
 
-// fileMode keeps skill scripts runnable. The embedded tree carries no modes,
-// and a file that starts with a shebang is one the skill tells the agent to run.
+// fileMode keeps skill scripts runnable. The embedded tree carries no modes
+// and a clone's modes aren't trusted either; a file that starts with a shebang
+// is one the skill tells the agent to run.
 func fileMode(content []byte) os.FileMode {
 	if bytes.HasPrefix(content, []byte("#!")) {
 		return 0o755

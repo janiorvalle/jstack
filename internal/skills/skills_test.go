@@ -10,7 +10,11 @@ import (
 	"testing/fstest"
 )
 
-func source() fstest.MapFS {
+func source() []Source {
+	return []Source{{Name: "jstack", Files: jstackFiles()}}
+}
+
+func jstackFiles() fstest.MapFS {
 	return fstest.MapFS{
 		"how/SKILL.md":    {Data: []byte("how\n")},
 		"voice/SKILL.md":  {Data: []byte("voice v2\n")},
@@ -21,6 +25,23 @@ func source() fstest.MapFS {
 		"why/refs/one.md": {Data: []byte("one\n")},
 		"why/scan.sh":     {Data: []byte("#!/bin/sh\necho scan\n")},
 	}
+}
+
+// repo is a skills repo of the human's own: one skill of its own and one
+// named the same as a jstack skill.
+func repo() Source {
+	return Source{Name: "me/work-skills", Files: fstest.MapFS{
+		"deploy/SKILL.md": {Data: []byte("deploy\n")},
+		"voice/SKILL.md":  {Data: []byte("voice, my way\n")},
+	}}
+}
+
+func names(skills []Skill) string {
+	var parts []string
+	for _, skill := range skills {
+		parts = append(parts, skill.Name)
+	}
+	return strings.Join(parts, ",")
 }
 
 func write(t *testing.T, path, content string) {
@@ -72,7 +93,7 @@ func assertNoWorkFolders(t *testing.T, dest string) {
 }
 
 func TestNamesAreFoldersWithASkillFile(t *testing.T) {
-	names, err := Names(source())
+	names, err := Names(source()[0])
 	if err != nil || strings.Join(names, ",") != "how,voice,why" {
 		t.Fatalf("names = %v, %v", names, err)
 	}
@@ -86,17 +107,17 @@ func TestPlanGroupsByWhatWouldChange(t *testing.T) {
 	write(t, filepath.Join(dest, "voice", "notes.md"), "notes\n")
 	write(t, filepath.Join(dest, "mine", "SKILL.md"), "local skill\n")
 	write(t, filepath.Join(dest, ".jstack-backup", "x"), "")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(plan.New, ","); got != "why" {
+	if got := names(plan.New); got != "why" {
 		t.Fatalf("new = %q", got)
 	}
-	if got := strings.Join(plan.Changed, ","); got != "voice" {
+	if got := names(plan.Changed); got != "voice" {
 		t.Fatalf("changed = %q", got)
 	}
-	if got := strings.Join(plan.Same, ","); got != "how" {
+	if got := names(plan.Same); got != "how" {
 		t.Fatalf("same = %q", got)
 	}
 	if got := strings.Join(plan.Local, ","); got != "mine" {
@@ -108,23 +129,90 @@ func TestExtraFileMakesASkillChanged(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "how", "SKILL.md"), "how\n")
 	write(t, filepath.Join(dest, "how", "extra.md"), "added locally\n")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(plan.Changed, ",") != "how" {
+	if names(plan.Changed) != "how" {
 		t.Fatalf("changed = %v", plan.Changed)
 	}
 }
 
 func TestMissingDestIsAllNew(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "skills")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(plan.New, ",") != "how,voice,why" || len(plan.Local) != 0 {
+	if names(plan.New) != "how,voice,why" || len(plan.Local) != 0 {
 		t.Fatalf("plan = %+v", plan)
+	}
+}
+
+func TestCollisionsNameEverySourceHoldingASkill(t *testing.T) {
+	sources := append(source(), repo(), Source{Name: "me/more", Files: fstest.MapFS{"voice/SKILL.md": {Data: []byte("third\n")}}})
+	collisions, err := Collisions(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(collisions) != 1 || collisions[0].Name != "voice" || strings.Join(collisions[0].Sources, ",") != "jstack,me/work-skills,me/more" {
+		t.Fatalf("collisions = %+v", collisions)
+	}
+	if none, _ := Collisions(source()); len(none) != 0 {
+		t.Fatalf("one source collides with itself: %+v", none)
+	}
+}
+
+func TestPlanTakesACollidingSkillFromThePickedSource(t *testing.T) {
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v2\n")
+	write(t, filepath.Join(dest, "voice", "notes.md"), "notes\n")
+	sources := append(source(), repo())
+	kept, err := PlanFor(sources, map[string]string{"voice": "jstack"}, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(kept.Same) != "voice" || names(kept.New) != "deploy,how,why" {
+		t.Fatalf("kept jstack's: %+v", kept)
+	}
+	if kept.New[0].Source.Name != "me/work-skills" || kept.New[1].Source.Name != "jstack" {
+		t.Fatalf("sources = %s, %s", kept.New[0].Source.Name, kept.New[1].Source.Name)
+	}
+	overridden, err := PlanFor(sources, map[string]string{"voice": "me/work-skills"}, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(overridden.Changed) != "voice" || overridden.Changed[0].Source.Name != "me/work-skills" {
+		t.Fatalf("overridden: %+v", overridden)
+	}
+	if err := Apply(dest, overridden, filepath.Join(t.TempDir(), "backup")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dest, "voice", "SKILL.md")); string(got) != "voice, my way\n" {
+		t.Fatalf("installed voice = %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "voice", "notes.md")); !os.IsNotExist(err) {
+		t.Fatal("jstack's notes.md survived the override")
+	}
+}
+
+func TestSkillsFromASecondSourceAreOwnedNotLocal(t *testing.T) {
+	dest := t.TempDir()
+	write(t, filepath.Join(dest, "deploy", "SKILL.md"), "deploy\n")
+	write(t, filepath.Join(dest, "mine", "SKILL.md"), "local skill\n")
+	plan, err := PlanFor([]Source{source()[0], {Name: "me/work-skills", Files: fstest.MapFS{"deploy/SKILL.md": {Data: []byte("deploy\n")}}}}, nil, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(plan.Same) != "deploy" || strings.Join(plan.Local, ",") != "mine" {
+		t.Fatalf("plan = %+v", plan)
+	}
+}
+
+func TestUnreadableRepoSourceNamesTheClone(t *testing.T) {
+	_, err := Names(Source{Name: "me/work-skills", Files: os.DirFS(filepath.Join(t.TempDir(), "missing"))})
+	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-SOURCE") || !strings.Contains(err.Error(), "me/work-skills") || !strings.Contains(err.Error(), "~/.jstack/repos") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -134,11 +222,11 @@ func TestApplyCopiesNewBacksUpChangedAndLeavesLocalAlone(t *testing.T) {
 	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me in the backup\n")
 	write(t, filepath.Join(dest, "mine", "SKILL.md"), "local skill\n")
 	backup := filepath.Join(t.TempDir(), "backup", "claude", "skills")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(source(), dest, plan, backup); err != nil {
+	if err := Apply(dest, plan, backup); err != nil {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]string{
@@ -167,11 +255,11 @@ func TestApplyCopiesNewBacksUpChangedAndLeavesLocalAlone(t *testing.T) {
 			}
 		}
 	}
-	after, err := PlanFor(source(), dest)
+	after, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Pending() || strings.Join(after.Same, ",") != "how,voice,why" {
+	if after.Pending() || names(after.Same) != "how,voice,why" {
 		t.Fatalf("after = %+v", after)
 	}
 	assertNoWorkFolders(t, dest)
@@ -183,11 +271,11 @@ func TestApplyBacksUpAChangedSkillAcrossFilesystems(t *testing.T) {
 	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
 	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me in the backup\n")
 	backup := filepath.Join(t.TempDir(), "backup", "codex", "skills")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(source(), dest, plan, backup); err != nil {
+	if err := Apply(dest, plan, backup); err != nil {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]string{
@@ -221,11 +309,11 @@ func TestBackupKeepsSymlinksAndFileModes(t *testing.T) {
 		t.Fatal(err)
 	}
 	backup := filepath.Join(t.TempDir(), "backup")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(source(), dest, plan, backup); err != nil {
+	if err := Apply(dest, plan, backup); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Lstat(filepath.Join(backup, "voice", "link.md"))
@@ -257,11 +345,11 @@ func TestSymlinkedSkillFolderIsBackedUpAsALink(t *testing.T) {
 		t.Fatal(err)
 	}
 	backup := filepath.Join(t.TempDir(), "backup", "claude", "skills")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(source(), dest, plan, backup); err != nil {
+	if err := Apply(dest, plan, backup); err != nil {
 		t.Fatal(err)
 	}
 	if link, err := os.Readlink(filepath.Join(backup, "voice")); err != nil || link != elsewhere {
@@ -282,11 +370,11 @@ func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
 	write(t, filepath.Join(dest, "voice", "old-only.md"), "keep me\n")
 	failRenameInto(t, filepath.Join(dest, "voice"))
 	backup := filepath.Join(t.TempDir(), "backup")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = Apply(source(), dest, plan, backup)
+	err = Apply(dest, plan, backup)
 	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), "back as it was") {
 		t.Fatalf("err = %v", err)
 	}
@@ -306,11 +394,11 @@ func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
 func TestApplyWithNothingChangedMakesNoBackup(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "skills")
 	backup := filepath.Join(t.TempDir(), "backup")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(source(), dest, plan, backup); err != nil {
+	if err := Apply(dest, plan, backup); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(backup); !os.IsNotExist(err) {
@@ -322,12 +410,12 @@ func TestApplyFailureLeavesEachSkillWholeAndNoStaging(t *testing.T) {
 	dest := t.TempDir()
 	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
 	backup := filepath.Join(t.TempDir(), "backup")
-	plan, err := PlanFor(source(), dest)
+	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(dest, "why", "mine.md"), "appeared after the plan\n")
-	err = Apply(source(), dest, plan, backup)
+	err = Apply(dest, plan, backup)
 	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), `"why"`) {
 		t.Fatalf("err = %v", err)
 	}
