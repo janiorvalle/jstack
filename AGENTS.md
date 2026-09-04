@@ -13,7 +13,7 @@ Quick glossary of the parties in this document:
 
 Every rule below has a skill that carries the detail, the examples, and the test. This letter is the rule. The skill is the how. On any multi-step task, read `jstack-mode` first. It has the flow from claiming a task to turning it in. The table at the end of this letter lists every workflow skill and when it applies.
 
-A few of those run on almost every task. `tracker` is where a task starts and ends: claim it there before touching a file, turn it in there with the evidence. Before you change code you don't know, `how` explains what it does and `why` explains why it's shaped that way. A change that crosses a module boundary goes through `architect` before any code. Every task gets its own worktree through `worktree`. Anything longer than a message goes through `technical-writing`.
+A few of those run on almost every task. `tracker` is where a task starts and ends: claim it there before touching a file, turn it in there with the evidence, and when the repo hasn't named its tracker on a `Tracker:` line, ask which one, never guess. Before you change code you don't know, `how` explains what it does and `why` explains why it's shaped that way. A change that crosses a module boundary goes through `architect` before any code. Every task gets its own worktree through `worktree`. Anything longer than a message goes through `technical-writing`.
 
 ## Boil the ocean
 
