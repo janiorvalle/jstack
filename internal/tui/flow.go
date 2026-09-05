@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"github.com/janiorvalle/jstack/internal/setup"
+	"github.com/janiorvalle/jstack/internal/skills"
 )
 
 // ErrQuit is returned when the person leaves before the plan is applied:
@@ -262,7 +263,7 @@ func (f *flow) collisionScreens(entered direction) (outcome, error) {
 	if err != nil {
 		return quit, err
 	}
-	if len(open) != len(f.collisions) {
+	if !sameCollisions(f.collisions, open) {
 		f.collisions = nil
 		for _, collision := range open {
 			f.collisions = append(f.collisions, collisionScratch{name: collision.Name, sources: collision.Sources})
@@ -284,6 +285,21 @@ func (f *flow) collisionScreens(entered direction) (outcome, error) {
 		return quit, err
 	}
 	return result, nil
+}
+
+// sameCollisions reports whether the scratch answers are for these very
+// collisions, by name and sources, so a repo swapped after Esc gets fresh
+// questions.
+func sameCollisions(scratch []collisionScratch, open []skills.Collision) bool {
+	if len(scratch) != len(open) {
+		return false
+	}
+	for index, collision := range open {
+		if scratch[index].name != collision.Name || strings.Join(scratch[index].sources, ",") != strings.Join(collision.Sources, ",") {
+			return false
+		}
+	}
+	return true
 }
 
 func (f *flow) collisionScreen(collision *collisionScratch) step {

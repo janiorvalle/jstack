@@ -28,37 +28,49 @@ const (
 	bySomethingElse
 )
 
-// location is where a present tool's binary was found and who owns it.
+// location is where a present tool's binary was found, who owns it, and
+// for Homebrew the formula, read off the Cellar path.
 type location struct {
-	path  string
-	owner owner
+	path    string
+	owner   owner
+	formula string
 }
 
-// locator answers where a binary is and what the Homebrew prefix is, each
-// through the shell setup runs its lines in. The prefix is read once per
-// run, the first time a tool's path has to be compared with it.
+// locator answers where a binary is, where Homebrew and npm keep what they
+// install, each through the shell setup runs its lines in. The prefixes
+// are read once per run, the first time a tool's path has to be compared
+// with them.
 type locator struct {
-	ctx        context.Context
-	opts       Options
-	prefix     string
-	prefixRead bool
+	ctx      context.Context
+	opts     Options
+	prefixes map[string]string
 }
 
-// locate finds a present tool's binary and who owns it. npm first, by the
-// install line: node itself may live under Homebrew, and npm's copy is still
-// npm's to update. Then by path: under the Homebrew prefix, in the
-// installer's folder, or anywhere else.
+// locate finds a present tool's binary and who owns it, by where the
+// binary really is once links are followed: an npm install line's binary
+// under node's global node_modules, or a link into Homebrew's Cellar, or
+// a file in the installer's folder. A binary in Homebrew's bin that isn't
+// a link into the Cellar is not Homebrew's, whatever put it there, and
+// brew upgrade would leave it standing.
 func (l *locator) locate(tool tools.Tool) location {
-	if tool.NpmInstalled() {
-		return location{path: l.pathOf(tool), owner: byNpm}
-	}
 	path := l.pathOf(tool)
-	switch {
-	case path == "":
+	if path == "" {
 		return location{owner: byInstaller}
-	case l.underHomebrew(path):
-		return location{path: path, owner: byHomebrew}
-	case within(installFolder(l.opts), path):
+	}
+	real := path
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		real = resolved
+	}
+	if tool.NpmInstalled() {
+		if within(l.npmModules(), real) {
+			return location{path: path, owner: byNpm}
+		}
+		return location{path: path, owner: bySomethingElse}
+	}
+	if formula := l.homebrewFormula(real); formula != "" {
+		return location{path: path, owner: byHomebrew, formula: formula}
+	}
+	if within(installFolder(l.opts), path) {
 		return location{path: path, owner: byInstaller}
 	}
 	return location{path: path, owner: bySomethingElse}
@@ -81,15 +93,60 @@ func resolveLine(operatingSystem, binary string) string {
 	return "command -v " + binary
 }
 
-func (l *locator) underHomebrew(path string) bool {
+// homebrewFormula is the formula a binary belongs to, read off its real
+// path under the Cellar, <prefix>/Cellar/<formula>/<version>/..., or ""
+// when it isn't there. Windows has no Homebrew.
+func (l *locator) homebrewFormula(real string) string {
 	if runtime.GOOS == "windows" {
-		return false
+		return ""
 	}
-	if !l.prefixRead {
-		l.prefix = l.firstLine("brew --prefix")
-		l.prefixRead = true
+	prefix := l.prefix("brew --prefix")
+	if prefix == "" {
+		return ""
 	}
-	return l.prefix != "" && within(l.prefix, path)
+	cellar := filepath.Join(prefix, "Cellar")
+	if resolved, err := filepath.EvalSymlinks(cellar); err == nil {
+		cellar = resolved
+	}
+	if !within(cellar, real) {
+		return ""
+	}
+	relative, err := filepath.Rel(cellar, real)
+	if err != nil {
+		return ""
+	}
+	formula, _, _ := strings.Cut(filepath.ToSlash(relative), "/")
+	return formula
+}
+
+// npmModules is where npm keeps the global packages: lib/node_modules under
+// the global prefix on macOS and Linux, the prefix itself on Windows, where
+// the .cmd shims sit beside node_modules.
+func (l *locator) npmModules() string {
+	prefix := l.prefix("npm prefix -g")
+	if prefix == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return prefix
+	}
+	modules := filepath.Join(prefix, "lib", "node_modules")
+	if resolved, err := filepath.EvalSymlinks(modules); err == nil {
+		modules = resolved
+	}
+	return modules
+}
+
+// prefix runs a command that prints a folder, once per run.
+func (l *locator) prefix(command string) string {
+	if l.prefixes == nil {
+		l.prefixes = map[string]string{}
+	}
+	if answer, done := l.prefixes[command]; done {
+		return answer
+	}
+	l.prefixes[command] = l.firstLine(command)
+	return l.prefixes[command]
 }
 
 func (l *locator) firstLine(command string) string {
@@ -123,21 +180,11 @@ func within(folder, path string) bool {
 func (status toolStatus) update() string {
 	switch status.owner {
 	case byHomebrew:
-		return "brew upgrade " + status.formula()
+		return "brew upgrade " + status.formula
 	case bySomethingElse:
 		return ""
 	}
 	return status.tool.Command
-}
-
-// formula is the Homebrew formula for the tool: the Formula line, or the
-// binary's name, which is how formulas are named unless the line says
-// otherwise.
-func (status toolStatus) formula() string {
-	if status.tool.Formula != "" {
-		return status.tool.Formula
-	}
-	return status.tool.Binary
 }
 
 // updateShown is the update line as the plan and the report show it: the

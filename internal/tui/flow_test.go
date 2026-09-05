@@ -118,13 +118,24 @@ func (f *fakeShell) withEverythingCurrent() *fakeShell {
 	return f
 }
 
-// withTrufflehogFromBrew is a machine with TruffleHog 3.97.0 under the
-// Homebrew prefix while the latest is 3.97.4.
-func (f *fakeShell) withTrufflehogFromBrew() *fakeShell {
+// withTrufflehogFromBrew is a machine with TruffleHog 3.97.0 linked from
+// Homebrew's bin into its Cellar, both under home so the link is real,
+// while the latest is 3.97.4.
+func (f *fakeShell) withTrufflehogFromBrew(t *testing.T, home string) *fakeShell {
+	t.Helper()
+	brew := filepath.Join(home, "brew")
+	target := filepath.Join(brew, "Cellar", "trufflehog", "3.97.0", "bin", "trufflehog")
+	write(t, target, "#!/bin/sh\n")
+	if err := os.MkdirAll(filepath.Join(brew, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(brew, "bin", "trufflehog")); err != nil {
+		t.Fatal(err)
+	}
 	f.present["command -v trufflehog"] = true
-	f.versions["command -v trufflehog"] = "/opt/homebrew/bin/trufflehog"
+	f.versions["command -v trufflehog"] = filepath.Join(brew, "bin", "trufflehog")
 	f.versions["trufflehog --version"] = "trufflehog 3.97.0"
-	f.versions["brew --prefix"] = "/opt/homebrew"
+	f.versions["brew --prefix"] = brew
 	return f
 }
 
@@ -552,7 +563,7 @@ func TestToolsScreenOffersTheOwnersUpdateLineAndUncheckedMeansSkip(t *testing.T)
 		t.Skip("Homebrew is not where Windows keeps tools")
 	}
 	home := homeWithClaude(t)
-	shell := machine().withTrufflehogFromBrew()
+	shell := machine().withTrufflehogFromBrew(t, home)
 	settled(t, home, shell)
 	opts, out := options(t, home, shell)
 	script, err := guided(t, opts, on("Install into which harnesses?", enter), on("Which tools?", enter))

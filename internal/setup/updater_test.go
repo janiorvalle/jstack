@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -16,26 +17,45 @@ func ownedFixture() fstest.MapFS {
 	files["tools.md"] = &fstest.MapFile{Data: []byte("# Tools\n\n" +
 		"## git\n\n- Check: `check-git`\n\n" +
 		"## TruffleHog\n\n- Repo: https://github.com/x/trufflehog\n- Check: `command -v trufflehog`\n- Check (windows): `Get-Command trufflehog`\n- Version: `trufflehog --version`\n- Install: `curl trufflehog | sh`\n\n" +
-		"## bgr\n\n- Repo: https://github.com/x/bgr\n- Check: `command -v bgr`\n- Check (windows): `Get-Command bgr`\n- Version: `bgr --version`\n- Install: `curl bgr | sh`\n- Formula: `better-git-review`\n\n" +
+		"## bgr\n\n- Repo: https://github.com/x/bgr\n- Check: `command -v bgr`\n- Check (windows): `Get-Command bgr`\n- Version: `bgr --version`\n- Install: `curl bgr | sh`\n\n" +
 		"## browser\n\n- Repo: https://github.com/x/browser\n- Check: `command -v browser`\n- Check (windows): `Get-Command browser`\n- Version: `browser --version`\n- Install: `" + pinnedInstall + "`\n")}
 	return files
 }
 
-// owned is a machine with every tool outdated and each binary somewhere:
-// TruffleHog under Homebrew, bgr in ~/.local/bin, browser from npm under
-// Homebrew's node.
+// linked puts a file at target and a symlink to it at link, the way brew
+// and npm link what they install into a bin folder.
+func linked(t *testing.T, link, target string) {
+	t.Helper()
+	write(t, target, "#!/bin/sh\n")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// owned is a machine with every tool outdated and each binary where its
+// owner put it: TruffleHog linked from Homebrew's bin into its Cellar, bgr
+// in ~/.local/bin, browser linked from node's bin into its global
+// node_modules. brew and node live under home so the links are real.
 func owned(t *testing.T, home string) (*fakeShell, Options) {
 	t.Helper()
+	brew, node := filepath.Join(home, "brew"), filepath.Join(home, "node")
+	linked(t, filepath.Join(brew, "bin", "trufflehog"), filepath.Join(brew, "Cellar", "trufflehog", "3.97.0", "bin", "trufflehog"))
+	linked(t, filepath.Join(node, "bin", "browser"), filepath.Join(node, "lib", "node_modules", "browser", "bin", "browser"))
+	write(t, filepath.Join(home, ".local", "bin", "bgr"), "#!/bin/sh\n")
 	shell := &fakeShell{
-		present: map[string]bool{"check-git": true, "command -v trufflehog": true, "command -v bgr": true, "command -v browser": true},
+		present: map[string]bool{"check-git": true},
 		versions: map[string]string{
 			"trufflehog --version":  "trufflehog 3.97.0",
 			"bgr --version":         "bgr 1.6.0",
 			"browser --version":     "browser 0.35.0",
-			"brew --prefix":         "/opt/homebrew",
-			"command -v trufflehog": "/opt/homebrew/bin/trufflehog",
+			"brew --prefix":         brew,
+			"npm prefix -g":         node,
+			"command -v trufflehog": filepath.Join(brew, "bin", "trufflehog"),
 			"command -v bgr":        filepath.Join(home, ".local", "bin", "bgr"),
-			"command -v browser":    "/opt/homebrew/bin/browser",
+			"command -v browser":    filepath.Join(node, "bin", "browser"),
 		},
 		latest: map[string]string{"TruffleHog": "v3.97.4", "bgr": "v1.7.0"},
 	}
@@ -57,10 +77,15 @@ func resolved(t *testing.T, opts Options) map[string]toolStatus {
 	return byTitle
 }
 
-func TestUpdateGoesThroughWhoeverOwnsTheBinary(t *testing.T) {
+func skipOnWindows(t *testing.T) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("Homebrew and ~/.local/bin are not where Windows keeps tools")
+		t.Skip("Homebrew, ~/.local/bin, and symlinks are not how Windows keeps tools")
 	}
+}
+
+func TestUpdateGoesThroughWhoeverOwnsTheBinary(t *testing.T) {
+	skipOnWindows(t)
 	home := homeWithClaude(t)
 	_, opts := owned(t, home)
 	statuses := resolved(t, opts)
@@ -84,66 +109,76 @@ func TestUpdateGoesThroughWhoeverOwnsTheBinary(t *testing.T) {
 	}
 }
 
-func TestFormulaLineNamesTheBrewFormula(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Homebrew is not where Windows keeps tools")
-	}
+func TestTheFormulaIsReadOffTheCellarPath(t *testing.T) {
+	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
-	shell.versions["command -v bgr"] = "/opt/homebrew/bin/bgr"
+	brew := filepath.Join(home, "brew")
+	linked(t, filepath.Join(brew, "bin", "bgr"), filepath.Join(brew, "Cellar", "better-git-review", "1.6.0", "bin", "bgr"))
+	shell.versions["command -v bgr"] = filepath.Join(brew, "bin", "bgr")
 	if got := resolved(t, opts)["bgr"].line(); got != "brew upgrade better-git-review" {
 		t.Fatalf("bgr update = %q", got)
 	}
 }
 
-func TestBinarySomewhereElseGetsThePathAndNoOffer(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Homebrew and ~/.local/bin are not where Windows keeps tools")
-	}
+func TestAFileInHomebrewsBinThatIsNotBrewsLinkIsSomebodyElses(t *testing.T) {
+	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
-	shell.versions["command -v bgr"] = "/usr/local/bin/bgr"
-	shell.versions["trufflehog --version"] = "trufflehog 3.97.4"
+	stray := filepath.Join(home, "brew", "bin", "trufflehog")
+	if err := os.Remove(stray); err != nil {
+		t.Fatal(err)
+	}
+	write(t, stray, "#!/bin/sh\n")
+	shell.versions["bgr --version"] = "bgr 1.7.0"
 	shell.versions["browser --version"] = "browser 0.36.0"
 	opts.UpdateTools = true
 	opts.Yes = true
-	status := resolved(t, opts)["bgr"]
+	status := resolved(t, opts)["TruffleHog"]
 	if status.actionable() || status.line() != "" || status.owner != bySomethingElse {
 		t.Fatalf("status = %+v", status)
 	}
-	if got := toolState(status); got != "outdated bgr 1.6.0, latest 1.7.0, at /usr/local/bin/bgr, which setup didn't put there; update it the way it was installed" {
+	if got := toolState(status); got != "outdated TruffleHog 3.97.0, latest 3.97.4, at "+stray+", which setup didn't put there; update it the way it was installed" {
 		t.Fatalf("plan line = %q", got)
 	}
 	shell.commands = nil
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(strings.Join(shell.commands, ";"), "curl bgr | sh") {
-		t.Fatalf("--update-tools ran the install line over a binary setup didn't put there: %v", shell.commands)
+	if commands := strings.Join(shell.commands, ";"); strings.Contains(commands, "brew upgrade") || strings.Contains(commands, "curl trufflehog") {
+		t.Fatalf("--update-tools ran a line over a binary nobody setup knows owns: %v", shell.commands)
 	}
 }
 
-func TestBrewPrefixIsReadOnceAndOnlyForAnOutdatedTool(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Homebrew is not where Windows keeps tools")
+func TestAnNpmLineBinaryOutsideNodesModulesIsSomebodyElses(t *testing.T) {
+	skipOnWindows(t)
+	home := homeWithClaude(t)
+	shell, opts := owned(t, home)
+	elsewhere := filepath.Join(home, "pnpm", "browser")
+	write(t, elsewhere, "#!/bin/sh\n")
+	shell.versions["command -v browser"] = elsewhere
+	status := resolved(t, opts)["browser"]
+	if status.actionable() || status.owner != bySomethingElse || status.path != elsewhere {
+		t.Fatalf("status = %+v", status)
 	}
+}
+
+func TestPrefixesAreReadOnceAndOnlyForOutdatedTools(t *testing.T) {
+	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
 	shell.versions["bgr --version"] = "bgr 1.7.0"
 	resolved(t, opts)
 	commands := strings.Join(shell.commands, ";")
-	if strings.Count(commands, "brew --prefix") != 1 || strings.Count(commands, "command -v bgr") != 1 || strings.Count(commands, "command -v trufflehog") != 2 {
+	if strings.Count(commands, "brew --prefix") != 1 || strings.Count(commands, "npm prefix -g") != 1 || strings.Count(commands, "command -v bgr") != 1 || strings.Count(commands, "command -v trufflehog") != 2 {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
 
 func TestBrewThatStaysBehindTheReleaseSaysSo(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Homebrew is not where Windows keeps tools")
-	}
+	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
-	shell.present["check-bgr"] = true
 	opts.UpdateTools = true
 	opts.Yes = true
 	err := Run(context.Background(), opts)

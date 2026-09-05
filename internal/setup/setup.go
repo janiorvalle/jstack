@@ -74,10 +74,10 @@ type harnessPlan struct {
 
 // toolStatus is one tool as found on the machine. installed and latest are
 // "v1.2.3" or "" when unknown; a tool with no Version line never has either.
-// path and owner are where an outdated tool's binary is and who put it
-// there, read only for outdated tools since only the update offer depends
-// on them. install is the agreed action: an install when missing, an update
-// when outdated.
+// path, owner, and formula are where an outdated tool's binary is and who
+// put it there, read only for outdated tools since only the update offer
+// depends on them. install is the agreed action: an install when missing,
+// an update when outdated.
 type toolStatus struct {
 	tool         tools.Tool
 	present      bool
@@ -85,6 +85,7 @@ type toolStatus struct {
 	latest       string
 	path         string
 	owner        owner
+	formula      string
 	skillPresent bool
 	install      bool
 }

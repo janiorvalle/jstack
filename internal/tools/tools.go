@@ -23,9 +23,7 @@ const Doc = "https://github.com/janiorvalle/jstack/blob/main/tools.md"
 // setup compares against it instead of asking a registry; moving it is a PR.
 // Binary is the executable the Check line looks for, "command -v roast" or
 // "Get-Command roast", so setup can ask where it is and who put it there;
-// a Check line shaped any other way gives "". Formula is the Homebrew
-// formula from a Formula line, for a tool whose formula isn't named like
-// its binary, "" otherwise.
+// a Check line shaped any other way gives "".
 type Tool struct {
 	Title        string
 	Check        string
@@ -35,7 +33,6 @@ type Tool struct {
 	Install      string
 	Command      string
 	Pin          string
-	Formula      string
 	SkillInstall string
 	SkillFolder  string
 }
@@ -79,7 +76,6 @@ func parseFor(markdown, operatingSystem string) []Tool {
 			Install:      install,
 			Command:      command,
 			Pin:          pinFrom(command),
-			Formula:      quoted(lineFor(section, "Formula", operatingSystem)),
 			SkillInstall: quoted(lineFor(section, "Skill install", operatingSystem)),
 			SkillFolder:  quoted(lineFor(section, "Skill folder", operatingSystem)),
 		})

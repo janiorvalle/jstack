@@ -87,13 +87,6 @@ func TestParseReadsTheBinaryFromAOneCommandCheckLine(t *testing.T) {
 	}
 }
 
-func TestParseReadsTheFormulaLine(t *testing.T) {
-	parsed := Parse("## bgr\n\n- Check: `command -v bgr`\n- Formula: `better-git-review`\n\n## roast\n\n- Check: `command -v roast`\n")
-	if len(parsed) != 2 || parsed[0].Formula != "better-git-review" || parsed[1].Formula != "" {
-		t.Fatalf("parsed = %+v", parsed)
-	}
-}
-
 func TestNpmInstalledReadsTheInstallLine(t *testing.T) {
 	if !(Tool{Command: "npm install -g agent-browser@0.36.0 && agent-browser install"}).NpmInstalled() {
 		t.Fatal("an npm install line is not npm installed")

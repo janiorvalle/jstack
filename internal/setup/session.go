@@ -413,7 +413,7 @@ func checkTools(ctx context.Context, opts Options, list []tools.Tool) []toolStat
 	for index := range statuses {
 		if statuses[index].outdated() {
 			found := where.locate(statuses[index].tool)
-			statuses[index].path, statuses[index].owner = found.path, found.owner
+			statuses[index].path, statuses[index].owner, statuses[index].formula = found.path, found.owner, found.formula
 		}
 	}
 	return statuses
