@@ -324,7 +324,7 @@ func TestBrewThatStaysBehindTheReleaseSaysSo(t *testing.T) {
 	opts.UpdateTools = true
 	opts.Yes = true
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "TruffleHog: `brew upgrade trufflehog` ran, but `trufflehog --version` still prints 3.97.0 and the latest is 3.97.4; Homebrew's formula is behind the release, rerun jstack setup once `brew upgrade` has it") {
+	if err == nil || !strings.Contains(err.Error(), "TruffleHog: `brew upgrade trufflehog` ran, but `trufflehog --version` still prints 3.97.0 and the latest is 3.97.4; Homebrew's formula is behind the release, rerun squirrel setup once `brew upgrade` has it") {
 		t.Fatalf("err = %v", err)
 	}
 	if !strings.Contains(strings.Join(shell.commands, ";"), "brew upgrade trufflehog") {

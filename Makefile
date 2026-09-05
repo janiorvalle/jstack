@@ -26,7 +26,7 @@ install-smoke: snapshot
 	./scripts/install-smoke.sh
 
 setup:
-	go run $(GOFLAGS) ./cmd/jstack setup
+	go run $(GOFLAGS) ./cmd/squirrel setup
 
 verify-skills:
 	python3 scripts/verify.py

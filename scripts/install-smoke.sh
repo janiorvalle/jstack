@@ -13,12 +13,12 @@ case "$(uname -m)" in
   *) printf 'unsupported smoke architecture\n' >&2; exit 1 ;;
 esac
 
-archive=$(find "$root/dist" -maxdepth 1 -type f -name "jstack_*_${os}_${arch}.tar.gz" -print | head -n 1)
+archive=$(find "$root/dist" -maxdepth 1 -type f -name "squirrel_*_${os}_${arch}.tar.gz" -print | head -n 1)
 [ -n "$archive" ] || { printf 'snapshot archive not found for %s/%s\n' "$os" "$arch" >&2; exit 1; }
 archive_name=$(basename "$archive")
-version=${archive_name#jstack_}
+version=${archive_name#squirrel_}
 version=${version%_"${os}"_"${arch}".tar.gz}
-install_root=$(mktemp -d 2>/dev/null || mktemp -d -t jstack-install-smoke)
+install_root=$(mktemp -d 2>/dev/null || mktemp -d -t squirrel-install-smoke)
 mkdir -p "$install_root/home"
 trap 'rm -rf "$install_root"' EXIT HUP INT TERM
 
@@ -26,28 +26,28 @@ trap 'rm -rf "$install_root"' EXIT HUP INT TERM
 # with no terminal, changes nothing.
 run_installer() {
   HOME="$install_root/home" \
-  JSTACK_INSTALL_BASE_URL="file://$root/dist" \
-  JSTACK_INSTALL_VERSION="$version" \
-  JSTACK_INSTALL_ARCHIVE="$archive_name" \
-  JSTACK_INSTALL_DIR="$install_root/bin" \
+  SQUIRREL_INSTALL_BASE_URL="file://$root/dist" \
+  SQUIRREL_INSTALL_VERSION="$version" \
+  SQUIRREL_INSTALL_ARCHIVE="$archive_name" \
+  SQUIRREL_INSTALL_DIR="$install_root/bin" \
     "$root/install.sh"
 }
 run_installer
 run_installer
-"$install_root/bin/jstack" --version
+"$install_root/bin/squirrel" --version
 
 bad_dist="$install_root/bad-dist"
 mkdir -p "$bad_dist"
 cp "$archive" "$bad_dist/$archive_name"
 printf '%064d  %s\n' 0 "$archive_name" > "$bad_dist/checksums.txt"
 if HOME="$install_root/home" \
-  JSTACK_INSTALL_BASE_URL="file://$bad_dist" \
-  JSTACK_INSTALL_VERSION="$version" \
-  JSTACK_INSTALL_ARCHIVE="$archive_name" \
-  JSTACK_INSTALL_DIR="$install_root/bad-bin" \
+  SQUIRREL_INSTALL_BASE_URL="file://$bad_dist" \
+  SQUIRREL_INSTALL_VERSION="$version" \
+  SQUIRREL_INSTALL_ARCHIVE="$archive_name" \
+  SQUIRREL_INSTALL_DIR="$install_root/bad-bin" \
   "$root/install.sh" >"$install_root/bad.log" 2>&1; then
   printf 'installer accepted a checksum mismatch\n' >&2
   exit 1
 fi
-[ ! -e "$install_root/bad-bin/jstack" ] || { printf 'checksum failure left a binary behind\n' >&2; exit 1; }
+[ ! -e "$install_root/bad-bin/squirrel" ] || { printf 'checksum failure left a binary behind\n' >&2; exit 1; }
 printf 'install smoke passed\n'

@@ -45,7 +45,7 @@ func (lookup Lookup) fetch(ctx context.Context, url, field string) (string, erro
 		return "", err
 	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", "jstack-setup")
+	request.Header.Set("User-Agent", "squirrel-setup")
 	response, err := lookup.Client.Do(request)
 	if err != nil {
 		return "", err

@@ -13,8 +13,8 @@ import (
 
 	"github.com/charmbracelet/huh"
 
-	"github.com/janiorvalle/jstack/internal/setup"
-	"github.com/janiorvalle/jstack/internal/skills"
+	"github.com/janiorvalle/squirrel/internal/setup"
+	"github.com/janiorvalle/squirrel/internal/skills"
 )
 
 // ErrQuit is returned when the person leaves before the plan is applied:
@@ -23,7 +23,7 @@ var ErrQuit = errors.New("quit")
 
 // Run asks each question in turn, prints the plan, and applies it after
 // the confirm. Nothing in a harness or a repo of the person's changes
-// before that; the skills repo clone under ~/.jstack/repos is synced as
+// before that; the skills repo clone under ~/.squirrel/repos is synced as
 // soon as it's named, since its collisions are the next question.
 func Run(ctx context.Context, opts setup.Options) error {
 	session, err := setup.Start(opts)
@@ -162,7 +162,7 @@ func run(ctx context.Context, session *setup.Session, opts setup.Options, show r
 func (f *flow) ask(field huh.Field, summary func() string) (outcome, error) {
 	s := newScreen(field, summary)
 	if err := f.show(s); err != nil {
-		return quit, fmt.Errorf("[JSTACK-TUI] the terminal stopped answering: %w; rerun with --yes and --harness to skip the questions", err)
+		return quit, fmt.Errorf("[SQUIRREL-TUI] the terminal stopped answering: %w; rerun with --yes and --harness to skip the questions", err)
 	}
 	return s.outcome, nil
 }

@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
 
-repo="${JSTACK_INSTALL_REPO:-janiorvalle/jstack}"
-install_dir="${JSTACK_INSTALL_DIR:-$HOME/.local/bin}"
-base_url="${JSTACK_INSTALL_BASE_URL:-}"
-version="${JSTACK_INSTALL_VERSION:-}"
-archive_name="${JSTACK_INSTALL_ARCHIVE:-}"
+repo="${SQUIRREL_INSTALL_REPO:-janiorvalle/squirrel}"
+install_dir="${SQUIRREL_INSTALL_DIR:-$HOME/.local/bin}"
+base_url="${SQUIRREL_INSTALL_BASE_URL:-}"
+version="${SQUIRREL_INSTALL_VERSION:-}"
+archive_name="${SQUIRREL_INSTALL_ARCHIVE:-}"
 
 fail() {
-  printf 'jstack installer: %s\n' "$*" >&2
+  printf 'squirrel installer: %s\n' "$*" >&2
   exit 1
 }
 
@@ -17,7 +17,7 @@ command -v curl >/dev/null 2>&1 || fail "curl is required"
 case "$(uname -s)" in
   Darwin) os=darwin ;;
   Linux) os=linux ;;
-  *) fail "unsupported operating system; on Windows run the PowerShell installer: irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex" ;;
+  *) fail "unsupported operating system; on Windows run the PowerShell installer: irm https://raw.githubusercontent.com/janiorvalle/squirrel/main/install.ps1 | iex" ;;
 esac
 case "$(uname -m)" in
   x86_64|amd64) arch=amd64 ;;
@@ -26,45 +26,45 @@ case "$(uname -m)" in
 esac
 
 if [ -z "$version" ]; then
-  release_json=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest") || fail "no published release found for $repo; see https://github.com/$repo/releases or run go install github.com/$repo/cmd/jstack@latest"
+  release_json=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest") || fail "no published release found for $repo; see https://github.com/$repo/releases or run go install github.com/$repo/cmd/squirrel@latest"
   version=$(printf '%s\n' "$release_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' | head -n 1)
   [ -n "$version" ] || fail "latest release did not include a tag_name"
 fi
 version=${version#v}
 
 if [ -z "$archive_name" ]; then
-  archive_name="jstack_${version}_${os}_${arch}.tar.gz"
+  archive_name="squirrel_${version}_${os}_${arch}.tar.gz"
 fi
 if [ -z "$base_url" ]; then
   base_url="https://github.com/$repo/releases/download/v$version"
 fi
 base_url=${base_url%/}
 
-tmp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t jstack-install)
-stage_jstack=""
-dest_jstack="$install_dir/jstack"
-backup_jstack="$tmp_dir/previous-jstack"
-had_jstack=false
+tmp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t squirrel-install)
+stage_squirrel=""
+dest_squirrel="$install_dir/squirrel"
+backup_squirrel="$tmp_dir/previous-squirrel"
+had_squirrel=false
 transaction_active=false
 
 restore_install() {
   transaction_active=false
-  if [ "$had_jstack" = true ]; then
-    mv -f "$backup_jstack" "$dest_jstack"
+  if [ "$had_squirrel" = true ]; then
+    mv -f "$backup_squirrel" "$dest_squirrel"
   else
-    rm -f "$dest_jstack"
+    rm -f "$dest_squirrel"
   fi
 }
 cleanup() {
   [ "$transaction_active" = false ] || restore_install
   rm -rf "$tmp_dir"
-  [ -z "$stage_jstack" ] || rm -f "$stage_jstack"
+  [ -z "$stage_squirrel" ] || rm -f "$stage_squirrel"
 }
 trap cleanup EXIT HUP INT TERM
 
 archive="$tmp_dir/$archive_name"
 checksums="$tmp_dir/checksums.txt"
-printf 'Downloading jstack %s for %s/%s...\n' "$version" "$os" "$arch"
+printf 'Downloading squirrel %s for %s/%s...\n' "$version" "$os" "$arch"
 curl -fsSL "$base_url/$archive_name" -o "$archive" || fail "could not download $archive_name"
 curl -fsSL "$base_url/checksums.txt" -o "$checksums" || fail "could not download checksums.txt"
 
@@ -80,33 +80,33 @@ fi
 [ "$actual" = "$expected" ] || fail "checksum mismatch for $archive_name"
 
 tar -xzf "$archive" -C "$tmp_dir"
-[ -x "$tmp_dir/jstack" ] || fail "archive did not contain jstack"
-"$tmp_dir/jstack" --version >/dev/null || fail "release jstack failed its version smoke test"
+[ -x "$tmp_dir/squirrel" ] || fail "archive did not contain squirrel"
+"$tmp_dir/squirrel" --version >/dev/null || fail "release squirrel failed its version smoke test"
 
 mkdir -p "$install_dir"
-stage_jstack="$install_dir/.jstack.new.$$"
-install -m 0755 "$tmp_dir/jstack" "$stage_jstack"
-if [ -e "$dest_jstack" ] || [ -L "$dest_jstack" ]; then
-  cp -p "$dest_jstack" "$backup_jstack"
-  had_jstack=true
+stage_squirrel="$install_dir/.squirrel.new.$$"
+install -m 0755 "$tmp_dir/squirrel" "$stage_squirrel"
+if [ -e "$dest_squirrel" ] || [ -L "$dest_squirrel" ]; then
+  cp -p "$dest_squirrel" "$backup_squirrel"
+  had_squirrel=true
 fi
 transaction_active=true
-mv -f "$stage_jstack" "$dest_jstack" || fail "could not replace jstack"
-stage_jstack=""
+mv -f "$stage_squirrel" "$dest_squirrel" || fail "could not replace squirrel"
+stage_squirrel=""
 
-"$dest_jstack" --version >/dev/null || fail "installed jstack failed its version smoke test"
+"$dest_squirrel" --version >/dev/null || fail "installed squirrel failed its version smoke test"
 transaction_active=false
-printf 'Installed jstack to %s\n' "$install_dir"
+printf 'Installed squirrel to %s\n' "$install_dir"
 case ":$PATH:" in
   *":$install_dir:"*) ;;
-  *) printf 'Add %s to PATH to run jstack from any directory: put this line in your shell profile, ~/.zshrc or ~/.bashrc (fish: fish_add_path %s), then open a new terminal.\n  export PATH="%s:$PATH"\n' "$install_dir" "$install_dir" "$install_dir" ;;
+  *) printf 'Add %s to PATH to run squirrel from any directory: put this line in your shell profile, ~/.zshrc or ~/.bashrc (fish: fish_add_path %s), then open a new terminal.\n  export PATH="%s:$PATH"\n' "$install_dir" "$install_dir" "$install_dir" ;;
 esac
 
 # Piped through sh, stdin is the script itself. The terminal is still there as
 # /dev/tty, so setup can ask its questions. Without one, setup prints the plan
 # and the flags and changes nothing.
 if ( : </dev/tty ) 2>/dev/null; then
-  "$dest_jstack" setup </dev/tty
+  "$dest_squirrel" setup </dev/tty
 else
-  "$dest_jstack" setup
+  "$dest_squirrel" setup
 fi

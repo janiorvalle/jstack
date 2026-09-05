@@ -5,8 +5,8 @@ package letter
 import "strings"
 
 const (
-	Start = "<!-- jstack:start -->"
-	End   = "<!-- jstack:end -->"
+	Start = "<!-- squirrel:start -->"
+	End   = "<!-- squirrel:end -->"
 )
 
 // Outcome names what Plan decided to do with the instructions file.

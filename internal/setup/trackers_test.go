@@ -35,7 +35,7 @@ func homeWithRepos(t *testing.T) string {
 // leaves behind, so a test can start at the tracker questions.
 func savedRepos(t *testing.T, home string) {
 	t.Helper()
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"skill_repos_asked":true,"repos_dirs":["`+strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)+`"],"repos_dirs_asked":true}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["claude"],"skill_repos_asked":true,"repos_dirs":["`+strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)+`"],"repos_dirs_asked":true}`)
 }
 
 func in(home, repo, command string) string {
@@ -151,7 +151,7 @@ func TestReposFolderIsGuessedAskedOnceAndRemembered(t *testing.T) {
 		"\ntrackers\n  bravo    skipped this run\n  charlie  skipped this run\n",
 		"bravo  skipped\n  charlie  skipped",
 	)
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"repos_dirs": [`) || !strings.Contains(got, `"repos_dirs_asked": true`) {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, `"repos_dirs": [`) || !strings.Contains(got, `"repos_dirs_asked": true`) {
 		t.Fatalf("config = %q", got)
 	}
 	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" || exists(filepath.Join(home, "code", "charlie", "AGENTS.md")) {
@@ -175,7 +175,7 @@ func TestTypedReposFolderMustExist(t *testing.T) {
 	if err := os.Rename(filepath.Join(home, "code"), filepath.Join(home, "work")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ParseReposDirs("nowhere", home); err == nil || !strings.Contains(err.Error(), `[JSTACK-REPOS-DIR] "nowhere" is not a folder; type the path of a folder that exists, such as `+filepath.Join(home, "code")) {
+	if _, err := ParseReposDirs("nowhere", home); err == nil || !strings.Contains(err.Error(), `[SQUIRREL-REPOS-DIR] "nowhere" is not a folder; type the path of a folder that exists, such as `+filepath.Join(home, "code")) {
 		t.Fatalf("err = %v", err)
 	}
 	dirs, err := ParseReposDirs("~/work", home)
@@ -198,7 +198,7 @@ func TestReposDirFlagSettlesTheQuestionWithoutATerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(), "repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n", "\nrepos\n  2 not declared: bravo, charlie; rerun with a terminal to name the tracker of each one\n")
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"repos_dirs_asked": true`) {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, `"repos_dirs_asked": true`) {
 		t.Fatalf("config = %q", got)
 	}
 	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" {
@@ -235,7 +235,7 @@ func TestNoFolderNamedHintsTheFlagWithTheGuesses(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "jstack setup --harness claude --yes --repos-dir "+quote(runtime.GOOS, filepath.Join(home, "code")))
+	expectAll(t, out.String(), "squirrel setup --harness claude --yes --repos-dir "+quote(runtime.GOOS, filepath.Join(home, "code")))
 }
 
 func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
@@ -359,7 +359,7 @@ func TestFailedPushGoesBackToTheBranchAndIsReportedAtTheEnd(t *testing.T) {
 	shell.failing = map[string]bool{in(home, "bravo", "git -c credential.helper="+quote(runtime.GOOS, "!gh auth git-credential")+" push -u origin tracker-line"): true}
 	opts, out := options(t, home, shell, "")
 	err := guided(t, opts, script{trackers: answering("Tracker: github-issues", "bravo")})
-	if err == nil || !strings.Contains(err.Error(), "[JSTACK-TRACKERS] the harnesses are done, but 1 repo step(s) failed") || !strings.Contains(err.Error(), "push -u origin tracker-line` failed") {
+	if err == nil || !strings.Contains(err.Error(), "[SQUIRREL-TRACKERS] the harnesses are done, but 1 repo step(s) failed") || !strings.Contains(err.Error(), "push -u origin tracker-line` failed") {
 		t.Fatalf("err = %v", err)
 	}
 	expectAll(t, out.String(), "push -u origin tracker-line` failed: exit status 1; finish the PR by hand from", `charlie  wrote "Tracker: github-issues"`)
@@ -418,13 +418,13 @@ func TestReposDirFlagIsResolvedFromTheWorkingDirectoryAndMustExist(t *testing.T)
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)) || strings.Contains(got, `"code"`) {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)) || strings.Contains(got, `"code"`) {
 		t.Fatalf("config = %q", got)
 	}
 	opts, _ = options(t, home, withRoast("1.1.0"), "")
 	opts.ReposDirs = []string{"nowhere"}
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), `[JSTACK-REPOS-DIR] "nowhere" is not a folder`) {
+	if err == nil || !strings.Contains(err.Error(), `[SQUIRREL-REPOS-DIR] "nowhere" is not a folder`) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -617,7 +617,7 @@ func TestTwoReposFoldersWithTheSameRepoNameEachGetTheirOwnAnswer(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(work, "bravo", ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"skill_repos_asked":true,"repos_dirs":["`+strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)+`","`+strings.ReplaceAll(work, `\`, `\\`)+`"],"repos_dirs_asked":true}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["claude"],"skill_repos_asked":true,"repos_dirs":["`+strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)+`","`+strings.ReplaceAll(work, `\`, `\\`)+`"],"repos_dirs_asked":true}`)
 	opts, out := options(t, home, withRoast("1.1.0"), "")
 	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
 		var answers []TrackerAnswer

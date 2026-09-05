@@ -1,7 +1,7 @@
-# jstack
+# squirrel
 
 <p align="center">
-  <img src="assets/hero.png" alt="jstack. how I work, stacked." width="840">
+  <img src="assets/hero.png" alt="squirrel. chaos outside. a stash inside." width="840">
 </p>
 
 How I work with coding agents, written down as skills.
@@ -13,27 +13,27 @@ The opinions are the point. A human stays in the merge seat. Every claim ships w
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/janiorvalle/squirrel/main/install.sh | sh
 ```
 
-That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, a skills repo of your own, where your repos live, the tracker for any repo that hasn't named one, and which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back. The last screen is the plan with a confirm, and nothing in a harness or a repo of yours changes before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.jstack/backup/`.
+That puts the `squirrel` binary in `~/.local/bin`, checksum verified, and runs `squirrel setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, a skills repo of your own, where your repos live, the tracker for any repo that hasn't named one, and which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back. The last screen is the plan with a confirm, and nothing in a harness or a repo of yours changes before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.squirrel/backup/`.
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/janiorvalle/squirrel/main/install.ps1 | iex
 ```
 
-That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack` on your user PATH and runs `jstack setup`, with the tool checks and installs in Windows PowerShell.
+That puts `squirrel.exe` in `%LOCALAPPDATA%\Programs\squirrel` on your user PATH and runs `squirrel setup`, with the tool checks and installs in Windows PowerShell.
 
-Run `jstack setup` again any time. Your saved answers come preselected, so a rerun with nothing changed is one Enter, and a harness installed since last time shows up checked. `jstack upgrade` fetches the newest release and reruns setup.
+Run `squirrel setup` again any time. Your saved answers come preselected, so a rerun with nothing changed is one Enter, and a harness installed since last time shows up checked. `squirrel upgrade` fetches the newest release and reruns setup.
 
-Two questions are asked once. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: setup clones it with gh under `~/.jstack/repos`, pulls it every run, and installs its skills beside jstack's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared`. For each undeclared one it asks which of the four backends the `tracker` skill knows, or skip, with a same-for-the-rest shortcut, and whether to open the one-line PR through gh. The line lands in the repo's `AGENTS.md` after the confirm.
+Two questions are asked once. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: setup clones it with gh under `~/.squirrel/repos`, pulls it every run, and installs its skills beside squirrel's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared`. For each undeclared one it asks which of the four backends the `tracker` skill knows, or skip, with a same-for-the-rest shortcut, and whether to open the one-line PR through gh. The line lands in the repo's `AGENTS.md` after the confirm.
 
 Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing in the harnesses (a skills repo you named is still refreshed):
 
 ```sh
-jstack setup --harness claude,codex --yes   # or --harness all
+squirrel setup --harness claude,codex --yes   # or --harness all
 ```
 
 - `--install-tools` installs the missing tools without asking. `--update-tools` updates the outdated ones.
@@ -44,11 +44,11 @@ jstack setup --harness claude,codex --yes   # or --harness all
 
 ## Use it
 
-Restart your harness so the skills load. Then start any multi-step task with `/jstack-mode`, or say "work the jstack way". The letter is in your instructions file, so the mode is on in every session.
+Restart your harness so the skills load. Then start any multi-step task with `/squirrel`, or say "work the squirrel way". The letter is in your instructions file, so the mode is on in every session.
 
 ## Tools
 
-The flow leans on three tools. `jstack setup` offers each one that's missing or behind its latest release, and an update runs through whoever installed the binary: `brew upgrade` for a Homebrew one, the `tools.md` line for one in `~/.local/bin`, the pinned npm line for an npm one. A binary anywhere else is shown with its path and left to you.
+The flow leans on three tools. `squirrel setup` offers each one that's missing or behind its latest release, and an update runs through whoever installed the binary: `brew upgrade` for a Homebrew one, the `tools.md` line for one in `~/.local/bin`, the pinned npm line for an npm one. A binary anywhere else is shown with its path and left to you.
 
 - **roast**, the independent review gate. A different model reviews the diff until it says well done. It needs TruffleHog for its secret scan, and setup installs that too.
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
@@ -61,12 +61,12 @@ Each tool ships its own skill and installs it. `tools.md` has the check, version
 ## What's in it
 
 - `AGENTS.md` is the letter: who's who, what we're doing, and the rules that matter first. Setup installs it into your harness's user-level instructions file so the mode is always on.
-- `skills/jstack-mode/` is the front door: the flow, the rules, and an index of every skill, generated from their description lines.
+- `skills/squirrel/` is the front door: the flow, the rules, and an index of every skill, generated from their description lines.
 - `skills/*/` with `kind: principle` in the frontmatter are the principles. One rule each.
 - The rest are workflows: `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.
 - `tools.md` names the tools the flow expects and how to get them. A `(windows)` line runs there in PowerShell, the plain line is POSIX shell for macOS and Linux. The agent-browser line pins the CLI version because its skill text ships inside the CLI, and `scripts/tool-bump.py` moves that pin through a weekly PR.
-- `vendor.json` pins the third-party skills in `skills/`, the ones whose tool jstack doesn't control, so their text changes through a reviewed PR. `scripts/vendor-bump.py` copies each in at its pin, and a weekly workflow opens a bump PR when upstream moves. Our own tools, roast, bgr, and tokenomnom, ship their skill with the binary instead.
-- `cmd/jstack` and `internal/` are the binary, with the skills, the letter, `tools.md`, and `vendor.json` embedded at build time, so setup runs from anywhere.
+- `vendor.json` pins the third-party skills in `skills/`, the ones whose tool squirrel doesn't control, so their text changes through a reviewed PR. `scripts/vendor-bump.py` copies each in at its pin, and a weekly workflow opens a bump PR when upstream moves. Our own tools, roast, bgr, and tokenomnom, ship their skill with the binary instead.
+- `cmd/squirrel` and `internal/` are the binary, with the skills, the letter, `tools.md`, and `vendor.json` embedded at build time, so setup runs from anywhere.
 - This repo tracks its own work in GitHub Issues, named by the `Tracker:` line at the top of the letter. Setup leaves that line out of what it installs.
 - `decisions.md` records the choices made while building this, so nobody relitigates them.
 
@@ -76,7 +76,7 @@ Each tool ships its own skill and installs it. `tools.md` has the check, version
 make install-hooks   # gitleaks plus the verify script on every commit
 make verify          # what CI runs: gofmt, build, vet, test, then the skill checks
 make index           # rebuild the letter's workflows table after changing a description
-make setup           # go run ./cmd/jstack setup, with this checkout's skills embedded
+make setup           # go run ./cmd/squirrel setup, with this checkout's skills embedded
 ```
 
 See `CONTRIBUTING.md` for the shape of a skill and the CLA.

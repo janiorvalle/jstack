@@ -1,11 +1,11 @@
 version: 2
 
-project_name: jstack
+project_name: squirrel
 
 builds:
-  - id: jstack
-    main: ./cmd/jstack
-    binary: jstack
+  - id: squirrel
+    main: ./cmd/squirrel
+    binary: squirrel
     env:
       - CGO_ENABLED=0
     flags:
@@ -23,7 +23,7 @@ builds:
       - arm64
 
 archives:
-  - id: jstack
+  - id: squirrel
     formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

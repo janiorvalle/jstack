@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/janiorvalle/jstack"
+	"github.com/janiorvalle/squirrel"
 )
 
 const sample = "# Tools\n\nIntro with a `- Check:` mention that is not a section.\n\n" +
@@ -37,7 +37,7 @@ func TestParseKeepsSectionsWithACheckLine(t *testing.T) {
 		t.Fatalf("quest version = %q, repo = %q", quest.Version, quest.Repo)
 	}
 	bare := parsed[2]
-	if bare.Install != "see https://github.com/janiorvalle/jstack/blob/main/tools.md#bare" || bare.Command != "" {
+	if bare.Install != "see https://github.com/janiorvalle/squirrel/blob/main/tools.md#bare" || bare.Command != "" {
 		t.Fatalf("bare = %+v", bare)
 	}
 }
@@ -51,7 +51,7 @@ func TestPrerequisiteLinksToItsOwnHeading(t *testing.T) {
 	if parsed[0].Command != "" {
 		t.Fatalf("a prerequisite has a command to run: %q", parsed[0].Command)
 	}
-	if parsed[0].Install != "see https://github.com/janiorvalle/jstack/blob/main/tools.md#git-and-gh" {
+	if parsed[0].Install != "see https://github.com/janiorvalle/squirrel/blob/main/tools.md#git-and-gh" {
 		t.Fatalf("install = %q", parsed[0].Install)
 	}
 }
@@ -181,7 +181,7 @@ func TestWindowsInstallWrittenForAPersonIsShownAndNeverRun(t *testing.T) {
 // Every section of the real tools.md needs a Windows check, or a tool that
 // is present shows as missing there: PowerShell has no command -v.
 func TestEveryRealToolHasAWindowsCheckLine(t *testing.T) {
-	markdown, err := fs.ReadFile(jstack.Files, "tools.md")
+	markdown, err := fs.ReadFile(squirrel.Files, "tools.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestEveryRealToolHasAWindowsCheckLine(t *testing.T) {
 // sh runs nothing and exits zero. Every real line downloads to a file and
 // runs the file, so curl's failure is the line's.
 func TestEveryRealCurlInstallLineDownloadsBeforeItRuns(t *testing.T) {
-	markdown, err := fs.ReadFile(jstack.Files, "tools.md")
+	markdown, err := fs.ReadFile(squirrel.Files, "tools.md")
 	if err != nil {
 		t.Fatal(err)
 	}

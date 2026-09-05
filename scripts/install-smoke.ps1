@@ -1,4 +1,4 @@
-# The Windows half of install-smoke.sh. Builds jstack.exe from this checkout,
+# The Windows half of install-smoke.sh. Builds squirrel.exe from this checkout,
 # zips it the way goreleaser does, then runs install.ps1 against that zip
 # twice, refuses a bad checksum, checks that `irm ... | iex` leaves the session
 # alone and that a relative install folder goes on the user PATH absolute, and
@@ -15,7 +15,7 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
   "ARM64" { "arm64" }
   default { throw "unsupported smoke architecture: $env:PROCESSOR_ARCHITECTURE" }
 }
-$work = Join-Path ([System.IO.Path]::GetTempPath()) "jstack-install-smoke-$PID"
+$work = Join-Path ([System.IO.Path]::GetTempPath()) "squirrel-install-smoke-$PID"
 $savedProfile = $env:USERPROFILE
 
 function Assert([bool]$Condition, [string]$Message) {
@@ -25,11 +25,11 @@ function Assert([bool]$Condition, [string]$Message) {
 }
 
 function Set-InstallerEnvironment([string]$Dist, [string]$Bin) {
-  $env:JSTACK_INSTALL_ARCHIVE = Join-Path $Dist $archiveName
-  $env:JSTACK_INSTALL_CHECKSUMS = Join-Path $Dist "checksums.txt"
-  $env:JSTACK_INSTALL_VERSION = $version
-  $env:JSTACK_INSTALL_DIR = $Bin
-  $env:JSTACK_INSTALL_SKIP_PATH = "1"
+  $env:SQUIRREL_INSTALL_ARCHIVE = Join-Path $Dist $archiveName
+  $env:SQUIRREL_INSTALL_CHECKSUMS = Join-Path $Dist "checksums.txt"
+  $env:SQUIRREL_INSTALL_VERSION = $version
+  $env:SQUIRREL_INSTALL_DIR = $Bin
+  $env:SQUIRREL_INSTALL_SKIP_PATH = "1"
 }
 
 function Invoke-Installer([string]$Dist, [string]$Bin) {
@@ -43,7 +43,7 @@ function Invoke-Installer([string]$Dist, [string]$Bin) {
 # The README line is `irm ... | iex`, which runs the installer's text in the
 # terminal's own scope. This runs it the same way in a fresh session and fails
 # on anything the session gained. LASTEXITCODE is PowerShell's own, set
-# whenever a native program runs, and the installer runs jstack.exe.
+# whenever a native program runs, and the installer runs squirrel.exe.
 function Invoke-InstallerThroughSession([string]$Dist, [string]$Bin) {
   Set-InstallerEnvironment $Dist $Bin
   $probe = Join-Path $work "session-probe.ps1"
@@ -68,12 +68,12 @@ Write-Output "install.ps1 through iex left nothing in the session"
 # the installer does, so a terminal opened afterwards sees the restored PATH
 # and not the folder this smoke deleted. The variable itself goes right away.
 function Publish-EnvironmentChange {
-  [Environment]::SetEnvironmentVariable("JSTACK_INSTALL_SMOKE", "1", "User")
-  [Environment]::SetEnvironmentVariable("JSTACK_INSTALL_SMOKE", $null, "User")
+  [Environment]::SetEnvironmentVariable("SQUIRREL_INSTALL_SMOKE", "1", "User")
+  [Environment]::SetEnvironmentVariable("SQUIRREL_INSTALL_SMOKE", $null, "User")
 }
 
 # The installer puts its folder on the user PATH, so a relative
-# JSTACK_INSTALL_DIR has to go on as an absolute path. This is the one install
+# SQUIRREL_INSTALL_DIR has to go on as an absolute path. This is the one install
 # here that writes the PATH, and it puts the PATH back afterwards.
 function Assert-RelativeInstallDirGoesOnPathAbsolute([string]$Dist) {
   $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
@@ -82,15 +82,15 @@ function Assert-RelativeInstallDirGoesOnPathAbsolute([string]$Dist) {
   Push-Location $work
   try {
     Set-InstallerEnvironment $Dist "relative-bin"
-    Remove-Item Env:JSTACK_INSTALL_SKIP_PATH
+    Remove-Item Env:SQUIRREL_INSTALL_SKIP_PATH
     & powershell -NoProfile -ExecutionPolicy Bypass -File $installer | Out-Host
     Assert ($LASTEXITCODE -eq 0) "install into a relative folder failed"
     $absolute = Join-Path (Get-Location).Path "relative-bin"
-    Assert (Test-Path (Join-Path $absolute "jstack.exe")) "jstack.exe did not land in $absolute"
+    Assert (Test-Path (Join-Path $absolute "squirrel.exe")) "squirrel.exe did not land in $absolute"
     $userPath = @([string]$environmentKey.GetValue("Path", "") -split ";")
     Assert ($absolute -in $userPath) "the user PATH did not get $absolute"
     Assert ("relative-bin" -notin $userPath) "the user PATH got the relative folder as written"
-    Write-Output "a relative JSTACK_INSTALL_DIR went on the user PATH as $absolute"
+    Write-Output "a relative SQUIRREL_INSTALL_DIR went on the user PATH as $absolute"
   } finally {
     Pop-Location
     $environmentKey.SetValue("Path", $savedPath, $savedKind)
@@ -109,14 +109,14 @@ try {
 
   Push-Location $root
   try {
-    & go build -buildvcs=false -ldflags "-s -w -X main.version=$version" -o (Join-Path $build "jstack.exe") ./cmd/jstack
+    & go build -buildvcs=false -ldflags "-s -w -X main.version=$version" -o (Join-Path $build "squirrel.exe") ./cmd/squirrel
     Assert ($LASTEXITCODE -eq 0) "go build failed"
   } finally {
     Pop-Location
   }
-  $archiveName = "jstack_${version}_windows_${arch}.zip"
+  $archiveName = "squirrel_${version}_windows_${arch}.zip"
   $archive = Join-Path $dist $archiveName
-  Compress-Archive -LiteralPath (Join-Path $build "jstack.exe") -DestinationPath $archive
+  Compress-Archive -LiteralPath (Join-Path $build "squirrel.exe") -DestinationPath $archive
   $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
   Set-Content -Path (Join-Path $dist "checksums.txt") -Value "$hash  $archiveName" -Encoding ascii
 
@@ -125,20 +125,20 @@ try {
   $env:USERPROFILE = $profileHome
   Assert ((Invoke-Installer $dist $bin) -eq 0) "first install failed"
   Assert ((Invoke-Installer $dist $bin) -eq 0) "second install over the first failed"
-  $installed = Join-Path $bin "jstack.exe"
+  $installed = Join-Path $bin "squirrel.exe"
   $reported = (& $installed --version | Out-String).Trim()
-  Assert ($reported -eq $version) "installed jstack reports '$reported', want '$version'"
+  Assert ($reported -eq $version) "installed squirrel reports '$reported', want '$version'"
   Assert ((Invoke-InstallerThroughSession $dist (Join-Path $work "session-bin")) -eq 0) "install.ps1 changed the session it ran in"
   Assert-RelativeInstallDirGoesOnPathAbsolute $dist
-  Assert (-not (Test-Path (Join-Path $profileHome ".claude\skills\jstack-mode"))) "install.ps1 changed the profile without a terminal"
+  Assert (-not (Test-Path (Join-Path $profileHome ".claude\skills\squirrel"))) "install.ps1 changed the profile without a terminal"
 
   $report = & $installed setup --harness claude,codex --yes | Out-String
   Write-Output $report
-  Assert ($LASTEXITCODE -eq 0) "jstack setup exited with $LASTEXITCODE"
-  foreach ($path in @(".claude\skills\jstack-mode\SKILL.md", ".claude\CLAUDE.md", ".codex\skills\jstack-mode\SKILL.md", ".codex\AGENTS.md", ".jstack\config.json")) {
+  Assert ($LASTEXITCODE -eq 0) "squirrel setup exited with $LASTEXITCODE"
+  foreach ($path in @(".claude\skills\squirrel\SKILL.md", ".claude\CLAUDE.md", ".codex\skills\squirrel\SKILL.md", ".codex\AGENTS.md", ".squirrel\config.json")) {
     Assert (Test-Path (Join-Path $profileHome $path)) "setup did not write $path"
   }
-  Assert ((Get-Content (Join-Path $profileHome ".claude\CLAUDE.md") -Raw).Contains("<!-- jstack:start -->")) "the letter is not in CLAUDE.md"
+  Assert ((Get-Content (Join-Path $profileHome ".claude\CLAUDE.md") -Raw).Contains("<!-- squirrel:start -->")) "the letter is not in CLAUDE.md"
   Assert ($report.Contains("git and gh")) "the report does not name git and gh"
   if ($env:GH_TOKEN) {
     # gh is on the runner and GH_TOKEN makes gh auth status pass, so the
@@ -153,7 +153,7 @@ try {
   $programs = Join-Path $env:LOCALAPPDATA "Programs"
   $report = & $installed setup --harness claude,codex --yes --install-tools | Out-String
   Write-Output $report
-  Assert ($LASTEXITCODE -eq 0) "jstack setup --install-tools exited with $LASTEXITCODE"
+  Assert ($LASTEXITCODE -eq 0) "squirrel setup --install-tools exited with $LASTEXITCODE"
   foreach ($tool in @("roast", "TruffleHog", "bgr", "tokenomnom")) {
     Assert ($report -match "(?m)^\s+ok $tool\b") "setup did not report $tool ok after installing it"
   }
@@ -163,7 +163,7 @@ try {
   foreach ($skill in @("roast", "bgr", "tokenomnom")) {
     Assert (Test-Path (Join-Path $profileHome ".claude\skills\$skill\SKILL.md")) "setup did not install the $skill skill after installing the tool"
   }
-  $writtenTruffleInstaller = Join-Path $profileHome ".jstack\scripts\install-trufflehog.ps1"
+  $writtenTruffleInstaller = Join-Path $profileHome ".squirrel\scripts\install-trufflehog.ps1"
   Assert (Test-Path $writtenTruffleInstaller) "setup did not write the embedded TruffleHog installer under the profile"
 
   # The TruffleHog installer ships in the binary, so the copy setup wrote is
@@ -190,7 +190,7 @@ try {
   Set-Content -Path (Join-Path $badDist "checksums.txt") -Value ("0" * 64 + "  $archiveName") -Encoding ascii
   $badBin = Join-Path $work "bad-bin"
   Assert ((Invoke-Installer $badDist $badBin) -ne 0) "installer accepted a checksum mismatch"
-  Assert (-not (Test-Path (Join-Path $badBin "jstack.exe"))) "checksum failure left a binary behind"
+  Assert (-not (Test-Path (Join-Path $badBin "squirrel.exe"))) "checksum failure left a binary behind"
   Write-Output "install smoke passed"
 } finally {
   $env:USERPROFILE = $savedProfile

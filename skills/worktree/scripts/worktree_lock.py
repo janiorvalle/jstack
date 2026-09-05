@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and write the jstack worktree registry with a file lock.
+"""Read and write the squirrel worktree registry with a file lock.
 
 Usage:
   worktree_lock.py list [--status active] [--repo name]
@@ -7,12 +7,12 @@ Usage:
   worktree_lock.py heartbeat --path P [--notes TEXT] [--ports k=v]
   worktree_lock.py release --path P --status released|handoff|stale
 
-Registry: $JSTACK_WORKTREE_REGISTRY or ~/.config/jstack/worktree-locks.json
+Registry: $SQUIRREL_WORKTREE_REGISTRY or ~/.config/squirrel/worktree-locks.json
 """
 import argparse, fcntl, json, os, sys
 from datetime import datetime, timezone
 
-REGISTRY = os.environ.get("JSTACK_WORKTREE_REGISTRY") or os.path.expanduser("~/.config/jstack/worktree-locks.json")
+REGISTRY = os.environ.get("SQUIRREL_WORKTREE_REGISTRY") or os.path.expanduser("~/.config/squirrel/worktree-locks.json")
 
 def now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

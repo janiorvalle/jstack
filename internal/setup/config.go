@@ -12,7 +12,7 @@ import (
 // picked, every harness found on any run so far, so one found since is
 // offered checked while one they left out stays out, the skills
 // repos they named, whether they were asked for one, which source each
-// colliding skill name comes from, "jstack" or "owner/name", and the
+// colliding skill name comes from, "squirrel" or "owner/name", and the
 // folders their repos live in, with whether they were asked for those.
 type Config struct {
 	Harnesses       []string          `json:"harnesses"`
@@ -25,7 +25,7 @@ type Config struct {
 }
 
 func configPath(home string) string {
-	return filepath.Join(home, ".jstack", "config.json")
+	return filepath.Join(home, ".squirrel", "config.json")
 }
 
 func loadConfig(home string) (Config, error) {
@@ -34,11 +34,11 @@ func loadConfig(home string) (Config, error) {
 		return Config{}, nil
 	}
 	if err != nil {
-		return Config{}, fmt.Errorf("[JSTACK-CONFIG-READ] cannot read %q: %w; make it readable or delete it and rerun", configPath(home), err)
+		return Config{}, fmt.Errorf("[SQUIRREL-CONFIG-READ] cannot read %q: %w; make it readable or delete it and rerun", configPath(home), err)
 	}
 	var config Config
 	if err := json.Unmarshal(content, &config); err != nil {
-		return Config{}, fmt.Errorf("[JSTACK-CONFIG-PARSE] %q is not valid JSON: %w; expected {\"harnesses\":[\"claude\",\"codex\"]}; fix it or delete it and rerun", configPath(home), err)
+		return Config{}, fmt.Errorf("[SQUIRREL-CONFIG-PARSE] %q is not valid JSON: %w; expected {\"harnesses\":[\"claude\",\"codex\"]}; fix it or delete it and rerun", configPath(home), err)
 	}
 	return config, nil
 }
@@ -46,7 +46,7 @@ func loadConfig(home string) (Config, error) {
 func saveConfig(home string, config Config) error {
 	path := configPath(home)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot create %q: %w; make the home folder writable and rerun", filepath.Dir(path), err)
+		return fmt.Errorf("[SQUIRREL-CONFIG-WRITE] cannot create %q: %w; make the home folder writable and rerun", filepath.Dir(path), err)
 	}
 	content, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -54,18 +54,18 @@ func saveConfig(home string, config Config) error {
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".config-*")
 	if err != nil {
-		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot stage %q: %w; make its folder writable and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-CONFIG-WRITE] cannot stage %q: %w; make its folder writable and rerun", path, err)
 	}
 	defer os.Remove(temporary.Name())
 	if _, err := temporary.Write(append(content, '\n')); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-CONFIG-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
 	}
 	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-CONFIG-WRITE] cannot write %q: %w; make it writable and rerun", path, err)
 	}
 	if err := os.Rename(temporary.Name(), path); err != nil {
-		return fmt.Errorf("[JSTACK-CONFIG-WRITE] cannot replace %q: %w; make it writable and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-CONFIG-WRITE] cannot replace %q: %w; make it writable and rerun", path, err)
 	}
 	return nil
 }

@@ -36,12 +36,12 @@ func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, 
 }
 
 func TestRunUpgradesVerifiedBinaryAndRerunsSetup(t *testing.T) {
-	newBinary := replacementBinary(t, []byte("new jstack binary"))
-	archive := tarGzip(t, "jstack", newBinary)
+	newBinary := replacementBinary(t, []byte("new squirrel binary"))
+	archive := tarGzip(t, "squirrel", newBinary)
 	digest := sha256.Sum256(archive)
-	checksums := hex.EncodeToString(digest[:]) + "  jstack_0.2.4_linux_arm64.tar.gz\n"
+	checksums := hex.EncodeToString(digest[:]) + "  squirrel_0.2.4_linux_arm64.tar.gz\n"
 	metadata := `{"tag_name":"v0.2.4","assets":[` +
-		`{"name":"jstack_0.2.4_linux_arm64.tar.gz","browser_download_url":"https://downloads.test/archive"},` +
+		`{"name":"squirrel_0.2.4_linux_arm64.tar.gz","browser_download_url":"https://downloads.test/archive"},` +
 		`{"name":"checksums.txt","browser_download_url":"https://downloads.test/checksums"}]}`
 	requests := 0
 	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
@@ -56,7 +56,7 @@ func TestRunUpgradesVerifiedBinaryAndRerunsSetup(t *testing.T) {
 		return response(http.StatusOK, []byte(content)), nil
 	})}
 	destination := filepath.Join(t.TempDir(), testBinaryName())
-	if err := os.WriteFile(destination, []byte("old jstack binary"), 0o700); err != nil {
+	if err := os.WriteFile(destination, []byte("old squirrel binary"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	verified := false
@@ -87,7 +87,7 @@ func TestRunUpgradesVerifiedBinaryAndRerunsSetup(t *testing.T) {
 			if !bytes.Equal(content, newBinary) {
 				t.Fatalf("installed content = %q", content)
 			}
-			_, writeErr := io.WriteString(writer, "jstack: Codex: applied\n")
+			_, writeErr := io.WriteString(writer, "squirrel: Codex: applied\n")
 			return writeErr
 		},
 	})
@@ -114,7 +114,7 @@ func TestRunUpgradesVerifiedBinaryAndRerunsSetup(t *testing.T) {
 }
 
 func TestRunAlreadyUpToDateStillForceRerunsSetup(t *testing.T) {
-	destination := filepath.Join(t.TempDir(), "jstack")
+	destination := filepath.Join(t.TempDir(), "squirrel")
 	if err := os.WriteFile(destination, []byte("current"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestRunAlreadyUpToDateStillForceRerunsSetup(t *testing.T) {
 }
 
 func TestRunKeepsNewerSemanticVersionAndStillRerunsSetup(t *testing.T) {
-	destination := filepath.Join(t.TempDir(), "jstack")
+	destination := filepath.Join(t.TempDir(), "squirrel")
 	if err := os.WriteFile(destination, []byte("release candidate"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -186,21 +186,21 @@ func TestRunKeepsNewerSemanticVersionAndStillRerunsSetup(t *testing.T) {
 }
 
 func TestRunRejectsChecksumMismatchWithoutChangingBinary(t *testing.T) {
-	archive := tarGzip(t, "jstack", []byte("untrusted"))
+	archive := tarGzip(t, "squirrel", []byte("untrusted"))
 	metadata := `{"tag_name":"v0.2.4","assets":[` +
-		`{"name":"jstack_0.2.4_linux_amd64.tar.gz","browser_download_url":"https://downloads.test/archive"},` +
+		`{"name":"squirrel_0.2.4_linux_amd64.tar.gz","browser_download_url":"https://downloads.test/archive"},` +
 		`{"name":"checksums.txt","browser_download_url":"https://downloads.test/checksums"}]}`
 	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		switch request.URL.String() {
 		case "https://downloads.test/archive":
 			return response(http.StatusOK, archive), nil
 		case "https://downloads.test/checksums":
-			return response(http.StatusOK, []byte(strings.Repeat("0", 64)+"  jstack_0.2.4_linux_amd64.tar.gz\n")), nil
+			return response(http.StatusOK, []byte(strings.Repeat("0", 64)+"  squirrel_0.2.4_linux_amd64.tar.gz\n")), nil
 		default:
 			return response(http.StatusOK, []byte(metadata)), nil
 		}
 	})}
-	destination := filepath.Join(t.TempDir(), "jstack")
+	destination := filepath.Join(t.TempDir(), "squirrel")
 	if err := os.WriteFile(destination, []byte("trusted old binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestRunRejectsChecksumMismatchWithoutChangingBinary(t *testing.T) {
 		operatingSystem: "linux",
 		architecture:    "amd64",
 	})
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-UPGRADE-CHECKSUM") || !strings.Contains(err.Error(), "binary was not changed") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-UPGRADE-CHECKSUM") || !strings.Contains(err.Error(), "binary was not changed") {
 		t.Fatalf("error = %v", err)
 	}
 	content, readErr := os.ReadFile(destination)
@@ -227,7 +227,7 @@ func TestRunNetworkErrorNamesURLAndFallback(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, expected := range []string{"JSTACK-UPGRADE-RELEASE", latestReleaseURL, "offline", fallbackInstruction()} {
+	for _, expected := range []string{"SQUIRREL-UPGRADE-RELEASE", latestReleaseURL, "offline", fallbackInstruction()} {
 		if !strings.Contains(err.Error(), expected) {
 			t.Fatalf("error = %q, missing %q", err, expected)
 		}
@@ -235,14 +235,14 @@ func TestRunNetworkErrorNamesURLAndFallback(t *testing.T) {
 }
 
 func TestReplaceExecutableKeepsCurrentBinaryWhenSmokeTestFails(t *testing.T) {
-	destination := filepath.Join(t.TempDir(), "jstack")
+	destination := filepath.Join(t.TempDir(), "squirrel")
 	if err := os.WriteFile(destination, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	err := replaceExecutable(context.Background(), destination, []byte("new"), "0.2.4", func(context.Context, string, string) error {
 		return errors.New("wrong architecture")
 	})
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-UPGRADE-SMOKE") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-UPGRADE-SMOKE") {
 		t.Fatalf("error = %v", err)
 	}
 	content, readErr := os.ReadFile(destination)
@@ -259,10 +259,10 @@ func TestReplaceRunningExecutableOnWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	destination := filepath.Join(t.TempDir(), "jstack-helper.exe")
+	destination := filepath.Join(t.TempDir(), "squirrel-helper.exe")
 	copyFile(t, source, destination)
 	command := exec.Command(destination, "-test.run=TestUpgradeRunningExecutableHelper")
-	command.Env = append(os.Environ(), "JSTACK_UPGRADE_HELPER=1")
+	command.Env = append(os.Environ(), "SQUIRREL_UPGRADE_HELPER=1")
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -288,7 +288,7 @@ func TestReplaceRunningExecutableOnWindows(t *testing.T) {
 }
 
 func TestUpgradeRunningExecutableHelper(t *testing.T) {
-	if os.Getenv("JSTACK_UPGRADE_HELPER") != "1" {
+	if os.Getenv("SQUIRREL_UPGRADE_HELPER") != "1" {
 		return
 	}
 	fmt.Println("ready")
@@ -298,7 +298,7 @@ func TestUpgradeRunningExecutableHelper(t *testing.T) {
 func TestExtractZipFindsWindowsBinary(t *testing.T) {
 	var archive bytes.Buffer
 	writer := zip.NewWriter(&archive)
-	file, err := writer.Create("nested/jstack.exe")
+	file, err := writer.Create("nested/squirrel.exe")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestExtractZipFindsWindowsBinary(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	binary, err := extractBinary("release.zip", "zip", "jstack.exe", archive.Bytes())
+	binary, err := extractBinary("release.zip", "zip", "squirrel.exe", archive.Bytes())
 	if err != nil || string(binary) != "windows binary" {
 		t.Fatalf("binary = %q, error = %v", binary, err)
 	}
@@ -372,9 +372,9 @@ func replacementBinary(t *testing.T, fallback []byte) []byte {
 
 func testBinaryName() string {
 	if runtime.GOOS == "windows" {
-		return "jstack.exe"
+		return "squirrel.exe"
 	}
-	return "jstack"
+	return "squirrel"
 }
 
 func TestSetupAppliesOnlyWithSavedPicks(t *testing.T) {

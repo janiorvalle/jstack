@@ -24,7 +24,7 @@ def description(path):
 
 def build():
     principles, workflows = [], []
-    skip = vendored() | {"jstack-mode"}
+    skip = vendored() | {"squirrel"}
     for name in sorted(os.listdir(SKILLS)):
         if name in skip:
             continue

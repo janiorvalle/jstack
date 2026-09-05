@@ -7,10 +7,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/janiorvalle/jstack/internal/harness"
-	"github.com/janiorvalle/jstack/internal/letter"
-	"github.com/janiorvalle/jstack/internal/skills"
-	"github.com/janiorvalle/jstack/internal/tools"
+	"github.com/janiorvalle/squirrel/internal/harness"
+	"github.com/janiorvalle/squirrel/internal/letter"
+	"github.com/janiorvalle/squirrel/internal/skills"
+	"github.com/janiorvalle/squirrel/internal/tools"
 )
 
 // Session is one run of setup: the embedded assets, the saved config, and
@@ -149,7 +149,7 @@ func (s *Session) PickSources(picks map[string]string) error {
 			return renameStop(collision)
 		}
 		if !holds(collision, source) {
-			return fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in %s; it is in %s", collision.Name, source, strings.Join(collision.Sources, " and "))
+			return fmt.Errorf("[SQUIRREL-OVERRIDE] skill %q is not in %s; it is in %s", collision.Name, source, strings.Join(collision.Sources, " and "))
 		}
 		s.gathered.picks[collision.Name] = source
 	}

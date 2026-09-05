@@ -14,7 +14,7 @@ concurrency:
 jobs:
   release:
     name: Verify and release
-    if: github.repository == 'janiorvalle/jstack'
+    if: github.repository == 'janiorvalle/squirrel'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: release

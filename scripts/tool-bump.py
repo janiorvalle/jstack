@@ -18,7 +18,7 @@ PINNED = re.compile(r"^- Install: `npm install -g ([^@\s`]+)@(\d+\.\d+\.\d+(?:[-
 REPO = re.compile(r"^- Repo: (\S+)$", re.M)
 
 def npm_latest(package):
-    request = urllib.request.Request(f"https://registry.npmjs.org/{package}/latest", headers={"User-Agent": "jstack-tool-bump"})
+    request = urllib.request.Request(f"https://registry.npmjs.org/{package}/latest", headers={"User-Agent": "squirrel-tool-bump"})
     return json.load(urllib.request.urlopen(request, timeout=60))["version"]
 
 def sections(text):

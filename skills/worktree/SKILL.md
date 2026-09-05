@@ -11,8 +11,8 @@ Every task gets its own worktree, and every worktree has exactly one owner. A lo
 
 A JSON file listing who owns what, one entry per worktree.
 
-- Default path: `~/.config/jstack/worktree-locks.json`
-- Override: `JSTACK_WORKTREE_REGISTRY=/path/to/file.json`
+- Default path: `~/.config/squirrel/worktree-locks.json`
+- Override: `SQUIRREL_WORKTREE_REGISTRY=/path/to/file.json`
 - Remote hosts keep their own registry at the same default path. A remote worktree operated from a local session also goes in the local registry, with the host name and the remote path.
 
 Read and write it with `scripts/worktree_lock.py` from this skill. It takes a file lock so two agents can't clobber the file. Without the script, edit the JSON by hand in the same shape and keep everyone else's entries.

@@ -1,4 +1,4 @@
-module github.com/janiorvalle/jstack
+module github.com/janiorvalle/squirrel
 
 go 1.24.0
 

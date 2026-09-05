@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for pitching in. jstack is opinionated on purpose, so most contributions are one of three things: a skill that's wrong about how something works, a skill that reads like a machine wrote it, or a gap the flow doesn't cover.
+Thanks for pitching in. squirrel is opinionated on purpose, so most contributions are one of three things: a skill that's wrong about how something works, a skill that reads like a machine wrote it, or a gap the flow doesn't cover.
 
 ## Setup
 

@@ -12,7 +12,7 @@ Scan the repos on this machine, show what's open, merge what you approve. Built 
 Everything is overridable in the prompt. Defaults, in order of precedence:
 
 1. Words in the prompt. "dir=~/work", "org=my-org", "exclude foo, bar".
-2. `~/.config/jstack/review-prs.json`, if it exists.
+2. `~/.config/squirrel/review-prs.json`, if it exists.
 3. Built in: directory `~/code`, no org filter, no excludes.
 
 The config file:

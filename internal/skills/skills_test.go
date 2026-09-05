@@ -11,10 +11,10 @@ import (
 )
 
 func source() []Source {
-	return []Source{{Name: "jstack", Files: jstackFiles()}}
+	return []Source{{Name: "squirrel", Files: squirrelFiles()}}
 }
 
-func jstackFiles() fstest.MapFS {
+func squirrelFiles() fstest.MapFS {
 	return fstest.MapFS{
 		"how/SKILL.md":    {Data: []byte("how\n")},
 		"voice/SKILL.md":  {Data: []byte("voice v2\n")},
@@ -28,7 +28,7 @@ func jstackFiles() fstest.MapFS {
 }
 
 // repo is a skills repo of the human's own: one skill of its own and one
-// named the same as a jstack skill.
+// named the same as a squirrel skill.
 func repo() Source {
 	return Source{Name: "me/work-skills", Files: fstest.MapFS{
 		"deploy/SKILL.md": {Data: []byte("deploy\n")},
@@ -71,7 +71,7 @@ func failRenamesOutside(t *testing.T, tree string) {
 func failRenameInto(t *testing.T, target string) {
 	t.Helper()
 	rename = func(oldPath, newPath string) error {
-		if newPath == target && strings.Contains(oldPath, ".jstack-staging-") {
+		if newPath == target && strings.Contains(oldPath, ".squirrel-staging-") {
 			return &os.LinkError{Op: "rename", Old: oldPath, New: newPath, Err: syscall.EACCES}
 		}
 		return os.Rename(oldPath, newPath)
@@ -86,7 +86,7 @@ func assertNoWorkFolders(t *testing.T, dest string) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".jstack-") {
+		if strings.HasPrefix(entry.Name(), ".squirrel-") {
 			t.Fatalf("work folder left behind in dest: %s", entry.Name())
 		}
 	}
@@ -106,7 +106,7 @@ func TestPlanGroupsByWhatWouldChange(t *testing.T) {
 	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v1\n")
 	write(t, filepath.Join(dest, "voice", "notes.md"), "notes\n")
 	write(t, filepath.Join(dest, "mine", "SKILL.md"), "local skill\n")
-	write(t, filepath.Join(dest, ".jstack-backup", "x"), "")
+	write(t, filepath.Join(dest, ".squirrel-backup", "x"), "")
 	plan, err := PlanFor(source(), nil, dest)
 	if err != nil {
 		t.Fatal(err)
@@ -192,7 +192,7 @@ func TestLocalSkillDifferingOnlyInCaseIsNeverOverwritten(t *testing.T) {
 		return
 	}
 	_, err := PlanFor(source, nil, dest)
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-CASE") || !strings.Contains(err.Error(), `local skill "Deploy"`) {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-SKILLS-CASE") || !strings.Contains(err.Error(), `local skill "Deploy"`) {
 		t.Fatalf("case-insensitive disk: err = %v", err)
 	}
 }
@@ -227,7 +227,7 @@ func TestCollisionsNameEverySourceHoldingASkill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(collisions) != 1 || collisions[0].Name != "voice" || strings.Join(collisions[0].Sources, ",") != "jstack,me/work-skills,me/more" {
+	if len(collisions) != 1 || collisions[0].Name != "voice" || strings.Join(collisions[0].Sources, ",") != "squirrel,me/work-skills,me/more" {
 		t.Fatalf("collisions = %+v", collisions)
 	}
 	if none, _ := Collisions(source()); len(none) != 0 {
@@ -240,14 +240,14 @@ func TestPlanTakesACollidingSkillFromThePickedSource(t *testing.T) {
 	write(t, filepath.Join(dest, "voice", "SKILL.md"), "voice v2\n")
 	write(t, filepath.Join(dest, "voice", "notes.md"), "notes\n")
 	sources := append(source(), repo())
-	kept, err := PlanFor(sources, map[string]string{"voice": "jstack"}, dest)
+	kept, err := PlanFor(sources, map[string]string{"voice": "squirrel"}, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if names(kept.Same) != "voice" || names(kept.New) != "deploy,how,why" {
-		t.Fatalf("kept jstack's: %+v", kept)
+		t.Fatalf("kept squirrel's: %+v", kept)
 	}
-	if kept.New[0].Source.Name != "me/work-skills" || kept.New[1].Source.Name != "jstack" {
+	if kept.New[0].Source.Name != "me/work-skills" || kept.New[1].Source.Name != "squirrel" {
 		t.Fatalf("sources = %s, %s", kept.New[0].Source.Name, kept.New[1].Source.Name)
 	}
 	overridden, err := PlanFor(sources, map[string]string{"voice": "me/work-skills"}, dest)
@@ -264,7 +264,7 @@ func TestPlanTakesACollidingSkillFromThePickedSource(t *testing.T) {
 		t.Fatalf("installed voice = %q", got)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "voice", "notes.md")); !os.IsNotExist(err) {
-		t.Fatal("jstack's notes.md survived the override")
+		t.Fatal("squirrel's notes.md survived the override")
 	}
 }
 
@@ -283,7 +283,7 @@ func TestSkillsFromASecondSourceAreOwnedNotLocal(t *testing.T) {
 
 func TestUnreadableRepoSourceNamesTheClone(t *testing.T) {
 	_, err := Names(Source{Name: "me/work-skills", Files: os.DirFS(filepath.Join(t.TempDir(), "missing"))})
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-SOURCE") || !strings.Contains(err.Error(), "me/work-skills") || !strings.Contains(err.Error(), "~/.jstack/repos") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-SKILLS-SOURCE") || !strings.Contains(err.Error(), "me/work-skills") || !strings.Contains(err.Error(), "~/.squirrel/repos") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -447,7 +447,7 @@ func TestApplyPutsTheOldSkillBackWhenTheSwapFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = Apply(dest, plan, backup)
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), "back as it was") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-SKILLS-COPY") || !strings.Contains(err.Error(), "back as it was") {
 		t.Fatalf("err = %v", err)
 	}
 	for path, want := range map[string]string{
@@ -488,7 +488,7 @@ func TestApplyFailureLeavesEachSkillWholeAndNoStaging(t *testing.T) {
 	}
 	write(t, filepath.Join(dest, "why", "mine.md"), "appeared after the plan\n")
 	err = Apply(dest, plan, backup)
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-SKILLS-COPY") || !strings.Contains(err.Error(), `"why"`) {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-SKILLS-COPY") || !strings.Contains(err.Error(), `"why"`) {
 		t.Fatalf("err = %v", err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(dest, "voice", "SKILL.md")); string(got) != "voice v1\n" {

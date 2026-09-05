@@ -1,4 +1,4 @@
-title = "jstack gitleaks configuration"
+title = "squirrel gitleaks configuration"
 
 [extend]
 useDefault = true
