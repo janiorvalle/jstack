@@ -9,12 +9,14 @@ import (
 )
 
 // Config is what setup remembers between runs: the harnesses the human
-// picked, the skills repos they named, whether they were asked for one,
-// which source each colliding skill name comes from, "jstack" or
-// "owner/name", and the folders their repos live in, with whether they
-// were asked for those.
+// picked, the ones the harness screen offered them, so one found since is
+// offered checked while one they unchecked stays unchecked, the skills
+// repos they named, whether they were asked for one, which source each
+// colliding skill name comes from, "jstack" or "owner/name", and the
+// folders their repos live in, with whether they were asked for those.
 type Config struct {
 	Harnesses       []string          `json:"harnesses"`
+	HarnessesFound  []string          `json:"harnesses_found,omitempty"`
 	SkillRepos      []string          `json:"skill_repos,omitempty"`
 	SkillReposAsked bool              `json:"skill_repos_asked,omitempty"`
 	SkillOverrides  map[string]string `json:"skill_overrides,omitempty"`

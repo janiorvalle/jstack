@@ -209,6 +209,7 @@ func options(t *testing.T, home string, shell *fakeShell, stdin string) (Options
 // undeclared repo, nil tools take what the flags agreed to.
 type script struct {
 	harnesses []string
+	found     []string
 	skillRepo string
 	picks     map[string]string
 	reposDirs []string
@@ -230,7 +231,7 @@ func guided(t *testing.T, opts Options, given script) error {
 	if err != nil {
 		return err
 	}
-	answers := Answers{Harnesses: given.harnesses, SkillRepoAsked: true, ReposDirsAsked: true, Tools: map[string]bool{}}
+	answers := Answers{Harnesses: given.harnesses, HarnessesFound: given.found, SkillRepoAsked: true, ReposDirsAsked: true, Tools: map[string]bool{}}
 	if answers.Harnesses == nil {
 		for _, choice := range choices {
 			if choice.Checked {
@@ -546,6 +547,21 @@ func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
 	}
 	if got := strings.Join(checked(t, opts), ","); got != "claude,codex" {
 		t.Fatalf("checked = %q, want the new Codex offered checked", got)
+	}
+	if err := guided(t, opts, script{harnesses: []string{"claude"}, found: []string{"claude", "codex"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want Codex to stay unchecked once offered and left out", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude,cursor" {
+		t.Fatalf("checked = %q, want only the newly found Cursor added", got)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+		t.Fatalf("config = %q", got)
 	}
 	opts.Harness = "pi"
 	if got := strings.Join(checked(t, opts), ","); got != "pi" {

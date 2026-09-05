@@ -175,6 +175,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	answers := Answers{
 		Harnesses:      harness.Keys(picked),
+		HarnessesFound: session.config.HarnessesFound,
 		SkillRepos:     repoNames,
 		SkillRepoAsked: asked,
 		ReposDirs:      reposDirs,

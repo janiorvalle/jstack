@@ -100,6 +100,7 @@ type flow struct {
 
 	harnesses     []string
 	harnessesInit bool
+	found         []string
 	skillRepo     string
 	collisions    []collisionScratch
 	reposPick     string
@@ -167,8 +168,8 @@ func (f *flow) ask(field huh.Field, summary func() string) (outcome, error) {
 	return s.outcome, nil
 }
 
-// harnessScreen is every run: the checkbox list of harnesses, found ones
-// and saved picks checked. One Enter when nothing changed.
+// harnessScreen is every run: the checkbox list of harnesses, saved picks
+// and newly found ones checked. One Enter when nothing changed.
 func (f *flow) harnessScreen(direction) (outcome, error) {
 	choices, err := f.session.Harnesses()
 	if err != nil {
@@ -176,8 +177,12 @@ func (f *flow) harnessScreen(direction) (outcome, error) {
 	}
 	names := map[string]string{}
 	options := make([]huh.Option[string], 0, len(choices))
+	f.found = nil
 	for _, choice := range choices {
 		names[choice.Key] = choice.Name
+		if choice.Found {
+			f.found = append(f.found, choice.Key)
+		}
 		state := "not found"
 		if choice.Found {
 			state = "found"
@@ -678,6 +683,7 @@ func (f *flow) collect() (setup.Answers, error) {
 	}
 	answers := setup.Answers{
 		Harnesses:      f.harnesses,
+		HarnessesFound: f.found,
 		SkillRepos:     names,
 		SkillRepoAsked: true,
 		ReposDirs:      dirs,

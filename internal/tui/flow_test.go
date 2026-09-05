@@ -359,6 +359,32 @@ func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
 	}
 }
 
+func TestHarnessUncheckedOnPurposeStaysUnchecked(t *testing.T) {
+	home := homeWithClaude(t)
+	shell := machine().withEverythingCurrent()
+	settled(t, home, shell)
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts, out := options(t, home, shell)
+	if _, err := guided(t, opts, on("Install into which harnesses?", down, space, enter)); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "harnesses  Claude Code\n", "Everything is in place. Nothing to apply.")
+	opts, _ = options(t, home, shell)
+	script, err := guided(t, opts, on("Install into which harnesses?", enter))
+	if err != nil {
+		t.Fatal(err)
+	}
+	harnesses := script.frame("Install into which harnesses?")
+	if !strings.Contains(harnesses, "✓ Claude Code") || !strings.Contains(harnesses, "• Codex") {
+		t.Fatalf("Codex came back checked after being left out:\n%s", harnesses)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex", "skills")); err == nil {
+		t.Fatal("skills were written into the harness left out")
+	}
+}
+
 func TestEscGoesBackAScreenAndTheAnswerStays(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := machine()

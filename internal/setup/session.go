@@ -49,7 +49,8 @@ func Start(opts Options) (*Session, error) {
 
 // HarnessChoice is one row of the harness screen. Checked is the pick to
 // start from: --harness when given, else the saved picks plus every
-// harness found, so one installed since the last run is offered.
+// harness found that the screen never offered before, so one installed
+// since the last run is offered while one unchecked on purpose stays so.
 type HarnessChoice struct {
 	Key     string
 	Name    string
@@ -64,9 +65,13 @@ func (s *Session) Harnesses() ([]HarnessChoice, error) {
 	if err != nil {
 		return nil, err
 	}
+	offered := map[string]bool{}
+	for _, key := range s.config.HarnessesFound {
+		offered[key] = true
+	}
 	var choices []HarnessChoice
 	for _, entry := range s.rows {
-		checked := contains(picked, entry) || source == fromConfig && entry.Installed()
+		checked := contains(picked, entry) || source == fromConfig && entry.Installed() && !offered[entry.Key]
 		choices = append(choices, HarnessChoice{Key: entry.Key, Name: entry.Name, Where: rootWithVariable(s.opts.Home, entry), Found: entry.Installed(), Checked: checked})
 	}
 	return choices, nil
@@ -276,9 +281,11 @@ func (s *Session) toolStatuses(ctx context.Context) []toolStatus {
 }
 
 // Answers is everything a run decides, from the flags, the config, and the
-// screens, in the values the plan and the apply take.
+// screens, in the values the plan and the apply take. HarnessesFound is
+// what the harness screen offered, when it was shown.
 type Answers struct {
 	Harnesses      []string
+	HarnessesFound []string
 	SkillRepos     []string
 	SkillRepoAsked bool
 	ReposDirs      []string
@@ -368,6 +375,7 @@ func (s *Session) Apply(ctx context.Context, p *Plan, answers Answers) error {
 	}
 	saved := Config{
 		Harnesses:       harness.Keys(p.picked),
+		HarnessesFound:  answers.HarnessesFound,
 		SkillRepos:      answers.SkillRepos,
 		SkillReposAsked: answers.SkillRepoAsked,
 		SkillOverrides:  rememberOverrides(s.config.SkillOverrides, p.current.catalog.unreachable(), p.current.catalog.picks),
