@@ -258,12 +258,26 @@ func planRepos(home string, reposDirs []string) reposReport {
 	return report
 }
 
+// installedVersion is what the tool the person runs prints: the version
+// line runs on their own PATH first, since the shell's puts ~/.local/bin
+// ahead of it and a stale copy there would answer for the Homebrew binary
+// they use, and on the shell's only when their PATH has no such tool, the
+// just-installed case.
 func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string {
 	if tool.Version == "" {
 		return ""
 	}
+	if line, ok := onPersonsPath(opts, tool.Version); ok {
+		if version := versionPrinted(ctx, opts, line); version != "" {
+			return version
+		}
+	}
+	return versionPrinted(ctx, opts, tool.Version)
+}
+
+func versionPrinted(ctx context.Context, opts Options, line string) string {
 	var output bytes.Buffer
-	if err := opts.Shell(ctx, tool.Version, &output); err != nil {
+	if err := opts.Shell(ctx, line, &output); err != nil {
 		return ""
 	}
 	return tools.ParseVersion(output.String())

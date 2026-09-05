@@ -96,25 +96,38 @@ func (l *locator) pathOf(tool tools.Tool) string {
 	if tool.Binary == "" {
 		return ""
 	}
-	if path := l.firstLine(resolveLine(runtime.GOOS, tool.Binary, l.opts.Getenv("PATH"))); path != "" {
-		return path
+	if line, ok := onPersonsPath(l.opts, resolveLine(runtime.GOOS, tool.Binary)); ok {
+		if path := l.firstLine(line); path != "" {
+			return path
+		}
 	}
-	return l.firstLine(resolveLine(runtime.GOOS, tool.Binary, ""))
+	return l.firstLine(resolveLine(runtime.GOOS, tool.Binary))
 }
 
-// resolveLine prints the path of a binary, in the shell of the OS, on the
-// PATH given, or on the shell's own when it's "".
-func resolveLine(operatingSystem, binary, path string) string {
+// resolveLine prints the path of a binary on PATH, in the shell of the OS.
+func resolveLine(operatingSystem, binary string) string {
 	if operatingSystem == "windows" {
-		if path == "" {
-			return "(Get-Command " + binary + ").Source"
-		}
-		return "$env:Path = " + quote(operatingSystem, path) + "; (Get-Command " + binary + ").Source"
+		return "(Get-Command " + binary + ").Source"
 	}
+	return "command -v " + binary
+}
+
+// onPersonsPath is the line run on the PATH setup started with, the
+// person's own, instead of the shell's, which puts the installer's folder
+// first. False when setup started with no PATH at all, where the shell's
+// is the only one there is.
+func onPersonsPath(opts Options, command string) (string, bool) {
+	return onPath(runtime.GOOS, opts.Getenv("PATH"), command)
+}
+
+func onPath(operatingSystem, path, command string) (string, bool) {
 	if path == "" {
-		return "command -v " + binary
+		return "", false
 	}
-	return "PATH=" + quote(operatingSystem, path) + " command -v " + binary
+	if operatingSystem == "windows" {
+		return "$env:Path = " + quote(operatingSystem, path) + "; " + command, true
+	}
+	return "PATH=" + quote(operatingSystem, path) + " " + command, true
 }
 
 // homebrewFormula is the formula a binary belongs to, read off its real

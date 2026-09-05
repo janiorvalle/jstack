@@ -39,7 +39,7 @@ func linked(t *testing.T, link, target string) {
 // start of the lookup that runs on it.
 const userPath = "/usr/bin:/bin"
 
-var onPath = "PATH=" + quote("darwin", userPath) + " "
+var onUserPath = "PATH=" + quote("darwin", userPath) + " "
 
 // owned is a machine with every tool outdated and each binary where its
 // owner put it: TruffleHog linked from Homebrew's bin into its Cellar, bgr
@@ -54,14 +54,14 @@ func owned(t *testing.T, home string) (*fakeShell, Options) {
 	shell := &fakeShell{
 		present: map[string]bool{"check-git": true},
 		versions: map[string]string{
-			"trufflehog --version":           "trufflehog 3.97.0",
-			"bgr --version":                  "bgr 1.6.0",
-			"browser --version":              "browser 0.35.0",
-			"brew --prefix":                  brew,
-			"npm prefix -g":                  node,
-			onPath + "command -v trufflehog": filepath.Join(brew, "bin", "trufflehog"),
-			onPath + "command -v bgr":        filepath.Join(home, ".local", "bin", "bgr"),
-			onPath + "command -v browser":    filepath.Join(node, "bin", "browser"),
+			onUserPath + "trufflehog --version":  "trufflehog 3.97.0",
+			onUserPath + "bgr --version":         "bgr 1.6.0",
+			onUserPath + "browser --version":     "browser 0.35.0",
+			"brew --prefix":                      brew,
+			"npm prefix -g":                      node,
+			onUserPath + "command -v trufflehog": filepath.Join(brew, "bin", "trufflehog"),
+			onUserPath + "command -v bgr":        filepath.Join(home, ".local", "bin", "bgr"),
+			onUserPath + "command -v browser":    filepath.Join(node, "bin", "browser"),
 		},
 		latest: map[string]string{"TruffleHog": "v3.97.4", "bgr": "v1.7.0"},
 	}
@@ -127,7 +127,7 @@ func TestTheFormulaIsReadOffTheCellarPath(t *testing.T) {
 	shell, opts := owned(t, home)
 	brew := filepath.Join(home, "brew")
 	linked(t, filepath.Join(brew, "bin", "bgr"), filepath.Join(brew, "Cellar", "better-git-review", "1.6.0", "bin", "bgr"))
-	shell.versions[onPath+"command -v bgr"] = filepath.Join(brew, "bin", "bgr")
+	shell.versions[onUserPath+"command -v bgr"] = filepath.Join(brew, "bin", "bgr")
 	if got := resolved(t, opts)["bgr"].line(); got != "brew upgrade better-git-review" {
 		t.Fatalf("bgr update = %q", got)
 	}
@@ -142,8 +142,8 @@ func TestAFileInHomebrewsBinThatIsNotBrewsLinkIsSomebodyElses(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, stray, "#!/bin/sh\n")
-	shell.versions["bgr --version"] = "bgr 1.7.0"
-	shell.versions["browser --version"] = "browser 0.36.0"
+	shell.versions[onUserPath+"bgr --version"] = "bgr 1.7.0"
+	shell.versions[onUserPath+"browser --version"] = "browser 0.36.0"
 	opts.UpdateTools = true
 	opts.Yes = true
 	status := resolved(t, opts)["TruffleHog"]
@@ -168,7 +168,7 @@ func TestAnNpmLineBinaryOutsideNodesModulesIsSomebodyElses(t *testing.T) {
 	shell, opts := owned(t, home)
 	elsewhere := filepath.Join(home, "pnpm", "browser")
 	write(t, elsewhere, "#!/bin/sh\n")
-	shell.versions[onPath+"command -v browser"] = elsewhere
+	shell.versions[onUserPath+"command -v browser"] = elsewhere
 	status := resolved(t, opts)["browser"]
 	if status.actionable() || status.owner != bySomethingElse || status.path != elsewhere {
 		t.Fatalf("status = %+v", status)
@@ -184,7 +184,7 @@ func TestALinkInTheInstallersFolderThatLeadsElsewhereIsSomebodyElses(t *testing.
 		t.Fatal(err)
 	}
 	linked(t, link, filepath.Join(home, ".asdf", "installs", "bgr", "1.6.0", "bin", "bgr"))
-	shell.versions[onPath+"command -v bgr"] = link
+	shell.versions[onUserPath+"command -v bgr"] = link
 	status := resolved(t, opts)["bgr"]
 	if status.actionable() || status.owner != bySomethingElse {
 		t.Fatalf("status = %+v", status)
@@ -205,7 +205,7 @@ func TestAFileInsideALinkedInstallersFolderIsTheInstallers(t *testing.T) {
 	if err := os.Symlink(elsewhere, filepath.Join(home, ".local", "bin")); err != nil {
 		t.Fatal(err)
 	}
-	shell.versions[onPath+"command -v bgr"] = filepath.Join(home, ".local", "bin", "bgr")
+	shell.versions[onUserPath+"command -v bgr"] = filepath.Join(home, ".local", "bin", "bgr")
 	if status := resolved(t, opts)["bgr"]; status.owner != byInstaller || status.line() != "curl bgr | sh" {
 		t.Fatalf("status = %+v", status)
 	}
@@ -218,9 +218,10 @@ func TestAStaleCopyInTheInstallersFolderOffThePersonsPathDoesNotHideBrews(t *tes
 	stale := filepath.Join(home, ".local", "bin", "trufflehog")
 	write(t, stale, "#!/bin/sh\n")
 	shell.versions["command -v trufflehog"] = stale
+	shell.versions["trufflehog --version"] = "trufflehog 3.90.0"
 	status := resolved(t, opts)["TruffleHog"]
-	if status.owner != byHomebrew || status.line() != "brew upgrade trufflehog" || status.path != filepath.Join(home, "brew", "bin", "trufflehog") {
-		t.Fatalf("status = %+v, want the binary the person's PATH runs, not the stale copy setup's shell puts first", status)
+	if status.owner != byHomebrew || status.line() != "brew upgrade trufflehog" || status.path != filepath.Join(home, "brew", "bin", "trufflehog") || status.installed != "v3.97.0" {
+		t.Fatalf("status = %+v, want the binary and the version the person's PATH runs, not the stale copy setup's shell puts first", status)
 	}
 	if strings.Count(strings.Join(shell.commands, ";"), "command -v trufflehog") != 2 {
 		t.Fatalf("looked on the shell's PATH after the person's found it: %v", shell.commands)
@@ -231,9 +232,11 @@ func TestTheShellsPathIsTheFallbackWhenThePersonsFindsNothing(t *testing.T) {
 	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
-	delete(shell.versions, onPath+"command -v bgr")
+	delete(shell.versions, onUserPath+"command -v bgr")
+	delete(shell.versions, onUserPath+"bgr --version")
 	shell.versions["command -v bgr"] = filepath.Join(home, ".local", "bin", "bgr")
-	if status := resolved(t, opts)["bgr"]; status.owner != byInstaller || status.line() != "curl bgr | sh" {
+	shell.versions["bgr --version"] = "bgr 1.6.0"
+	if status := resolved(t, opts)["bgr"]; status.owner != byInstaller || status.line() != "curl bgr | sh" || status.installed != "v1.6.0" {
 		t.Fatalf("status = %+v", status)
 	}
 }
@@ -242,10 +245,10 @@ func TestPrefixesAreReadOnceAndOnlyForOutdatedTools(t *testing.T) {
 	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
-	shell.versions["bgr --version"] = "bgr 1.7.0"
+	shell.versions[onUserPath+"bgr --version"] = "bgr 1.7.0"
 	resolved(t, opts)
 	commands := strings.Join(shell.commands, ";")
-	if strings.Count(commands, "brew --prefix") != 1 || strings.Count(commands, "npm prefix -g") != 1 || strings.Count(commands, "command -v bgr") != 1 || strings.Count(commands, "command -v trufflehog") != 2 || !strings.Contains(commands, onPath+"command -v trufflehog") {
+	if strings.Count(commands, "brew --prefix") != 1 || strings.Count(commands, "npm prefix -g") != 1 || strings.Count(commands, "command -v bgr") != 1 || strings.Count(commands, "command -v trufflehog") != 2 || !strings.Contains(commands, onUserPath+"command -v trufflehog") {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }
@@ -281,17 +284,23 @@ func TestWithinIsTheFolderOrInsideIt(t *testing.T) {
 	}
 }
 
+func TestOnPathRunsALineOnThePersonsPath(t *testing.T) {
+	if got, ok := onPath("darwin", "/usr/bin:/opt/homebrew/bin", "roast --version"); !ok || got != "PATH='/usr/bin:/opt/homebrew/bin' roast --version" {
+		t.Fatalf("darwin = %q, %v", got, ok)
+	}
+	if got, ok := onPath("windows", `C:\bin`, "roast --version"); !ok || got != `$env:Path = 'C:\bin'; roast --version` {
+		t.Fatalf("windows = %q, %v", got, ok)
+	}
+	if _, ok := onPath("darwin", "", "roast --version"); ok {
+		t.Fatal("no PATH at all still wraps the line")
+	}
+}
+
 func TestResolveLineIsTheShellsOwn(t *testing.T) {
-	if got := resolveLine("darwin", "roast", "/usr/bin:/opt/homebrew/bin"); got != "PATH='/usr/bin:/opt/homebrew/bin' command -v roast" {
-		t.Fatalf("darwin on the person's PATH = %q", got)
-	}
-	if got := resolveLine("windows", "roast", `C:\bin`); got != `$env:Path = 'C:\bin'; (Get-Command roast).Source` {
-		t.Fatalf("windows on the person's PATH = %q", got)
-	}
-	if got := resolveLine("darwin", "roast", ""); got != "command -v roast" {
+	if got := resolveLine("darwin", "roast"); got != "command -v roast" {
 		t.Fatalf("darwin = %q", got)
 	}
-	if got := resolveLine("windows", "roast", ""); got != "(Get-Command roast).Source" {
+	if got := resolveLine("windows", "roast"); got != "(Get-Command roast).Source" {
 		t.Fatalf("windows = %q", got)
 	}
 }
