@@ -463,11 +463,7 @@ func (f *flow) trackerScreensFor(index int) []step {
 		if !ok {
 			return skip
 		}
-		argument := current.argument
-		if argument == "" {
-			argument = chosen.Default
-		}
-		return setup.TrackerLine(chosen, argument)
+		return lineFor(chosen, current.argument)
 	}
 	pick := func(direction) (outcome, error) {
 		if f.covered(index) {
@@ -567,11 +563,7 @@ func (f *flow) trackerAnswers() []setup.TrackerAnswer {
 		if !answer.Skip {
 			for _, entry := range setup.Backends() {
 				if entry.Key == source.backend {
-					argument := source.argument
-					if argument == "" {
-						argument = entry.Default
-					}
-					answer.Line = setup.TrackerLine(entry, argument)
+					answer.Line = lineFor(entry, source.argument)
 				}
 			}
 			answer.OpenPR = source.openPR && current.question.PROffer
@@ -582,6 +574,19 @@ func (f *flow) trackerAnswers() []setup.TrackerAnswer {
 		}
 	}
 	return answers
+}
+
+// lineFor is the tracker line for a backend and what was typed for it. A
+// backend that takes nothing ignores what was typed for another one
+// before an Esc; one that takes something gets its default for nothing.
+func lineFor(chosen setup.Backend, typed string) string {
+	if chosen.Argument == "" {
+		return setup.TrackerLine(chosen, "")
+	}
+	if typed == "" {
+		return setup.TrackerLine(chosen, chosen.Default)
+	}
+	return setup.TrackerLine(chosen, typed)
 }
 
 // toolsScreen is the checkbox list of tools setup could install or update.

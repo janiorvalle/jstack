@@ -184,6 +184,9 @@ func TestAFileInsideALinkedInstallersFolderIsTheInstallers(t *testing.T) {
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
 	elsewhere := filepath.Join(home, "elsewhere", "bin")
+	if err := os.MkdirAll(filepath.Dir(elsewhere), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Rename(filepath.Join(home, ".local", "bin"), elsewhere); err != nil {
 		t.Fatal(err)
 	}

@@ -537,6 +537,32 @@ func TestSameAnswerForTheRestIsOneEnterAndSkipsTheirScreens(t *testing.T) {
 	}
 }
 
+func TestBackendSwitchedAfterEscDropsTheOtherBackendsArgument(t *testing.T) {
+	home := homeWithRepos(t)
+	opts, out := options(t, home, machine())
+	_, err := guided(t, opts,
+		on("Install into which harnesses?", enter),
+		on("skills repo of your own", enter),
+		on("Where do your repos live?", enter),
+		on("bravo declares no tracker", down, down, down, enter),
+		on("Linear team key", typed("SR"), enter),
+		on("Open a PR for bravo?", esc),
+		on("Linear team key", esc),
+		on("bravo declares no tracker", tea.KeyMsg{Type: tea.KeyUp}, enter),
+		on("Open a PR for bravo?", typed("n")),
+		on("Same answer, Tracker: github-issues, for the 1 remaining?", typed("y")),
+		on("Which tools?", enter),
+		on("Apply?", enter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  wrote "Tracker: github-issues" to`, `charlie  wrote "Tracker: github-issues" to`)
+	if strings.Contains(out.String(), "github-issues SR") {
+		t.Fatalf("the Linear key leaked into the GitHub Issues line:\n%s", out.String())
+	}
+}
+
 func TestSkippedRepoIsLeftAlone(t *testing.T) {
 	home := homeWithRepos(t)
 	opts, out := options(t, home, machine())
