@@ -121,15 +121,28 @@ type collisionScratch struct {
 	pick    string
 }
 
-// backendScratch is one backend screen's answers as the screens collect
-// them: the checkouts checked for it and the one thing it needs, typed
-// once for all of them. shown is whether the screen came up yet, since
-// the origin's guesses come checked the first time only.
+// backendScratch is one backend's answers as the screens collect them: a
+// round per key typed, in the order they were typed, since a person's
+// repos sit in several teams. A backend that takes no key, or has a
+// default for the one thing it takes, has the one round.
 type backendScratch struct {
-	backend  setup.Backend
-	dirs     []string
-	argument string
-	shown    bool
+	backend setup.Backend
+	rounds  []roundScratch
+}
+
+// roundScratch is one key and the checkouts checked for it. shown is
+// whether its list came up yet, since the origin's guesses come checked
+// the first time only.
+type roundScratch struct {
+	key   string
+	dirs  []string
+	shown bool
+}
+
+// perKey reports whether a backend is asked in rounds: it takes a key and
+// has no default for it, so each key is a team of the person's own and the repos in it are its own list.
+func perKey(chosen setup.Backend) bool {
+	return chosen.Argument != "" && chosen.Default == ""
 }
 
 const elsewhere = "elsewhere"
@@ -404,11 +417,13 @@ func (f *flow) reposDirs() ([]string, bool, error) {
 	return append(dirs, f.reposPick), true, nil
 }
 
-// trackerScreens asks about every repo that declares no tracker: one
-// checkbox list per backend, in the order the backends come, over the
-// repos no earlier screen took. Unchecked on every screen means skip, and
-// the next run remembers it. A backend with no repo left to offer is not
-// shown.
+// trackerScreens asks about every repo that declares no tracker, one
+// backend at a time in the order the backends come, over the repos no
+// earlier screen took. Linear asks in rounds: the team key, the repos in
+// that team, then the key again until Enter leaves it empty. GitHub Issues
+// and markdown tasks are one list each. Unchecked on every
+// screen means skip, and the next run remembers it. A screen with no
+// repo left to offer is not shown.
 func (f *flow) trackerScreens(entered direction) (outcome, error) {
 	dirs, _, err := f.reposDirs()
 	if err != nil {
@@ -419,13 +434,17 @@ func (f *flow) trackerScreens(entered direction) (outcome, error) {
 		f.questions = questions
 		f.trackers = nil
 		for _, backend := range setup.Backends() {
-			f.trackers = append(f.trackers, backendScratch{backend: backend})
+			f.trackers = append(f.trackers, backendScratch{backend: backend, rounds: []roundScratch{{}}})
 		}
 	}
 	f.repoPaths = len(dirs) > 1
 	steps := make([]step, 0, len(f.trackers))
 	for index := range f.trackers {
-		steps = append(steps, f.backendScreen(index))
+		if perKey(f.trackers[index].backend) {
+			steps = append(steps, f.keyRounds(index))
+		} else {
+			steps = append(steps, f.backendScreen(index))
+		}
 	}
 	return sequence(steps...)(entered)
 }
@@ -442,13 +461,19 @@ func sameQuestions(known, questions []setup.TrackerQuestion) bool {
 	return true
 }
 
-// offered is the repos the backend screen at index shows: every one no
-// earlier screen took.
-func (f *flow) offered(index int) []setup.TrackerQuestion {
+// offered is the repos a round shows: every one no earlier backend's
+// rounds and no earlier round of its own took.
+func (f *flow) offered(index, round int) []setup.TrackerQuestion {
 	taken := map[string]bool{}
-	for _, earlier := range f.trackers[:index] {
-		for _, dir := range earlier.dirs {
-			taken[dir] = true
+	for backendIndex, scratch := range f.trackers[:index+1] {
+		rounds := scratch.rounds
+		if backendIndex == index {
+			rounds = rounds[:round]
+		}
+		for _, earlier := range rounds {
+			for _, dir := range earlier.dirs {
+				taken[dir] = true
+			}
 		}
 	}
 	var offered []setup.TrackerQuestion
@@ -469,76 +494,193 @@ func (f *flow) repoLabel(question setup.TrackerQuestion) string {
 	return question.Repo
 }
 
-// backendScreen is one backend's checkbox list, with a second page for the
-// one thing the backend needs when any repo is checked. The first time the
-// screen comes up, the repos whose origin suggests this backend come
-// checked.
+// keyRounds is a backend asked per key. A round is its key screen then
+// the list of repos in that team; each key answered adds the next round,
+// and the backend ends on Enter with the key empty or when its list took
+// the last repo. Esc walks the rounds back. The backend's line is left
+// behind once, when it ends, so the terminal reads one line per backend.
+func (f *flow) keyRounds(index int) step {
+	current := &f.trackers[index]
+	return func(entered direction) (outcome, error) {
+		round, heading, shown := 0, forward, false
+		if entered == backward {
+			round, heading = len(current.rounds)-1, backward
+		}
+		for round >= 0 {
+			result, err := sequence(f.keyScreen(index, round), f.listScreen(index, round))(heading)
+			if err != nil {
+				return result, err
+			}
+			switch result {
+			case quit:
+				return quit, nil
+			case next:
+				shown, heading = true, forward
+			case back:
+				heading = backward
+			}
+			if heading == backward {
+				round--
+				continue
+			}
+			if result == skipped || current.rounds[round].key == "" {
+				current.rounds[round].dirs = nil
+				current.rounds = current.rounds[:round+1]
+				break
+			}
+			if round == len(current.rounds)-1 {
+				current.rounds = append(current.rounds, roundScratch{})
+			}
+			round++
+		}
+		if round < 0 {
+			return back, nil
+		}
+		if !shown {
+			return skipped, nil
+		}
+		fmt.Fprintln(f.out, current.summary())
+		return next, nil
+	}
+}
+
+// keyScreen is one round's key, Enter for none. Not shown when no repo is
+// left to give it.
+func (f *flow) keyScreen(index, round int) step {
+	current := &f.trackers[index]
+	return func(direction) (outcome, error) {
+		if len(f.offered(index, round)) == 0 {
+			return skipped, nil
+		}
+		chosen := current.backend
+		title := chosen.Label + " " + chosen.Argument + ", Enter for none"
+		if round > 0 {
+			title = "Another " + title
+		}
+		field := huh.NewInput().
+			Title(title).
+			Description("for example " + chosen.Example + ". The repos in it come next, then this screen again for another.").
+			Placeholder(chosen.Example).
+			Value(&current.rounds[round].key).
+			Validate(oneWord(chosen))
+		return f.ask(field, noLine)
+	}
+}
+
+// listScreen is one round's checkbox list, the repos in the team its key
+// names. Not shown for an empty key.
+func (f *flow) listScreen(index, round int) step {
+	current := &f.trackers[index]
+	return func(direction) (outcome, error) {
+		offered := f.offered(index, round)
+		key := current.rounds[round].key
+		if key == "" || len(offered) == 0 {
+			return skipped, nil
+		}
+		chosen := current.backend
+		title := fmt.Sprintf("Which repos track their work in %s %s %s?", chosen.Label, strings.TrimSuffix(chosen.Argument, " key"), key)
+		return f.ask(f.repoList(chosen, &current.rounds[round], offered, title), noLine)
+	}
+}
+
+// noLine is the summary of a screen that leaves nothing behind: a round's
+// screens, whose backend leaves its line when it ends.
+func noLine() string {
+	return ""
+}
+
+// backendScreen is a backend asked once: its checkbox list, with a second
+// page for the one thing it needs when any repo is checked.
 func (f *flow) backendScreen(index int) step {
 	current := &f.trackers[index]
 	return func(direction) (outcome, error) {
-		offered := f.offered(index)
+		offered := f.offered(index, 0)
 		if len(offered) == 0 {
 			return skipped, nil
 		}
-		guessed := 0
-		for _, question := range offered {
-			if question.Guess == current.backend.Key {
-				guessed++
-				if !current.shown {
-					current.dirs = append(current.dirs, question.Dir)
-				}
-			}
-		}
-		current.shown = true
-		options := make([]huh.Option[string], 0, len(offered))
-		for _, question := range offered {
-			options = append(options, huh.NewOption(f.repoLabel(question), question.Dir))
-		}
-		description := "Space toggles, Enter continues, / filters by name. Unchecked on every screen means skip."
-		if guessed > 0 {
-			description += "\n" + countOf(guessed, "repo") + " checked already, from the origin."
-		}
-		list := huh.NewMultiSelect[string]().
-			Title(fmt.Sprintf("Which repos track their work in %s?", current.backend.Label)).
-			Description(description).
-			Options(options...).
-			Value(&current.dirs)
+		round := &current.rounds[0]
+		list := f.repoList(current.backend, round, offered, fmt.Sprintf("Which repos track their work in %s?", current.backend.Label))
 		groups := []*huh.Group{huh.NewGroup(list)}
 		if current.backend.Argument != "" {
-			groups = append(groups, huh.NewGroup(argumentField(current)).WithHideFunc(func() bool { return len(current.dirs) == 0 }))
+			groups = append(groups, huh.NewGroup(argumentField(current.backend, round)).WithHideFunc(func() bool { return len(round.dirs) == 0 }))
 		}
 		return f.present(newPages(current.summary, groups...))
 	}
 }
 
-// argumentField takes the one thing a backend needs, once for every repo
-// checked on its screen.
-func argumentField(current *backendScratch) huh.Field {
-	chosen := current.backend
-	description := "for example " + chosen.Example
-	if chosen.Default != "" {
-		description = "Enter for " + chosen.Default
-	}
-	return huh.NewInput().
-		Title(chosen.Label + " " + chosen.Argument + ", the same for every repo checked").
-		Description(description).
-		Placeholder(chosen.Example).
-		Value(&current.argument).
-		Validate(func(typed string) error {
-			if typed == "" && chosen.Default == "" || strings.ContainsAny(typed, " \t") {
-				return fmt.Errorf("the %s is one word, for example %s", chosen.Argument, chosen.Example)
+// repoList is the checkbox list over the repos offered. The first time it
+// comes up, the repos whose origin suggests this backend come checked.
+func (f *flow) repoList(chosen setup.Backend, round *roundScratch, offered []setup.TrackerQuestion, title string) huh.Field {
+	guessed := 0
+	for _, question := range offered {
+		if question.Guess == chosen.Key {
+			guessed++
+			if !round.shown {
+				round.dirs = append(round.dirs, question.Dir)
 			}
-			return nil
-		})
+		}
+	}
+	round.shown = true
+	options := make([]huh.Option[string], 0, len(offered))
+	for _, question := range offered {
+		options = append(options, huh.NewOption(f.repoLabel(question), question.Dir))
+	}
+	description := "Space toggles, Enter continues, / filters by name. Unchecked on every screen means skip."
+	if guessed > 0 {
+		description += "\n" + countOf(guessed, "repo") + " checked already, from the origin."
+	}
+	return huh.NewMultiSelect[string]().
+		Title(title).
+		Description(description).
+		Options(options...).
+		Value(&round.dirs)
 }
 
-// summary is the line a backend screen leaves behind: the line's words and
-// how many repos get it.
+// argumentField takes the one thing a backend with a default needs, once
+// for every repo checked on its list.
+func argumentField(chosen setup.Backend, round *roundScratch) huh.Field {
+	return huh.NewInput().
+		Title(chosen.Label + " " + chosen.Argument + ", the same for every repo checked").
+		Description("Enter for " + chosen.Default).
+		Placeholder(chosen.Example).
+		Value(&round.key).
+		Validate(oneWord(chosen))
+}
+
+// oneWord rejects a key or folder with a space in it, since the tracker
+// line is read by words.
+func oneWord(chosen setup.Backend) func(string) error {
+	return func(typed string) error {
+		if strings.ContainsAny(typed, " \t") {
+			return fmt.Errorf("the %s is one word, for example %s", chosen.Argument, chosen.Example)
+		}
+		return nil
+	}
+}
+
+// summary is the line a backend leaves behind: each line its rounds
+// decided and how many repos get it, the same key twice counted as one.
 func (s *backendScratch) summary() string {
-	if len(s.dirs) == 0 {
+	var lines []string
+	counts := map[string]int{}
+	for _, round := range s.rounds {
+		if len(round.dirs) == 0 {
+			continue
+		}
+		line := strings.TrimPrefix(lineFor(s.backend, round.key), "Tracker: ")
+		if counts[line] == 0 {
+			lines = append(lines, line)
+		}
+		counts[line] += len(round.dirs)
+	}
+	if len(lines) == 0 {
 		return s.backend.Key + "  none"
 	}
-	return strings.TrimPrefix(lineFor(s.backend, s.argument), "Tracker: ") + "  " + countOf(len(s.dirs), "repo")
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts = append(parts, line+"  "+countOf(counts[line], "repo"))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func countOf(count int, noun string) string {
@@ -548,16 +690,18 @@ func countOf(count int, noun string) string {
 	return fmt.Sprintf("%d %ss", count, noun)
 }
 
-// trackerAnswers is what the backend screens decided, one per undeclared
-// repo: the line of the first screen that has it checked, or skip when
-// none does, and the PR when the one PR question said yes and the repo can
+// trackerAnswers is what the screens decided, one per undeclared repo:
+// the line of the first round that has it checked, or skip when none
+// does, and the PR when the one PR question said yes and the repo can
 // take one.
 func (f *flow) trackerAnswers() []setup.TrackerAnswer {
 	lines := map[string]string{}
 	for _, scratch := range f.trackers {
-		for _, dir := range scratch.dirs {
-			if _, taken := lines[dir]; !taken {
-				lines[dir] = lineFor(scratch.backend, scratch.argument)
+		for _, round := range scratch.rounds {
+			for _, dir := range round.dirs {
+				if _, taken := lines[dir]; !taken {
+					lines[dir] = lineFor(scratch.backend, round.key)
+				}
 			}
 		}
 	}

@@ -216,6 +216,7 @@ var (
 	space = tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
 	ctrlC = tea.KeyMsg{Type: tea.KeyCtrlC}
 	ctrlU = tea.KeyMsg{Type: tea.KeyCtrlU}
+	ctrlA = tea.KeyMsg{Type: tea.KeyCtrlA}
 )
 
 func typed(text string) tea.KeyMsg {
@@ -502,6 +503,20 @@ func homeWithRepos(t *testing.T) string {
 	return home
 }
 
+// homeWithTeams is a home with ~/code holding eight undeclared repos named
+// for the Linear teams a person would put them in: five for SR, three for
+// KC. Nothing on disk says so; the names are for the tests to filter by.
+func homeWithTeams(t *testing.T) string {
+	t.Helper()
+	home := homeWithClaude(t)
+	for _, name := range []string{"kc-api", "kc-app", "kc-site", "sr-api", "sr-cli", "sr-docs", "sr-site", "sr-web"} {
+		if err := os.MkdirAll(filepath.Join(home, "code", name, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return home
+}
+
 func TestBackendScreensDeclareTheReposAndOnePRQuestionCoversThem(t *testing.T) {
 	home := homeWithRepos(t)
 	shell := machine()
@@ -510,8 +525,9 @@ func TestBackendScreensDeclareTheReposAndOnePRQuestionCoversThem(t *testing.T) {
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("Which repos track their work in Linear?", space, enter, await("Linear team key"), typed("SR"), enter),
-		on("Which repos track their work in Jira?", enter),
+		on("Linear team key, Enter for none", typed("SR"), enter),
+		on("Which repos track their work in Linear team SR?", space, enter),
+		on("Another Linear team key, Enter for none", enter),
 		on("Which repos track their work in GitHub Issues?", enter),
 		on("Which repos track their work in markdown tasks in the repo?", space, enter, await("markdown tasks in the repo folder"), enter),
 		on("Which tools?", enter),
@@ -525,14 +541,14 @@ func TestBackendScreensDeclareTheReposAndOnePRQuestionCoversThem(t *testing.T) {
 	if !strings.Contains(repos, "~/code") || !strings.Contains(repos, "somewhere else") {
 		t.Fatalf("repos screen:\n%s", repos)
 	}
-	linear := script.frame("Which repos track their work in Linear?")
+	if key := script.frame("Linear team key, Enter for none"); !strings.Contains(key, "for example SR") {
+		t.Fatalf("key screen:\n%s", key)
+	}
+	linear := script.frame("Which repos track their work in Linear team SR?")
 	for _, want := range []string{"✓ bravo", "• charlie", "Unchecked on every screen means skip."} {
 		if !strings.Contains(linear, want) {
 			t.Fatalf("Linear screen missing %q:\n%s", want, linear)
 		}
-	}
-	if key := script.frame("Linear team key, the same for every repo checked"); !strings.Contains(key, "for example SR") {
-		t.Fatalf("key page:\n%s", key)
 	}
 	if issues := script.frame("Which repos track their work in GitHub Issues?"); strings.Contains(issues, "bravo") || !strings.Contains(issues, "• charlie") {
 		t.Fatalf("a repo taken by Linear was offered again:\n%s", issues)
@@ -543,7 +559,6 @@ func TestBackendScreensDeclareTheReposAndOnePRQuestionCoversThem(t *testing.T) {
 	expectAll(t, out.String(),
 		"repos  ~/code",
 		"linear SR  1 repo\n",
-		"jira  none\n",
 		"github-issues  none\n",
 		"markdown tasks/  1 repo\n",
 		"\ntrackers\n  bravo    write \"Tracker: linear SR\", open a PR on branch tracker-line\n  charlie  write \"Tracker: markdown tasks/\" only, has no origin remote\n",
@@ -561,6 +576,62 @@ func TestBackendScreensDeclareTheReposAndOnePRQuestionCoversThem(t *testing.T) {
 	}
 }
 
+func TestEachKeyGetsItsOwnListAndEveryRepoItsOwnLine(t *testing.T) {
+	home := homeWithTeams(t)
+	opts, out := options(t, home, machine())
+	script, err := guided(t, opts,
+		on("Install into which harnesses?", enter),
+		on("skills repo of your own", enter),
+		on("Where do your repos live?", enter),
+		on("Linear team key, Enter for none", typed("SR"), enter),
+		on("Which repos track their work in Linear team SR?", typed("/"), typed("sr-"), enter, ctrlA, esc, enter),
+		on("Another Linear team key, Enter for none", typed("KC"), enter),
+		on("Which repos track their work in Linear team KC?", typed("/"), typed("kc-"), enter, ctrlA, esc, enter),
+		on("Which tools?", enter),
+		on("Open 8 pull requests?", typed("n")),
+		on("Apply?", enter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kc := script.frame("Which repos track their work in Linear team KC?"); strings.Contains(kc, "sr-") || !strings.Contains(kc, "✓ kc-app") {
+		t.Fatalf("the KC list offers what SR took, or lost its checks:\n%s", kc)
+	}
+	expectAll(t, out.String(),
+		"linear SR  5 repos, linear KC  3 repos\n",
+		"pull requests  no, lines left uncommitted\n",
+	)
+	for repo, line := range map[string]string{
+		"sr-api": "Tracker: linear SR", "sr-cli": "Tracker: linear SR", "sr-docs": "Tracker: linear SR", "sr-site": "Tracker: linear SR", "sr-web": "Tracker: linear SR",
+		"kc-api": "Tracker: linear KC", "kc-app": "Tracker: linear KC", "kc-site": "Tracker: linear KC",
+	} {
+		if got := read(t, filepath.Join(home, "code", repo, "AGENTS.md")); !strings.Contains(got, line+"\n") {
+			t.Fatalf("%s got %q, want %q", repo, got, line)
+		}
+	}
+}
+
+func TestTheSameKeyTwiceIsOneLine(t *testing.T) {
+	home := homeWithRepos(t)
+	opts, out := options(t, home, machine())
+	_, err := guided(t, opts,
+		on("Install into which harnesses?", enter),
+		on("skills repo of your own", enter),
+		on("Where do your repos live?", enter),
+		on("Linear team key, Enter for none", typed("SR"), enter),
+		on("Which repos track their work in Linear team SR?", space, enter),
+		on("Another Linear team key, Enter for none", typed("SR"), enter),
+		on("Which repos track their work in Linear team SR?", space, enter),
+		on("Which tools?", enter),
+		on("Open 1 pull request?", typed("n")),
+		on("Apply?", enter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "linear SR  2 repos\n", `bravo  wrote "Tracker: linear SR"`, `charlie  wrote "Tracker: linear SR"`)
+}
+
 func TestOriginWithIssuesComesCheckedAndSkipsAreRememberedUntilAskedForAgain(t *testing.T) {
 	home := homeWithRepos(t)
 	shell := machine()
@@ -569,8 +640,7 @@ func TestOriginWithIssuesComesCheckedAndSkipsAreRememberedUntilAskedForAgain(t *
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("Which repos track their work in Linear?", enter),
-		on("Which repos track their work in Jira?", enter),
+		on("Linear team key, Enter for none", enter),
 		on("Which repos track their work in GitHub Issues?", enter),
 		on("Which repos track their work in markdown tasks in the repo?", enter),
 		on("Which tools?", enter),
@@ -587,6 +657,7 @@ func TestOriginWithIssuesComesCheckedAndSkipsAreRememberedUntilAskedForAgain(t *
 		}
 	}
 	expectAll(t, out.String(),
+		"linear  none\n",
 		"github-issues  1 repo\n",
 		"markdown  none\n",
 		"\ntrackers\n  bravo    write \"Tracker: github-issues\", open a PR on branch tracker-line\n  charlie  skipped; not offered again without --ask-trackers-again\n",
@@ -613,7 +684,8 @@ func TestOriginWithIssuesComesCheckedAndSkipsAreRememberedUntilAskedForAgain(t *
 	opts.AskTrackersAgain = true
 	_, err = guided(t, opts,
 		on("Install into which harnesses?", enter),
-		on("Which repos track their work in Linear?", space, enter, await("Linear team key"), typed("SR"), enter),
+		on("Linear team key, Enter for none", typed("SR"), enter),
+		on("Which repos track their work in Linear team SR?", space, enter),
 		on("Which tools?", enter),
 		on("Apply?", enter),
 	)
@@ -633,8 +705,9 @@ func TestSlashFiltersTheListAndEscClearsTheFilterBeforeGoingBack(t *testing.T) {
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("Which repos track their work in Linear?", typed("/"), typed("cha"), enter, space, esc, enter, await("Linear team key"), typed("SR"), enter),
-		on("Which repos track their work in Jira?", enter),
+		on("Linear team key, Enter for none", typed("SR"), enter),
+		on("Which repos track their work in Linear team SR?", typed("/"), typed("cha"), enter, space, esc, enter),
+		on("Another Linear team key, Enter for none", enter),
 		on("Which repos track their work in GitHub Issues?", enter),
 		on("Which tools?", enter),
 		on("Open 1 pull request?", typed("y")),
@@ -645,7 +718,7 @@ func TestSlashFiltersTheListAndEscClearsTheFilterBeforeGoingBack(t *testing.T) {
 	}
 	var filtered, cleared string
 	for _, frame := range script.frames {
-		if strings.Contains(frame, "Which repos track their work in Linear?") && strings.Contains(frame, "cha") {
+		if strings.Contains(frame, "Which repos track their work in Linear team SR?") && strings.Contains(frame, "cha") {
 			if strings.Contains(frame, "✓ charlie") {
 				cleared = frame
 			} else if strings.Contains(frame, "• charlie") {
@@ -662,17 +735,24 @@ func TestSlashFiltersTheListAndEscClearsTheFilterBeforeGoingBack(t *testing.T) {
 	expectAll(t, out.String(), "linear SR  1 repo\n", "github-issues  1 repo\n", `charlie  wrote "Tracker: linear SR"`, `bravo  wrote "Tracker: github-issues"`)
 }
 
-func TestEscGoesBackToTheEarlierBackendScreenWithItsChecksKept(t *testing.T) {
+func TestEscWalksTheRoundsBackWithTheirKeysAndChecksKept(t *testing.T) {
 	home := homeWithRepos(t)
 	opts, out := options(t, home, machine())
 	script, err := guided(t, opts,
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("Which repos track their work in Linear?", space, enter, await("Linear team key"), typed("SR"), enter),
-		on("Which repos track their work in Jira?", esc),
-		on("Which repos track their work in Linear?", enter, await("Linear team key"), enter),
-		on("Which repos track their work in Jira?", enter),
+		on("Linear team key, Enter for none", typed("KC"), enter),
+		on("Which repos track their work in Linear team KC?", space, enter),
+		on("Another Linear team key, Enter for none", enter),
+		on("Which repos track their work in GitHub Issues?", esc),
+		on("Another Linear team key, Enter for none", esc),
+		on("Which repos track their work in Linear team KC?", esc),
+		on("Linear team key, Enter for none", esc),
+		on("Where do your repos live?", enter),
+		on("Linear team key, Enter for none", enter),
+		on("Which repos track their work in Linear team KC?", enter),
+		on("Another Linear team key, Enter for none", enter),
 		on("Which repos track their work in GitHub Issues?", enter),
 		on("Which repos track their work in markdown tasks in the repo?", enter),
 		on("Which tools?", enter),
@@ -682,10 +762,19 @@ func TestEscGoesBackToTheEarlierBackendScreenWithItsChecksKept(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again := script.frame("Which repos track their work in Linear?"); !strings.Contains(again, "✓ bravo") {
+	var key string
+	for _, frame := range script.frames {
+		if strings.Contains(frame, "Linear team key, Enter for none") && !strings.Contains(frame, "Another") {
+			key = frame
+		}
+	}
+	if !strings.Contains(key, "KC") {
+		t.Fatalf("the key was lost on the way back:\n%s", key)
+	}
+	if again := script.frame("Which repos track their work in Linear team KC?"); !strings.Contains(again, "✓ bravo") {
 		t.Fatalf("bravo lost its check after Esc:\n%s", again)
 	}
-	expectAll(t, out.String(), "linear SR  1 repo\n", `bravo  wrote "Tracker: linear SR"`, "charlie  skipped")
+	expectAll(t, out.String(), "linear KC  1 repo\n", `bravo  wrote "Tracker: linear KC"`, "charlie  skipped")
 }
 
 func TestToolsScreenOffersTheOwnersUpdateLineAndUncheckedMeansSkip(t *testing.T) {

@@ -101,15 +101,21 @@ func (s *screen) fieldTakesEsc() bool {
 // View is the form while the question is open, then the one line that
 // stays behind. The line ends with a newline so the terminal keeps it:
 // bubbletea erases the line the cursor ends on. Esc and Ctrl-C leave
-// nothing, since the question is either shown again or the run is over.
+// nothing, since the question is either shown again or the run is over,
+// and so does a screen with no line of its own, one round of a backend
+// whose line comes when the backend ends.
 func (s *screen) View() string {
 	if !s.done {
 		return s.form.View() + "\n" + s.help.ShortHelpView(s.bindings())
 	}
-	if s.outcome == next {
-		return s.summary() + "\n"
+	if s.outcome != next {
+		return ""
 	}
-	return ""
+	line := s.summary()
+	if line == "" {
+		return ""
+	}
+	return line + "\n"
 }
 
 // bindings is the focused field's own key help plus Esc, which the screen

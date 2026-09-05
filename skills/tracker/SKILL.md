@@ -1,6 +1,6 @@
 ---
 name: tracker
-description: "Use to claim a task, record the files you'll touch, file a ticket, turn work in with the PR and evidence, or find out which tracker a repo uses. One contract everywhere, and a short section per backend the repo's Tracker line can name: markdown tasks in the repo, GitHub Issues, Linear, or Jira. Every ticket is four labels under 120 words, checked by the lint before it's filed."
+description: "Use to claim a task, record the files you'll touch, file a ticket, turn work in with the PR and evidence, or find out which tracker a repo uses. One contract everywhere, and a short section per backend the repo's Tracker line can name: markdown tasks in the repo, GitHub Issues, or Linear. Every ticket is four labels under 120 words, checked by the lint before it's filed."
 ---
 
 # Tracker
@@ -15,10 +15,9 @@ One line in the repo's `AGENTS.md`, or `CLAUDE.md` if that's the file it keeps: 
 Tracker: markdown tasks/
 Tracker: github-issues
 Tracker: linear SR
-Tracker: jira SR
 ```
 
-Markdown takes the folder. GitHub Issues takes nothing, gh reads the repo from git. Linear takes the team key, Jira the project key. Find it with `grep -h '^Tracker:' AGENTS.md CLAUDE.md`.
+Markdown takes the folder. GitHub Issues takes nothing, gh reads the repo from git. Linear takes the team key. Find it with `grep -h '^Tracker:' AGENTS.md CLAUDE.md`.
 
 No line means nobody chose yet. Check for an open PR from a branch named `tracker-line`, `gh pr list --head tracker-line --state open`; if one carries a line, ask the human to confirm it. Otherwise ask in the Decide shape, one option per backend, each naming what it needs. Never pick a default silently.
 
@@ -107,12 +106,6 @@ Problem: ...
 - Complete: Done after the merge, by the human.
 
 The PR title carries the issue key, `fix(web): SR-123 new threads respect the worktree default`, so Linear links the PR to the issue.
-
-## Jira
-
-`Tracker: jira SR`, where `SR` is the project key. Connect Jira's MCP and run every verb as in Linear, against that project. Jira moves issues by transition, so for In Review list the transitions the issue offers and pick by name, since the project's workflow may have renamed it.
-
-The PR title carries the issue key, `fix(web): SR-123 new threads respect the worktree default`, so Jira links the PR to the issue.
 
 ## Never
 
