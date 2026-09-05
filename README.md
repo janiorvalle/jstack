@@ -40,7 +40,7 @@ squirrel setup --harness claude,codex --yes   # or --harness all
 - `--keep-instructions` appends the letter to an instructions file that has other content instead of replacing it.
 - `--skill-repo owner/name` adds a skills repo. `--forget-skill-repo` drops one.
 - `--override name=owner/name` picks between two skills with the same name, which otherwise stop setup and ask.
-- `--repos-dir <folder>` answers the repos question. `--ask-trackers-again` offers the repos you skipped on the tracker lists again.
+- `--repos-dir <folder>` answers the repos question. `--ask-trackers-again` offers the repos you skipped on the tracker lists again, and asks gh again about every origin instead of using what it said on an earlier run.
 
 ## Use it
 

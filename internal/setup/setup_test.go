@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -65,6 +66,28 @@ type fakeShell struct {
 	stuck    bool
 	commands []string
 	repos    map[string]map[string]string
+
+	// The tracker scan runs commands at once, so commands is guarded, and
+	// delay holds each call open long enough for peak to count how many
+	// ran together.
+	guard    sync.Mutex
+	delay    time.Duration
+	inFlight int
+	peak     int
+}
+
+// record notes the command and how many calls are open, and holds the
+// call open for delay.
+func (f *fakeShell) record(command string) {
+	f.guard.Lock()
+	f.commands = append(f.commands, command)
+	f.inFlight++
+	f.peak = max(f.peak, f.inFlight)
+	f.guard.Unlock()
+	time.Sleep(f.delay)
+	f.guard.Lock()
+	f.inFlight--
+	f.guard.Unlock()
 }
 
 func withRoast(version string) *fakeShell {
@@ -76,7 +99,7 @@ func withRoast(version string) *fakeShell {
 }
 
 func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error {
-	f.commands = append(f.commands, command)
+	f.record(command)
 	if f.failing[command] {
 		return errors.New("exit status 1")
 	}

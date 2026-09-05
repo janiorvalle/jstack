@@ -2,11 +2,14 @@ package setup
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // homeWithRepos is a home with ~/code holding four checkouts: alpha declares
@@ -827,8 +830,175 @@ func TestOriginIsAskedOnceAndSaysWhetherIssuesAreOn(t *testing.T) {
 		t.Fatalf("issues off: guesses = %q, holds = %q", guesses, holds)
 	}
 	shell.failing = map[string]bool{view: true}
-	hold := "has an origin gh can't see, run gh auth login for that host"
+	hold := "has an origin gh can't see, run gh auth login for that host and add --ask-trackers-again"
 	if guesses, holds, _ := ask(); guesses != ",,," || holds != strings.Repeat(hold+",", 3)+hold {
 		t.Fatalf("gh failing: guesses = %q, holds = %q", guesses, holds)
+	}
+}
+
+// homeWithManyRepos is a home with ~/code holding count undeclared
+// checkouts, named so their order by name differs from their order on
+// disk, and half of them sharing an origin with a neighbour.
+func homeWithManyRepos(t *testing.T, count int) (string, *fakeShell) {
+	t.Helper()
+	home := homeWithClaude(t)
+	shell := withRoast("1.1.0")
+	for index := range count {
+		name := fmt.Sprintf("repo-%02d", (index*7)%count)
+		if err := os.MkdirAll(filepath.Join(home, "code", name, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		shell.versions[in(home, name, "git remote get-url --push origin")] = fmt.Sprintf("git@github.com:me/origin-%02d.git", index/2)
+	}
+	savedRepos(t, home)
+	return home, shell
+}
+
+func ghCalls(shell *fakeShell) int {
+	calls := 0
+	for _, command := range shell.commands {
+		if strings.HasPrefix(command, "gh repo view --json hasIssuesEnabled ") {
+			calls++
+		}
+	}
+	return calls
+}
+
+func TestScanRunsGitAndGhTogetherAndKeepsTheReposOrder(t *testing.T) {
+	home, shell := homeWithManyRepos(t, 24)
+	shell.delay = 5 * time.Millisecond
+	opts, _ := options(t, home, shell, "")
+	session, err := Start(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	dirs, _ := session.ReposDirs()
+	questions := session.Trackers(context.Background(), dirs)
+	var names []string
+	for _, question := range questions {
+		names = append(names, question.Repo)
+		if question.Guess != gitHubIssues || question.PRHold != "" {
+			t.Fatalf("%s: guess = %q, hold = %q", question.Repo, question.Guess, question.PRHold)
+		}
+	}
+	if len(names) != 24 || !sort.StringsAreSorted(names) {
+		t.Fatalf("questions out of name order: %v", names)
+	}
+	if shell.peak < 2 || shell.peak > scanWorkers {
+		t.Fatalf("%d commands ran together, want between 2 and %d", shell.peak, scanWorkers)
+	}
+	if calls := ghCalls(shell); calls != 12 {
+		t.Fatalf("gh asked %d times for 12 origins", calls)
+	}
+}
+
+func TestCancelledScanRunsNothing(t *testing.T) {
+	home, shell := homeWithManyRepos(t, 6)
+	opts, _ := options(t, home, shell, "")
+	session, err := Start(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	dirs, _ := session.ReposDirs()
+	if questions := session.Trackers(ctx, dirs); len(questions) != 6 || len(shell.commands) != 0 {
+		t.Fatalf("%d questions, commands = %v", len(questions), shell.commands)
+	}
+}
+
+// scanAndApply is a guided run down to the apply with every undeclared
+// repo left as it is, neither answered nor skipped, so the next run asks
+// about it again.
+func scanAndApply(t *testing.T, opts Options) []TrackerQuestion {
+	t.Helper()
+	ctx := context.Background()
+	session, err := Start(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	if _, err := session.Gather(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	dirs, _ := session.ReposDirs()
+	questions := session.Trackers(ctx, dirs)
+	plan, err := session.Plan(ctx, Answers{Harnesses: []string{"claude"}, ReposDirs: dirs, ReposDirsAsked: true, Tools: map[string]bool{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Apply(ctx, plan, Answers{Harnesses: []string{"claude"}, ReposDirs: dirs, ReposDirsAsked: true}); err != nil {
+		t.Fatal(err)
+	}
+	return questions
+}
+
+func TestOriginsAreRememberedSoARerunAsksGhOnlyAboutNewOnes(t *testing.T) {
+	home, shell := homeWithManyRepos(t, 4)
+	opts, _ := options(t, home, shell, "")
+	scanAndApply(t, opts)
+	if calls := ghCalls(shell); calls != 2 {
+		t.Fatalf("gh asked %d times for 2 origins", calls)
+	}
+	config := read(t, filepath.Join(home, ".squirrel", "config.json"))
+	want := "\"origins\": {\n    \"git@github.com:me/origin-00.git\": {\n      \"seen\": true,\n      \"issues\": true,\n      \"asked_at\": \"2026-09-03T10:04:05Z\"\n    },"
+	if !strings.Contains(config, want) {
+		t.Fatalf("config = %s", config)
+	}
+
+	shell.commands = nil
+	shell.versions[in(home, "repo-01", "git remote get-url --push origin")] = "git@github.com:me/fresh.git"
+	shell.failing = map[string]bool{"gh repo view --json hasIssuesEnabled " + quote(runtime.GOOS, "git@github.com:me/fresh.git"): true}
+	opts, _ = options(t, home, shell, "")
+	if got := offers(scanAndApply(t, opts)); got != "repo-00:yes repo-01:no repo-02:yes repo-03:yes" {
+		t.Fatalf("offers = %q", got)
+	}
+	if calls := ghCalls(shell); calls != 1 {
+		t.Fatalf("gh asked %d times for 1 new origin", calls)
+	}
+	config = read(t, filepath.Join(home, ".squirrel", "config.json"))
+	if !strings.Contains(config, "\"git@github.com:me/fresh.git\": {\n      \"seen\": false,") || !strings.Contains(config, "origin-00.git") {
+		t.Fatalf("config = %s", config)
+	}
+
+	shell.commands = nil
+	opts, _ = options(t, home, shell, "")
+	if got := offers(scanAndApply(t, opts)); got != "repo-00:yes repo-01:no repo-02:yes repo-03:yes" {
+		t.Fatalf("a rerun forgot the origins: offers = %q", got)
+	}
+	if calls := ghCalls(shell); calls != 0 {
+		t.Fatalf("a rerun asked gh %d times about known origins", calls)
+	}
+
+	shell.commands = nil
+	opts, _ = options(t, home, shell, "")
+	opts.AskTrackersAgain = true
+	scanAndApply(t, opts)
+	if calls := ghCalls(shell); calls != 3 {
+		t.Fatalf("--ask-trackers-again asked gh %d times for 3 origins", calls)
+	}
+}
+
+func TestFlagPathKeepsTheOriginsUnlessAskedToForgetThem(t *testing.T) {
+	home, shell := homeWithManyRepos(t, 2)
+	opts, _ := options(t, home, shell, "")
+	scanAndApply(t, opts)
+	shell.commands = nil
+	opts, _ = options(t, home, shell, "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if config := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(config, "origin-00.git") || ghCalls(shell) != 0 {
+		t.Fatalf("the flag path forgot the origins or asked gh: %s\n%v", config, shell.commands)
+	}
+	opts.AskTrackersAgain = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if config := read(t, filepath.Join(home, ".squirrel", "config.json")); strings.Contains(config, "origins") {
+		t.Fatalf("--ask-trackers-again --yes kept the origins: %s", config)
 	}
 }

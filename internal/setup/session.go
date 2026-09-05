@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"strings"
 
 	"github.com/janiorvalle/squirrel/internal/harness"
@@ -33,7 +34,8 @@ type Session struct {
 	scanned     []TrackerQuestion
 	scannedFor  string
 	scannedYet  bool
-	origins     map[string]originFacts
+	origins     map[string]OriginFacts
+	metOrigins  []string
 }
 
 // Start reads what every screen needs. Nothing on the machine changes.
@@ -47,7 +49,17 @@ func Start(opts Options) (*Session, error) {
 		return nil, err
 	}
 	rows := harness.Resolve(opts.Home, opts.Getenv)
-	return &Session{opts: opts, embedded: embedded, config: config, rows: rows, found: harness.Keys(rows.Found()), origins: map[string]originFacts{}}, nil
+	return &Session{opts: opts, embedded: embedded, config: config, rows: rows, found: harness.Keys(rows.Found()), origins: rememberedOrigins(config, opts)}, nil
+}
+
+// rememberedOrigins is what earlier runs learned from gh about origins, or
+// nothing under --ask-trackers-again, the flag that asks everything again.
+func rememberedOrigins(config Config, opts Options) map[string]OriginFacts {
+	origins := map[string]OriginFacts{}
+	if !opts.AskTrackersAgain {
+		maps.Copy(origins, config.Origins)
+	}
+	return origins
 }
 
 // HarnessChoice is one row of the harness screen. Checked is the pick to
@@ -206,19 +218,23 @@ type TrackerQuestion struct {
 }
 
 // Trackers scans the folders and reads each undeclared repo's state, once
-// per set of folders. A repo skipped on an earlier run is left out unless
-// --ask-trackers-again was passed.
+// per set of folders: git for every repo, then gh for every origin no run
+// has asked about, a bounded number at a time. The questions come back in
+// the repos' order, by name. A repo skipped on an earlier run is left out
+// unless --ask-trackers-again was passed.
 func (s *Session) Trackers(ctx context.Context, reposDirs []string) []TrackerQuestion {
 	key := strings.Join(reposDirs, ",")
 	if s.scannedYet && s.scannedFor == key {
 		return s.scanned
 	}
 	s.scannedYet, s.scannedFor = true, key
+	repos := planRepos(s.opts.Home, reposDirs, s.skippedEarlier()).undeclared()
+	states := readRepoStates(ctx, s.opts, repos)
+	s.askOrigins(ctx, states)
 	s.scanned = nil
-	for _, repo := range planRepos(s.opts.Home, reposDirs, s.skippedEarlier()).undeclared() {
-		state := readRepoState(ctx, s.opts, repo.dir)
-		origin := s.origin(ctx, state.origin)
-		s.scanned = append(s.scanned, TrackerQuestion{Dir: repo.dir, Repo: repo.name, File: display(s.opts.Home, repo.file), Guess: origin.guess(), PRHold: prHold(state, origin)})
+	for index, repo := range repos {
+		origin := s.origins[states[index].origin]
+		s.scanned = append(s.scanned, TrackerQuestion{Dir: repo.dir, Repo: repo.name, File: display(s.opts.Home, repo.file), Guess: origin.guess(), PRHold: prHold(states[index], origin)})
 	}
 	return s.scanned
 }
@@ -236,18 +252,44 @@ func (s *Session) skippedEarlier() map[string]bool {
 	return skipped
 }
 
-// origin is what gh says about an origin, asked once per origin per run,
-// so two checkouts of one repo cost one call and Esc costs nothing.
-func (s *Session) origin(ctx context.Context, url string) originFacts {
-	if url == "" {
-		return originFacts{}
+// askOrigins asks gh about every origin the states name that no earlier
+// run or scan asked about, each once, so two checkouts of one repo cost
+// one call, Esc costs nothing, and a rerun costs only the new origins. It
+// also notes which origins this scan met, for what the config keeps.
+func (s *Session) askOrigins(ctx context.Context, states []repoState) {
+	s.metOrigins = nil
+	var unknown []string
+	met := map[string]bool{}
+	for _, state := range states {
+		url := state.origin
+		if url == "" || met[url] {
+			continue
+		}
+		met[url] = true
+		s.metOrigins = append(s.metOrigins, url)
+		if _, known := s.origins[url]; !known {
+			unknown = append(unknown, url)
+		}
 	}
-	facts, ok := s.origins[url]
-	if !ok {
-		facts = readOrigin(ctx, s.opts, url)
-		s.origins[url] = facts
+	for index, facts := range readOrigins(ctx, s.opts, unknown) {
+		s.origins[unknown[index]] = facts
 	}
-	return facts
+}
+
+// rememberOrigins is what the next run knows about origins: what this
+// run's scan met, from memory or from gh, so an origin whose repo has
+// named its tracker or is gone drops off. A run that scanned nothing, the
+// flag path, keeps what it started with: the map as it was, or nothing
+// under --ask-trackers-again.
+func (s *Session) rememberOrigins() map[string]OriginFacts {
+	if !s.scannedYet {
+		return s.origins
+	}
+	kept := map[string]OriginFacts{}
+	for _, url := range s.metOrigins {
+		kept[url] = s.origins[url]
+	}
+	return kept
 }
 
 // Backend is one of the trackers the tracker skill knows. Argument names
@@ -426,6 +468,7 @@ func (s *Session) Apply(ctx context.Context, p *Plan, answers Answers) error {
 		ReposDirs:       answers.ReposDirs,
 		ReposDirsAsked:  answers.ReposDirsAsked,
 		TrackersSkipped: rememberSkips(p.current.repos, answers.Trackers),
+		Origins:         s.rememberOrigins(),
 	}
 	if err := saveConfig(opts.Home, saved); err != nil {
 		return err

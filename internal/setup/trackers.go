@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 )
 
 // trackerRepo is one git checkout under a repos folder, as found on this
@@ -551,29 +552,32 @@ func (s repoState) prHold() string {
 }
 
 // prHold is why the PR can't carry the line: what git says, then whether
-// gh can see the origin, since gh opens the PR.
-func prHold(state repoState, origin originFacts) string {
+// gh can see the origin, since gh opens the PR. What gh said is remembered
+// between runs, so the fix names the flag that asks again.
+func prHold(state repoState, origin OriginFacts) string {
 	if hold := state.prHold(); hold != "" {
 		return hold
 	}
-	if !origin.seen {
-		return "has an origin gh can't see, run gh auth login for that host"
+	if !origin.Seen {
+		return "has an origin gh can't see, run gh auth login for that host and add --ask-trackers-again"
 	}
 	return ""
 }
 
-// originFacts is what gh says about an origin: seen when gh can reach the
-// repo, so it is on a GitHub host gh is logged into, and issues when the
-// repo has issues enabled, the one thing an origin says about which
-// tracker the repo uses.
-type originFacts struct {
-	seen   bool
-	issues bool
+// OriginFacts is what gh said about an origin, and when: Seen when gh
+// could reach the repo, so it is on a GitHub host gh is logged into, and
+// Issues when the repo has issues enabled, the one thing an origin says
+// about which tracker the repo uses. The config keeps them by push URL, so
+// a rerun asks gh only about origins it hasn't met.
+type OriginFacts struct {
+	Seen    bool      `json:"seen"`
+	Issues  bool      `json:"issues"`
+	AskedAt time.Time `json:"asked_at"`
 }
 
 // guess is the backend key the origin suggests, "" when it says nothing.
-func (o originFacts) guess() string {
-	if o.seen && o.issues {
+func (o OriginFacts) guess() string {
+	if o.Seen && o.Issues {
 		return gitHubIssues
 	}
 	return ""
@@ -581,18 +585,20 @@ func (o originFacts) guess() string {
 
 // readOrigin asks gh about the origin. Any failure, gh not logged in, a
 // host gh doesn't know, no network, reads as an origin gh can't see.
-func readOrigin(ctx context.Context, opts Options, url string) originFacts {
+func readOrigin(ctx context.Context, opts Options, url string) OriginFacts {
+	facts := OriginFacts{AskedAt: opts.Now().UTC().Truncate(time.Second)}
 	var out bytes.Buffer
 	if opts.Shell(ctx, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, url), &out) != nil {
-		return originFacts{}
+		return facts
 	}
 	var answer struct {
 		HasIssuesEnabled bool `json:"hasIssuesEnabled"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &answer); err != nil {
-		return originFacts{}
+		return facts
 	}
-	return originFacts{seen: true, issues: answer.HasIssuesEnabled}
+	facts.Seen, facts.Issues = true, answer.HasIssuesEnabled
+	return facts
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {
