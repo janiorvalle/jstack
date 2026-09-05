@@ -25,7 +25,7 @@ func homeWithRepos(t *testing.T) string {
 	}
 	write(t, filepath.Join(code, "alpha", "AGENTS.md"), "# Alpha\n\nTracker: markdown tasks/\n\nThe rest.\n")
 	write(t, filepath.Join(code, "bravo", "AGENTS.md"), "# Bravo\n\nSome text.\n")
-	write(t, filepath.Join(code, "delta", "CLAUDE.md"), "Tracker: jira SR\n")
+	write(t, filepath.Join(code, "delta", "CLAUDE.md"), "Tracker: linear KC\n")
 	write(t, filepath.Join(code, "notes", "README.md"), "not a checkout\n")
 	write(t, filepath.Join(code, "stray.txt"), "not a folder\n")
 	return home
@@ -123,7 +123,7 @@ func TestScanReadsAgentsMdThenClaudeMdAndSkipsWhatIsNotACheckout(t *testing.T) {
 	for _, repo := range repos {
 		got = append(got, repo.name+"="+repo.line+"@"+filepath.Base(repo.file))
 	}
-	if strings.Join(got, ";") != "alpha=Tracker: markdown tasks/@AGENTS.md;bravo=@AGENTS.md;charlie=@AGENTS.md;delta=Tracker: jira SR@CLAUDE.md" {
+	if strings.Join(got, ";") != "alpha=Tracker: markdown tasks/@AGENTS.md;bravo=@AGENTS.md;charlie=@AGENTS.md;delta=Tracker: linear KC@CLAUDE.md" {
 		t.Fatalf("repos = %v", got)
 	}
 }
@@ -164,7 +164,7 @@ func TestReposFolderIsGuessedAskedOnceAndRemembered(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(),
-		"repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n  charlie  not declared\n  delta    Tracker: jira SR\n",
+		"repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n  charlie  not declared\n  delta    Tracker: linear KC\n",
 		"\ntrackers\n  bravo    skipped; not offered again without --ask-trackers-again\n  charlie  skipped; not offered again without --ask-trackers-again\n",
 		"bravo  skipped\n  charlie  skipped",
 	)
@@ -231,7 +231,7 @@ func TestNoTerminalReportsTheReposAndChangesNothing(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n  charlie  not declared\n  delta    Tracker: jira SR\n", "2 repo(s) declare no tracker: bravo, charlie; rerun with a terminal to name each one")
+	expectAll(t, out.String(), "repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n  charlie  not declared\n  delta    Tracker: linear KC\n", "2 repo(s) declare no tracker: bravo, charlie; rerun with a terminal to name each one")
 	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" || exists(filepath.Join(home, "code", "charlie", "AGENTS.md")) {
 		t.Fatal("a repo changed without a terminal")
 	}
@@ -641,7 +641,7 @@ func TestTwoReposFoldersWithTheSameRepoNameEachGetTheirOwnAnswer(t *testing.T) {
 		for _, question := range questions {
 			answer := TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Skip: true}
 			if question.Dir == filepath.Join(work, "bravo") {
-				answer = TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: "Tracker: jira SR"}
+				answer = TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: "Tracker: linear KC"}
 			}
 			answers = append(answers, answer)
 		}
@@ -650,11 +650,11 @@ func TestTwoReposFoldersWithTheSameRepoNameEachGetTheirOwnAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), `bravo  wrote "Tracker: jira SR" to ~/work/bravo/AGENTS.md`)
+	expectAll(t, out.String(), `bravo  wrote "Tracker: linear KC" to ~/work/bravo/AGENTS.md`)
 	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" {
 		t.Fatal("the answer for ~/work/bravo landed in ~/code/bravo")
 	}
-	if got := read(t, filepath.Join(work, "bravo", "AGENTS.md")); got != "Tracker: jira SR\n" {
+	if got := read(t, filepath.Join(work, "bravo", "AGENTS.md")); got != "Tracker: linear KC\n" {
 		t.Fatalf("~/work/bravo AGENTS.md = %q", got)
 	}
 }
@@ -775,13 +775,13 @@ func TestSkippedRepoThatNamesItsTrackerDropsOffTheList(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "trackers_skipped") {
 		t.Fatalf("config = %s", got)
 	}
-	write(t, filepath.Join(home, "code", "bravo", "AGENTS.md"), "# Bravo\n\nTracker: jira SR\n")
+	write(t, filepath.Join(home, "code", "bravo", "AGENTS.md"), "# Bravo\n\nTracker: linear KC\n")
 	opts, out := options(t, home, withRoast("1.1.0"), "")
 	opts.Yes = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "  bravo    Tracker: jira SR\n  charlie  not declared, skipped on an earlier run; add --ask-trackers-again to be asked\n")
+	expectAll(t, out.String(), "  bravo    Tracker: linear KC\n  charlie  not declared, skipped on an earlier run; add --ask-trackers-again to be asked\n")
 	got := read(t, filepath.Join(home, ".squirrel", "config.json"))
 	if strings.Contains(got, jsonPath(canonical(filepath.Join(home, "code", "bravo")))) || !strings.Contains(got, jsonPath(canonical(filepath.Join(home, "code", "charlie")))) {
 		t.Fatalf("config = %s", got)

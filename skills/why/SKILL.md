@@ -63,7 +63,7 @@ gh pr view <number> --json title,body,author,createdAt,mergedAt,labels,closingIs
 List the MCPs and tools available in this session. Map each to one evidence category:
 
 1. Source control. Git and the PR host. Always available.
-2. Issue tracker. Jira, Linear, GitHub Issues, Monday, whatever the team uses.
+2. Issue tracker. Linear, GitHub Issues, Monday, whatever the team uses.
 3. Long-form docs. Confluence, Notion, Google Docs.
 4. Team chat. Slack, Teams, Discord.
 5. Observability. Datadog, Grafana, New Relic.

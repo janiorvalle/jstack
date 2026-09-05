@@ -54,7 +54,7 @@ The flow leans on three tools. `squirrel setup` offers each one that's missing o
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.
 - **agent-browser**, a real browser from the command line, for using what you built like a person would.
 
-The work tracker isn't a tool setup installs. Each repo names its own on a `Tracker:` line in its instructions file, and the `tracker` skill has the contract, the ticket shape, and the commands for markdown tasks, GitHub Issues, Linear, and Jira.
+The work tracker isn't a tool setup installs. Each repo names its own on a `Tracker:` line in its instructions file, and the `tracker` skill has the contract, the ticket shape, and the commands for markdown tasks, GitHub Issues, and Linear.
 
 Each tool ships its own skill and installs it. `tools.md` has the check, version, and install lines setup runs, with `~/.local/bin` on PATH so a tool just installed there is found in the same run. git and gh are prerequisites: setup checks for them and says where to get them, never installs them. The right command depends on the OS, and `gh auth login` is yours to run.
 

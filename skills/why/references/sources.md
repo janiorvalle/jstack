@@ -37,7 +37,7 @@ The reviews and comments fields on the PR are where the signal is.
 
 ## 2. Issue tracker
 
-Jira, Linear, GitHub Issues, Monday, Shortcut. Where the product and business reason usually lives. "Customer X asked for it." "Needed for the Q3 compliance push."
+Linear, GitHub Issues, Monday, Shortcut. Where the product and business reason usually lives. "Customer X asked for it." "Needed for the Q3 compliance push."
 
 **What it holds.** Issues with descriptions and comments. Parent and child relationships; the parent often has the why. Attached specs. Labels that classify motivation (customer request, incident follow-up, compliance, perf). Status changes that explain scope shifts. Links to PRs.
 

@@ -107,7 +107,7 @@ const gitHubIssues = "github-issues"
 
 // backends in the order the screens come: the one that needs a key first,
 // then the one the origin can guess, then the folder in the repo for the
-// rest. Jira is not offered; a line written by hand still reads.
+// rest.
 var backends = []backend{
 	{key: "linear", label: "Linear", argument: "team key", example: "SR"},
 	{key: gitHubIssues, label: "GitHub Issues"},
