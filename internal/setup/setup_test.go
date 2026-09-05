@@ -592,6 +592,24 @@ func TestAConfigFromBeforeTheFoundSetKeepsAnExcludedHarnessOut(t *testing.T) {
 	}
 }
 
+func TestAHarnessGoneForOneRunKeepsItsExclusion(t *testing.T) {
+	home := homeWithClaude(t)
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude","codex"]}`)
+	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+		t.Fatalf("config = %q, want Codex still known while its folder is gone", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want Codex to stay out when its folder is back", got)
+	}
+}
+
 func TestHarnessLeftOutByTheFlagStaysOutOnTheScreen(t *testing.T) {
 	home := homeWithClaude(t)
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {

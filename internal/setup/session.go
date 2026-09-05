@@ -383,7 +383,7 @@ func (s *Session) Apply(ctx context.Context, p *Plan, answers Answers) error {
 	}
 	saved := Config{
 		Harnesses:       harness.Keys(p.picked),
-		HarnessesFound:  s.found,
+		HarnessesFound:  s.everFound(),
 		SkillRepos:      answers.SkillRepos,
 		SkillReposAsked: answers.SkillRepoAsked,
 		SkillOverrides:  rememberOverrides(s.config.SkillOverrides, p.current.catalog.unreachable(), p.current.catalog.picks),
@@ -403,6 +403,23 @@ func (s *Session) Apply(ctx context.Context, p *Plan, answers Answers) error {
 	}
 	fmt.Fprintf(out, "\nharness picks saved to %s\nrestart the harness so the skills load.\n", display(opts.Home, configPath(opts.Home)))
 	return errors.Join(toolsErr, trackersErr)
+}
+
+// everFound is every harness found on this run or any earlier one, in
+// table order, so a harness whose folder is gone for one run is still
+// known and never offered as new when it's back.
+func (s *Session) everFound() []string {
+	known := map[string]bool{}
+	for _, key := range append(append([]string{}, s.config.HarnessesFound...), s.found...) {
+		known[key] = true
+	}
+	var keys []string
+	for _, entry := range s.rows {
+		if known[entry.Key] {
+			keys = append(keys, entry.Key)
+		}
+	}
+	return keys
 }
 
 // Close lets go of the clone folders the session holds open.
