@@ -67,8 +67,16 @@ func (s *Session) Harnesses() ([]HarnessChoice, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A config from before the found set was recorded says nothing about
+	// what was offered, so everything found now counts as offered then: a
+	// harness the person left out stays out, and the set is saved from
+	// this run on.
+	offeredKeys := s.config.HarnessesFound
+	if len(s.config.Harnesses) > 0 && offeredKeys == nil {
+		offeredKeys = s.found
+	}
 	offered := map[string]bool{}
-	for _, key := range s.config.HarnessesFound {
+	for _, key := range offeredKeys {
 		offered[key] = true
 	}
 	var choices []HarnessChoice
@@ -404,15 +412,16 @@ func (s *Session) Close() {
 	}
 }
 
-// checkTools runs each tool's check and version line, looks up the latest
-// versions, and locates each outdated tool's binary to find who updates
-// it.
+// checkTools runs each tool's check, finds where the person runs it, runs
+// its version line there, looks up the latest versions, and for each
+// outdated tool works out who updates it.
 func checkTools(ctx context.Context, opts Options, list []tools.Tool) []toolStatus {
 	var statuses []toolStatus
 	for _, tool := range list {
 		status := toolStatus{tool: tool, present: opts.Shell(ctx, tool.Check, io.Discard) == nil}
 		if status.present {
-			status.installed = installedVersion(ctx, opts, tool)
+			status.locate(ctx, opts)
+			status.installed = installedVersion(ctx, opts, status)
 		}
 		statuses = append(statuses, status)
 	}
@@ -420,8 +429,8 @@ func checkTools(ctx context.Context, opts Options, list []tools.Tool) []toolStat
 	where := &locator{ctx: ctx, opts: opts}
 	for index := range statuses {
 		if statuses[index].outdated() {
-			found := where.locate(statuses[index].tool)
-			statuses[index].path, statuses[index].owner, statuses[index].formula = found.path, found.owner, found.formula
+			found := where.owned(statuses[index])
+			statuses[index].owner, statuses[index].formula = found.owner, found.formula
 		}
 	}
 	return statuses

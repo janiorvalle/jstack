@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/janiorvalle/jstack/internal/tools"
 )
 
 // owner is who put a tool's binary where it is. The tools.md install line
@@ -46,14 +44,44 @@ type locator struct {
 	prefixes map[string]string
 }
 
-// locate finds a present tool's binary and who owns it, by where the
-// binary really is once links are followed: an npm install line's binary
-// under node's global node_modules, or a link into Homebrew's Cellar, or
-// a file in the installer's folder. A binary in Homebrew's bin that isn't
-// a link into the Cellar is not Homebrew's, whatever put it there, and
-// brew upgrade would leave it standing.
-func (l *locator) locate(tool tools.Tool) location {
-	path := l.pathOf(tool)
+// locate finds where the person's own PATH runs the tool's binary, or
+// where the shell's finds it when theirs doesn't, the just-installed
+// case. The shell's PATH puts ~/.local/bin first, so a stale copy there
+// would otherwise stand in for the Homebrew binary the person runs.
+func (status *toolStatus) locate(ctx context.Context, opts Options) {
+	status.path, status.onOwnPath = "", false
+	if status.tool.Binary == "" {
+		return
+	}
+	resolve := resolveLine(runtime.GOOS, status.tool.Binary)
+	if line, ok := onPersonsPath(opts, resolve); ok {
+		if path := firstLine(ctx, opts, line); path != "" {
+			status.path, status.onOwnPath = path, true
+			return
+		}
+	}
+	status.path = firstLine(ctx, opts, resolve)
+}
+
+// ownLine is a line that runs the tool, on the person's own PATH when
+// that is where the binary was found, else on the shell's.
+func (status toolStatus) ownLine(opts Options, command string) string {
+	if status.onOwnPath {
+		if line, ok := onPersonsPath(opts, command); ok {
+			return line
+		}
+	}
+	return command
+}
+
+// owned is who put a located binary where it is, by where it really is
+// once links are followed: an npm install line's binary under node's
+// global node_modules, or a link into Homebrew's Cellar, or a file in the
+// installer's folder. A binary in Homebrew's bin that isn't a link into
+// the Cellar is not Homebrew's, whatever put it there, and brew upgrade
+// would leave it standing.
+func (l *locator) owned(status toolStatus) location {
+	path := status.path
 	if path == "" {
 		return location{owner: byInstaller}
 	}
@@ -61,7 +89,7 @@ func (l *locator) locate(tool tools.Tool) location {
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		real = resolved
 	}
-	if tool.NpmInstalled() {
+	if status.tool.NpmInstalled() {
 		if within(l.npmModules(), real) {
 			return location{path: path, owner: byNpm}
 		}
@@ -84,24 +112,6 @@ func resolvedFolder(folder string) string {
 		return resolved
 	}
 	return folder
-}
-
-// pathOf is the binary the person runs, "" for a tool whose Check line
-// names no single binary or that the shell can't find. The shell setup
-// runs its lines in puts ~/.local/bin first on PATH, so a stale copy
-// there would win the lookup while the person's own PATH runs Homebrew's;
-// the lookup runs on the person's PATH first, and only when that finds
-// nothing, the just-installed case the prefix exists for, on the shell's.
-func (l *locator) pathOf(tool tools.Tool) string {
-	if tool.Binary == "" {
-		return ""
-	}
-	if line, ok := onPersonsPath(l.opts, resolveLine(runtime.GOOS, tool.Binary)); ok {
-		if path := l.firstLine(line); path != "" {
-			return path
-		}
-	}
-	return l.firstLine(resolveLine(runtime.GOOS, tool.Binary))
 }
 
 // resolveLine prints the path of a binary on PATH, in the shell of the OS.
@@ -180,8 +190,13 @@ func (l *locator) prefix(command string) string {
 }
 
 func (l *locator) firstLine(command string) string {
+	return firstLine(l.ctx, l.opts, command)
+}
+
+// firstLine is the first line a command prints, "" when it fails.
+func firstLine(ctx context.Context, opts Options, command string) string {
 	var output bytes.Buffer
-	if err := l.opts.Shell(l.ctx, command, &output); err != nil {
+	if err := opts.Shell(ctx, command, &output); err != nil {
 		return ""
 	}
 	line, _, _ := strings.Cut(strings.TrimSpace(output.String()), "\n")

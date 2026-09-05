@@ -74,16 +74,18 @@ type harnessPlan struct {
 
 // toolStatus is one tool as found on the machine. installed and latest are
 // "v1.2.3" or "" when unknown; a tool with no Version line never has either.
-// path, owner, and formula are where an outdated tool's binary is and who
-// put it there, read only for outdated tools since only the update offer
-// depends on them. install is the agreed action: an install when missing,
-// an update when outdated.
+// path is where a present tool's binary is, and onOwnPath whether the
+// person's own PATH finds it there, which decides where the lines that
+// run the tool run. owner and formula are who put it there, read only for
+// outdated tools since only the update offer depends on them. install is
+// the agreed action: an install when missing, an update when outdated.
 type toolStatus struct {
 	tool         tools.Tool
 	present      bool
 	installed    string
 	latest       string
 	path         string
+	onOwnPath    bool
 	owner        owner
 	formula      string
 	skillPresent bool
@@ -259,32 +261,22 @@ func planRepos(home string, reposDirs []string) reposReport {
 }
 
 // installedVersion is what the tool the person runs prints: the version
-// line runs on their own PATH first, since the shell's puts ~/.local/bin
-// ahead of it and a stale copy there would answer for the Homebrew binary
-// they use, and on the shell's only when their PATH has no such tool, the
+// line runs on their own PATH when the binary is there, since the shell's
+// puts ~/.local/bin ahead of it and a stale copy there would answer for
+// the Homebrew binary they use, and on the shell's when it isn't, the
 // just-installed case.
-func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string {
-	if tool.Version == "" {
+func installedVersion(ctx context.Context, opts Options, status toolStatus) string {
+	if status.tool.Version == "" {
 		return ""
 	}
-	if line, ok := onPersonsPath(opts, tool.Version); ok {
-		if version := versionPrinted(ctx, opts, line); version != "" {
-			return version
-		}
-	}
-	return versionPrinted(ctx, opts, tool.Version)
+	return versionPrinted(ctx, opts, status.ownLine(opts, status.tool.Version))
 }
 
-// runToolLine runs a line that runs the tool itself, its skill install, on
-// the person's own PATH first, so it's the binary they run that installs
-// its skill, and on the shell's when their PATH has no such tool.
-func runToolLine(ctx context.Context, opts Options, command string) error {
-	if line, ok := onPersonsPath(opts, command); ok {
-		if err := opts.Shell(ctx, line, io.Discard); err == nil {
-			return nil
-		}
-	}
-	return opts.Shell(ctx, command, io.Discard)
+// runToolLine runs a line that runs the tool itself, its skill install,
+// where the person's own PATH finds the binary, so it's the binary they
+// run that installs its skill, and a failure there is the failure.
+func runToolLine(ctx context.Context, opts Options, status toolStatus, command string) error {
+	return opts.Shell(ctx, status.ownLine(opts, command), io.Discard)
 }
 
 func versionPrinted(ctx context.Context, opts Options, line string) string {
@@ -836,7 +828,7 @@ func applyTool(ctx context.Context, opts Options, status toolStatus, picked []ha
 		fmt.Fprintln(out, line+", skill present")
 		return nil
 	}
-	if err := runToolLine(ctx, opts, status.tool.SkillInstall); err != nil {
+	if err := runToolLine(ctx, opts, status, status.tool.SkillInstall); err != nil {
 		fmt.Fprintf(out, "%s, skill install FAILED via %s: %v\n", line, status.tool.SkillInstall, err)
 		return fmt.Errorf("%s: `%s` failed: %v; run it by hand so the tool's skill is in place", status.tool.Title, status.tool.SkillInstall, err)
 	}
@@ -873,7 +865,8 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; read the install output above: if the download failed, run the install line again; if it put %s in a folder that is not on PATH, add that folder to PATH in your shell profile and open a new terminal; then rerun jstack setup", tool.Title, command, tool.Check, tool.Title)
 	}
 	status.present = true
-	status.installed = installedVersion(ctx, opts, tool)
+	status.locate(ctx, opts)
+	status.installed = installedVersion(ctx, opts, *status)
 	if status.outdated() && status.installed == "" {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` prints no version\n", tool.Title, done, tool.Version)
 		return fmt.Errorf("%s: `%s` ran, but `%s` prints no version, so the pinned %s can't be confirmed; run it by hand and fix what it prints, then rerun jstack setup", tool.Title, command, tool.Version, tools.Display(status.latest))

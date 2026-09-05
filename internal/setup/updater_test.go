@@ -228,7 +228,7 @@ func TestAStaleCopyInTheInstallersFolderOffThePersonsPathDoesNotHideBrews(t *tes
 	}
 }
 
-func TestTheSkillInstallRunsTheBinaryThePersonsPathRuns(t *testing.T) {
+func TestTheSkillInstallRunsTheBinaryThePersonsPathRunsAndItsFailureIsTheFailure(t *testing.T) {
 	skipOnWindows(t)
 	home := homeWithClaude(t)
 	shell, opts := owned(t, home)
@@ -245,11 +245,32 @@ func TestTheSkillInstallRunsTheBinaryThePersonsPathRuns(t *testing.T) {
 	}
 	shell.failing = map[string]bool{onUserPath + "bgr install-skill": true}
 	shell.commands = nil
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "bgr: `bgr install-skill` failed") {
+		t.Fatalf("err = %v, want the failure of the binary the person runs", err)
+	}
+	if strings.Contains(strings.Join(shell.commands, ";"), ";bgr install-skill") {
+		t.Fatalf("a failure fell through to the shell's PATH: %v", shell.commands)
+	}
+}
+
+func TestAToolOffThePersonsPathRunsItsLinesOnTheShells(t *testing.T) {
+	skipOnWindows(t)
+	home := homeWithClaude(t)
+	shell, opts := owned(t, home)
+	shell.versions[onUserPath+"trufflehog --version"] = "trufflehog 3.97.4"
+	shell.versions[onUserPath+"browser --version"] = "browser 0.36.0"
+	delete(shell.versions, onUserPath+"command -v bgr")
+	delete(shell.versions, onUserPath+"bgr --version")
+	shell.versions["command -v bgr"] = filepath.Join(home, ".local", "bin", "bgr")
+	shell.versions["bgr --version"] = "bgr 1.7.0"
+	opts.Yes = true
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(shell.commands, ";"), ";bgr install-skill") {
-		t.Fatalf("the shell's PATH was not the fallback: %v", shell.commands)
+	commands := strings.Join(shell.commands, ";")
+	if !strings.Contains(commands, ";bgr install-skill") || strings.Contains(commands, onUserPath+"bgr install-skill") {
+		t.Fatalf("a just-installed tool's skill install did not run on the shell's PATH: %v", shell.commands)
 	}
 }
 
@@ -273,7 +294,7 @@ func TestPrefixesAreReadOnceAndOnlyForOutdatedTools(t *testing.T) {
 	shell.versions[onUserPath+"bgr --version"] = "bgr 1.7.0"
 	resolved(t, opts)
 	commands := strings.Join(shell.commands, ";")
-	if strings.Count(commands, "brew --prefix") != 1 || strings.Count(commands, "npm prefix -g") != 1 || strings.Count(commands, "command -v bgr") != 1 || strings.Count(commands, "command -v trufflehog") != 2 || !strings.Contains(commands, onUserPath+"command -v trufflehog") {
+	if strings.Count(commands, "brew --prefix") != 1 || strings.Count(commands, "npm prefix -g") != 1 || strings.Count(commands, "command -v trufflehog") != 2 || !strings.Contains(commands, onUserPath+"command -v trufflehog") {
 		t.Fatalf("commands = %v", shell.commands)
 	}
 }

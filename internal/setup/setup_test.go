@@ -568,6 +568,30 @@ func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
 	}
 }
 
+func TestAConfigFromBeforeTheFoundSetKeepsAnExcludedHarnessOut(t *testing.T) {
+	home := homeWithClaude(t)
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"]}`)
+	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want a harness the old config left out to stay out", got)
+	}
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+		t.Fatalf("config = %q, want the found set saved from this run on", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude,cursor" {
+		t.Fatalf("checked = %q, want the newly found Cursor offered", got)
+	}
+}
+
 func TestHarnessLeftOutByTheFlagStaysOutOnTheScreen(t *testing.T) {
 	home := homeWithClaude(t)
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {

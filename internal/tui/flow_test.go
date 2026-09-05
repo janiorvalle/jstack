@@ -184,7 +184,7 @@ func settled(t *testing.T, home string, shell *fakeShell) {
 	if err := setup.Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"skill_repos_asked":true,"repos_dirs_asked":true}`)
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude"],"skill_repos_asked":true,"repos_dirs_asked":true}`)
 }
 
 func write(t *testing.T, path, content string) {
@@ -586,6 +586,33 @@ func TestBackendSwitchedAfterEscDropsTheOtherBackendsArgument(t *testing.T) {
 	expectAll(t, out.String(), `bravo  wrote "Tracker: github-issues" to`, `charlie  wrote "Tracker: github-issues" to`)
 	if strings.Contains(out.String(), "github-issues SR") {
 		t.Fatalf("the Linear key leaked into the GitHub Issues line:\n%s", out.String())
+	}
+}
+
+func TestBackendSwitchedAfterEscGetsItsOwnDefaultNotTheOtherBackendsArgument(t *testing.T) {
+	home := homeWithRepos(t)
+	opts, out := options(t, home, machine())
+	_, err := guided(t, opts,
+		on("Install into which harnesses?", enter),
+		on("skills repo of your own", enter),
+		on("Where do your repos live?", enter),
+		on("bravo declares no tracker", down, down, down, enter),
+		on("Linear team key", typed("SR"), enter),
+		on("Open a PR for bravo?", esc),
+		on("Linear team key", esc),
+		on("bravo declares no tracker", tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyUp}, enter),
+		on("markdown tasks in the repo folder", enter),
+		on("Open a PR for bravo?", typed("n")),
+		on("Same answer, Tracker: markdown tasks/, for the 1 remaining?", typed("y")),
+		on("Which tools?", enter),
+		on("Apply?", enter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  wrote "Tracker: markdown tasks/" to`)
+	if strings.Contains(out.String(), "markdown SR") {
+		t.Fatalf("the Linear key leaked into the markdown line:\n%s", out.String())
 	}
 }
 

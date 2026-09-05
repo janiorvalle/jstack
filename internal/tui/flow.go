@@ -481,6 +481,13 @@ func (f *flow) trackerScreensFor(index int) []step {
 			Description("The line goes into " + current.question.File + ".").
 			Options(options...).
 			Value(&current.backend)
+		before := current.backend
+		defer func() {
+			// What was typed for one backend is not an answer for another.
+			if current.backend != before {
+				current.argument = ""
+			}
+		}()
 		return f.ask(field, func() string {
 			if chosen, ok := backendOf(); ok && chosen.Argument != "" {
 				return current.question.Repo + "  " + chosen.Label
