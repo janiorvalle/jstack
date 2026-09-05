@@ -40,7 +40,8 @@ func fixture() fstest.MapFS {
 
 // fakeShell is the machine: which checks pass, what commands print, and
 // which repos gh can clone. It answers git the way a clean checkout on
-// main at its remote does, so a tracker PR is offered.
+// main at its remote does, so a tracker PR is offered, and gh the way it
+// does for a GitHub repo with issues on, so GitHub Issues is guessed.
 type fakeShell struct {
 	present  map[string]bool
 	versions map[string]string
@@ -85,6 +86,8 @@ func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error 
 		f.versions["trufflehog --version"] = "trufflehog 3.97.4"
 	}
 	switch {
+	case strings.HasPrefix(command, "gh repo view --json hasIssuesEnabled "):
+		fmt.Fprintln(out, `{"hasIssuesEnabled":true}`)
 	case strings.HasSuffix(command, "git rev-parse --abbrev-ref HEAD"):
 		fmt.Fprintln(out, "main")
 	case strings.HasSuffix(command, "git remote get-url --push origin"):
@@ -220,11 +223,15 @@ func typed(text string) tea.KeyMsg {
 }
 
 // press is what a test does on one screen: wait for the title, then the
-// keys, the last of which ends the screen.
+// keys, the last of which ends the screen. An await among the keys waits
+// for text to show before the next key, the way a person waits for the
+// second page of a screen before typing on it.
 type press struct {
 	title string
 	keys  []tea.Msg
 }
+
+type await string
 
 func on(title string, keys ...tea.Msg) press {
 	return press{title: title, keys: keys}
@@ -257,6 +264,12 @@ func (s *scripted) run(screen *screen) error {
 		return bytes.Contains(shown, []byte(current.title))
 	}, teatest.WithDuration(5*time.Second))
 	for _, key := range current.keys {
+		if text, ok := key.(await); ok {
+			teatest.WaitFor(s.t, model.Output(), func(shown []byte) bool {
+				return bytes.Contains(shown, []byte(text))
+			}, teatest.WithDuration(5*time.Second))
+			continue
+		}
 		model.Send(key)
 	}
 	model.WaitFinished(s.t, teatest.WithFinalTimeout(5*time.Second))
@@ -489,7 +502,7 @@ func homeWithRepos(t *testing.T) string {
 	return home
 }
 
-func TestReposFolderIsPickedAndEachUndeclaredRepoAsked(t *testing.T) {
+func TestBackendScreensDeclareTheReposAndOnePRQuestionCoversThem(t *testing.T) {
 	home := homeWithRepos(t)
 	shell := machine()
 	opts, out := options(t, home, shell)
@@ -497,13 +510,12 @@ func TestReposFolderIsPickedAndEachUndeclaredRepoAsked(t *testing.T) {
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("bravo declares no tracker", down, down, down, enter),
-		on("Linear team key", typed("SR"), enter),
-		on("Open a PR for bravo?", typed("y")),
-		on("Same answer, Tracker: linear SR, for the 1 remaining?", typed("n")),
-		on("charlie declares no tracker", down, enter),
-		on("markdown tasks in the repo folder", enter),
+		on("Which repos track their work in Linear?", space, enter, await("Linear team key"), typed("SR"), enter),
+		on("Which repos track their work in Jira?", enter),
+		on("Which repos track their work in GitHub Issues?", enter),
+		on("Which repos track their work in markdown tasks in the repo?", space, enter, await("markdown tasks in the repo folder"), enter),
 		on("Which tools?", enter),
+		on("Open 1 pull request?", typed("y")),
 		on("Apply?", enter),
 	)
 	if err != nil {
@@ -513,24 +525,33 @@ func TestReposFolderIsPickedAndEachUndeclaredRepoAsked(t *testing.T) {
 	if !strings.Contains(repos, "~/code") || !strings.Contains(repos, "somewhere else") {
 		t.Fatalf("repos screen:\n%s", repos)
 	}
-	bravo := script.frame("bravo declares no tracker")
-	for _, want := range []string{"The line goes into ~/code/bravo/AGENTS.md.", "skip this run", "markdown tasks in the repo", "GitHub Issues", "> Linear", "Jira"} {
-		if !strings.Contains(bravo, want) {
-			t.Fatalf("tracker screen missing %q:\n%s", want, bravo)
+	linear := script.frame("Which repos track their work in Linear?")
+	for _, want := range []string{"✓ bravo", "• charlie", "Unchecked on every screen means skip."} {
+		if !strings.Contains(linear, want) {
+			t.Fatalf("Linear screen missing %q:\n%s", want, linear)
 		}
+	}
+	if key := script.frame("Linear team key, the same for every repo checked"); !strings.Contains(key, "for example SR") {
+		t.Fatalf("key page:\n%s", key)
+	}
+	if issues := script.frame("Which repos track their work in GitHub Issues?"); strings.Contains(issues, "bravo") || !strings.Contains(issues, "• charlie") {
+		t.Fatalf("a repo taken by Linear was offered again:\n%s", issues)
+	}
+	if markdown := script.frame("markdown tasks in the repo folder"); !strings.Contains(markdown, "Enter for tasks/") {
+		t.Fatalf("folder page:\n%s", markdown)
 	}
 	expectAll(t, out.String(),
 		"repos  ~/code",
-		"bravo  Linear\n",
-		"bravo  Tracker: linear SR",
-		"bravo  PR through gh",
-		"charlie  asked one by one",
-		"charlie  Tracker: markdown tasks/",
-		"\ntrackers\n  bravo    would get \"Tracker: linear SR\" and a PR on branch tracker-line\n  charlie  would get \"Tracker: markdown tasks/\", left uncommitted\n",
+		"linear SR  1 repo\n",
+		"jira  none\n",
+		"github-issues  none\n",
+		"markdown tasks/  1 repo\n",
+		"\ntrackers\n  bravo    write \"Tracker: linear SR\", open a PR on branch tracker-line\n  charlie  write \"Tracker: markdown tasks/\" only, has no origin remote\n",
+		"pull requests  yes\n",
 		`bravo  wrote "Tracker: linear SR" to ~/code/bravo/AGENTS.md`,
 		"bravo  PR opened, back on main",
 		`charlie  wrote "Tracker: markdown tasks/" to ~/code/charlie/AGENTS.md`,
-		"charlie  has no origin remote, so the line is left uncommitted",
+		"charlie  has no origin remote; the line is left uncommitted",
 	)
 	if !strings.Contains(strings.Join(shell.commands, "\n"), "gh pr create") {
 		t.Fatalf("no PR was opened:\n%s", strings.Join(shell.commands, "\n"))
@@ -540,101 +561,131 @@ func TestReposFolderIsPickedAndEachUndeclaredRepoAsked(t *testing.T) {
 	}
 }
 
-func TestSameAnswerForTheRestIsOneEnterAndSkipsTheirScreens(t *testing.T) {
+func TestOriginWithIssuesComesCheckedAndSkipsAreRememberedUntilAskedForAgain(t *testing.T) {
 	home := homeWithRepos(t)
 	shell := machine()
 	opts, out := options(t, home, shell)
-	_, err := guided(t, opts,
+	script, err := guided(t, opts,
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("bravo declares no tracker", down, down, enter),
-		on("Open a PR for bravo?", typed("n")),
-		on("Same answer, Tracker: github-issues, for the 1 remaining?", typed("y")),
+		on("Which repos track their work in Linear?", enter),
+		on("Which repos track their work in Jira?", enter),
+		on("Which repos track their work in GitHub Issues?", enter),
+		on("Which repos track their work in markdown tasks in the repo?", enter),
 		on("Which tools?", enter),
+		on("Open 1 pull request?", typed("n")),
 		on("Apply?", enter),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo  line left uncommitted", "charlie  same answer", `bravo  wrote "Tracker: github-issues"`, `charlie  wrote "Tracker: github-issues"`)
+	issues := script.frame("Which repos track their work in GitHub Issues?")
+	for _, want := range []string{"✓ bravo", "• charlie", "1 repo checked already, from the origin."} {
+		if !strings.Contains(issues, want) {
+			t.Fatalf("GitHub Issues screen missing %q:\n%s", want, issues)
+		}
+	}
+	expectAll(t, out.String(),
+		"github-issues  1 repo\n",
+		"markdown  none\n",
+		"\ntrackers\n  bravo    write \"Tracker: github-issues\", open a PR on branch tracker-line\n  charlie  skipped; not offered again without --ask-trackers-again\n",
+		"pull requests  no, lines left uncommitted\n",
+		`bravo  wrote "Tracker: github-issues"`,
+		"bravo  line left uncommitted; commit it yourself",
+		"charlie  skipped",
+	)
 	if strings.Contains(strings.Join(shell.commands, "\n"), "checkout -b") {
 		t.Fatal("a PR was opened after No")
 	}
-}
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, `"trackers_skipped": [`) || !strings.Contains(got, "charlie") {
+		t.Fatalf("config = %s", got)
+	}
 
-func TestBackendSwitchedAfterEscDropsTheOtherBackendsArgument(t *testing.T) {
-	home := homeWithRepos(t)
-	opts, out := options(t, home, machine())
-	_, err := guided(t, opts,
+	opts, out = options(t, home, shell)
+	_, err = guided(t, opts, on("Install into which harnesses?", enter), on("Which tools?", enter))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "  bravo    Tracker: github-issues\n  charlie  not declared, skipped on an earlier run; add --ask-trackers-again to be asked\n", "Everything is in place. Nothing to apply.")
+
+	opts, out = options(t, home, shell)
+	opts.AskTrackersAgain = true
+	_, err = guided(t, opts,
 		on("Install into which harnesses?", enter),
-		on("skills repo of your own", enter),
-		on("Where do your repos live?", enter),
-		on("bravo declares no tracker", down, down, down, enter),
-		on("Linear team key", typed("SR"), enter),
-		on("Open a PR for bravo?", esc),
-		on("Linear team key", esc),
-		on("bravo declares no tracker", tea.KeyMsg{Type: tea.KeyUp}, enter),
-		on("Open a PR for bravo?", typed("n")),
-		on("Same answer, Tracker: github-issues, for the 1 remaining?", typed("y")),
+		on("Which repos track their work in Linear?", space, enter, await("Linear team key"), typed("SR"), enter),
 		on("Which tools?", enter),
 		on("Apply?", enter),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), `bravo  wrote "Tracker: github-issues" to`, `charlie  wrote "Tracker: github-issues" to`)
-	if strings.Contains(out.String(), "github-issues SR") {
-		t.Fatalf("the Linear key leaked into the GitHub Issues line:\n%s", out.String())
+	expectAll(t, out.String(), "linear SR  1 repo\n", `charlie  wrote "Tracker: linear SR"`)
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); strings.Contains(got, "trackers_skipped") {
+		t.Fatalf("a declared repo stayed on the skip list: %s", got)
 	}
 }
 
-func TestBackendSwitchedAfterEscGetsItsOwnDefaultNotTheOtherBackendsArgument(t *testing.T) {
+func TestSlashFiltersTheListAndEscClearsTheFilterBeforeGoingBack(t *testing.T) {
 	home := homeWithRepos(t)
 	opts, out := options(t, home, machine())
-	_, err := guided(t, opts,
+	script, err := guided(t, opts,
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("bravo declares no tracker", down, down, down, enter),
-		on("Linear team key", typed("SR"), enter),
-		on("Open a PR for bravo?", esc),
-		on("Linear team key", esc),
-		on("bravo declares no tracker", tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyUp}, enter),
-		on("markdown tasks in the repo folder", enter),
-		on("Open a PR for bravo?", typed("n")),
-		on("Same answer, Tracker: markdown tasks/, for the 1 remaining?", typed("y")),
+		on("Which repos track their work in Linear?", typed("/"), typed("cha"), enter, space, esc, enter, await("Linear team key"), typed("SR"), enter),
+		on("Which repos track their work in Jira?", enter),
+		on("Which repos track their work in GitHub Issues?", enter),
 		on("Which tools?", enter),
+		on("Open 1 pull request?", typed("y")),
 		on("Apply?", enter),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), `bravo  wrote "Tracker: markdown tasks/" to`)
-	if strings.Contains(out.String(), "markdown SR") {
-		t.Fatalf("the Linear key leaked into the markdown line:\n%s", out.String())
+	var filtered, cleared string
+	for _, frame := range script.frames {
+		if strings.Contains(frame, "Which repos track their work in Linear?") && strings.Contains(frame, "cha") {
+			if strings.Contains(frame, "✓ charlie") {
+				cleared = frame
+			} else if strings.Contains(frame, "• charlie") {
+				filtered = frame
+			}
+		}
 	}
+	if filtered == "" || strings.Contains(filtered, "bravo") {
+		t.Fatalf("the filter did not narrow the list to charlie:\n%s", filtered)
+	}
+	if cleared == "" || !strings.Contains(cleared, "• bravo") {
+		t.Fatalf("Esc did not clear the filter and bring bravo back:\n%s", cleared)
+	}
+	expectAll(t, out.String(), "linear SR  1 repo\n", "github-issues  1 repo\n", `charlie  wrote "Tracker: linear SR"`, `bravo  wrote "Tracker: github-issues"`)
 }
 
-func TestSkippedRepoIsLeftAlone(t *testing.T) {
+func TestEscGoesBackToTheEarlierBackendScreenWithItsChecksKept(t *testing.T) {
 	home := homeWithRepos(t)
 	opts, out := options(t, home, machine())
-	_, err := guided(t, opts,
+	script, err := guided(t, opts,
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", enter),
 		on("Where do your repos live?", enter),
-		on("bravo declares no tracker", enter),
-		on("Same answer, skip, for the 1 remaining?", typed("y")),
+		on("Which repos track their work in Linear?", space, enter, await("Linear team key"), typed("SR"), enter),
+		on("Which repos track their work in Jira?", esc),
+		on("Which repos track their work in Linear?", enter, await("Linear team key"), enter),
+		on("Which repos track their work in Jira?", enter),
+		on("Which repos track their work in GitHub Issues?", enter),
+		on("Which repos track their work in markdown tasks in the repo?", enter),
 		on("Which tools?", enter),
+		on("Open 1 pull request?", typed("n")),
 		on("Apply?", enter),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo  skip", "\ntrackers\n  bravo    skipped this run\n  charlie  skipped this run\n", "bravo  skipped\n  charlie  skipped")
-	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" {
-		t.Fatal("a skipped repo changed")
+	if again := script.frame("Which repos track their work in Linear?"); !strings.Contains(again, "✓ bravo") {
+		t.Fatalf("bravo lost its check after Esc:\n%s", again)
 	}
+	expectAll(t, out.String(), "linear SR  1 repo\n", `bravo  wrote "Tracker: linear SR"`, "charlie  skipped")
 }
 
 func TestToolsScreenOffersTheOwnersUpdateLineAndUncheckedMeansSkip(t *testing.T) {

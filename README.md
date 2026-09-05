@@ -16,7 +16,7 @@ The opinions are the point. A human stays in the merge seat. Every claim ships w
 curl -fsSL https://raw.githubusercontent.com/janiorvalle/squirrel/main/install.sh | sh
 ```
 
-That puts the `squirrel` binary in `~/.local/bin`, checksum verified, and runs `squirrel setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, a skills repo of your own, where your repos live, the tracker for any repo that hasn't named one, and which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back. The last screen is the plan with a confirm, and nothing in a harness or a repo of yours changes before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.squirrel/backup/`.
+That puts the `squirrel` binary in `~/.local/bin`, checksum verified, and runs `squirrel setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, a skills repo of your own, where your repos live, which repos use each tracker, and which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back. The last screen is the plan with a confirm, and nothing in a harness or a repo of yours changes before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.squirrel/backup/`.
 
 On Windows, in PowerShell:
 
@@ -28,7 +28,7 @@ That puts `squirrel.exe` in `%LOCALAPPDATA%\Programs\squirrel` on your user PATH
 
 Run `squirrel setup` again any time. Your saved answers come preselected, so a rerun with nothing changed is one Enter, and a harness installed since last time shows up checked. `squirrel upgrade` fetches the newest release and reruns setup.
 
-Two questions are asked once. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: setup clones it with gh under `~/.squirrel/repos`, pulls it every run, and installs its skills beside squirrel's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared`. For each undeclared one it asks which of the four backends the `tracker` skill knows, or skip, with a same-for-the-rest shortcut, and whether to open the one-line PR through gh. The line lands in the repo's `AGENTS.md` after the confirm.
+Two questions are asked once. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: setup clones it with gh under `~/.squirrel/repos`, pulls it every run, and installs its skills beside squirrel's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared`. Then one checkbox list per backend the `tracker` skill knows, Linear, Jira, GitHub Issues, markdown tasks, over the repos that haven't named one: check the repos that use it, type `/` to filter by name, and give the team key or project key once for all of them. A repo whose origin is a GitHub repo with issues on comes checked on the GitHub Issues list. A repo left unchecked on every list is skipped and not offered again; `--ask-trackers-again` offers it again. The plan names each repo that can take the one-line PR through gh and why the rest can't, and one question opens them all. The lines land in each repo's `AGENTS.md` after the confirm.
 
 Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing in the harnesses (a skills repo you named is still refreshed):
 
@@ -40,7 +40,7 @@ squirrel setup --harness claude,codex --yes   # or --harness all
 - `--keep-instructions` appends the letter to an instructions file that has other content instead of replacing it.
 - `--skill-repo owner/name` adds a skills repo. `--forget-skill-repo` drops one.
 - `--override name=owner/name` picks between two skills with the same name, which otherwise stop setup and ask.
-- `--repos-dir <folder>` answers the repos question.
+- `--repos-dir <folder>` answers the repos question. `--ask-trackers-again` offers the repos you skipped on the tracker lists again.
 
 ## Use it
 

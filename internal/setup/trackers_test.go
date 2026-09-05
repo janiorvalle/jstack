@@ -52,7 +52,7 @@ func answering(line string, prFor ...string) func([]TrackerQuestion) []TrackerAn
 			for _, name := range prFor {
 				openPR = openPR || name == question.Repo
 			}
-			answers = append(answers, TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: line, OpenPR: openPR && question.PROffer})
+			answers = append(answers, TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: line, OpenPR: openPR && question.PRHold == ""})
 		}
 		return answers
 	}
@@ -75,12 +75,29 @@ func offers(questions []TrackerQuestion) string {
 	var parts []string
 	for _, question := range questions {
 		state := "no"
-		if question.PROffer {
+		if question.PRHold == "" {
 			state = "yes"
 		}
 		parts = append(parts, question.Repo+":"+state)
 	}
 	return strings.Join(parts, " ")
+}
+
+// backendNamed is the backend with that key.
+func backendNamed(t *testing.T, key string) Backend {
+	t.Helper()
+	for _, entry := range Backends() {
+		if entry.Key == key {
+			return entry
+		}
+	}
+	t.Fatalf("no backend %q", key)
+	return Backend{}
+}
+
+// jsonPath is a path the way config.json holds it.
+func jsonPath(path string) string {
+	return strings.ReplaceAll(path, `\`, `\\`)
 }
 
 func TestWithTrackerLineGoesAfterTheFirstHeading(t *testing.T) {
@@ -101,7 +118,7 @@ func TestWithTrackerLineGoesAfterTheFirstHeading(t *testing.T) {
 
 func TestScanReadsAgentsMdThenClaudeMdAndSkipsWhatIsNotACheckout(t *testing.T) {
 	home := homeWithRepos(t)
-	repos := scanRepos([]string{filepath.Join(home, "code")})
+	repos := scanRepos([]string{filepath.Join(home, "code")}, nil)
 	got := make([]string, 0, len(repos))
 	for _, repo := range repos {
 		got = append(got, repo.name+"="+repo.line+"@"+filepath.Base(repo.file))
@@ -129,7 +146,7 @@ func TestLineGoesIntoClaudeMdWhenThatIsTheOnlyFile(t *testing.T) {
 	if got := read(t, file); got != "# Echo\n\nTracker: github-issues\n" {
 		t.Fatalf("CLAUDE.md = %q", got)
 	}
-	expectAll(t, out.String(), `echo  wrote "Tracker: github-issues" to ~/code/echo/CLAUDE.md`, "echo  has no origin remote, so the line is left uncommitted")
+	expectAll(t, out.String(), `echo  wrote "Tracker: github-issues" to ~/code/echo/CLAUDE.md`, "echo  has no origin remote; the line is left uncommitted")
 }
 
 func TestReposFolderIsGuessedAskedOnceAndRemembered(t *testing.T) {
@@ -148,7 +165,7 @@ func TestReposFolderIsGuessedAskedOnceAndRemembered(t *testing.T) {
 	}
 	expectAll(t, out.String(),
 		"repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n  charlie  not declared\n  delta    Tracker: jira SR\n",
-		"\ntrackers\n  bravo    skipped this run\n  charlie  skipped this run\n",
+		"\ntrackers\n  bravo    skipped; not offered again without --ask-trackers-again\n  charlie  skipped; not offered again without --ask-trackers-again\n",
 		"bravo  skipped\n  charlie  skipped",
 	)
 	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, `"repos_dirs": [`) || !strings.Contains(got, `"repos_dirs_asked": true`) {
@@ -167,7 +184,7 @@ func TestReposFolderIsGuessedAskedOnceAndRemembered(t *testing.T) {
 	if err := guided(t, opts, script{}); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared\n", "bravo  skipped")
+	expectAll(t, out.String(), "repos ~/code\n  alpha    Tracker: markdown tasks/\n  bravo    not declared, skipped on an earlier run; add --ask-trackers-again to be asked\n")
 }
 
 func TestTypedReposFolderMustExist(t *testing.T) {
@@ -252,7 +269,7 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		if questions[0].File != "~/code/bravo/AGENTS.md" || questions[1].File != "~/code/charlie/AGENTS.md" {
 			t.Fatalf("files = %+v", questions)
 		}
-		linear, markdown := Backends()[2], Backends()[0]
+		linear, markdown := backendNamed(t, "linear"), backendNamed(t, "markdown")
 		return answerEach(questions, map[string]TrackerAnswer{
 			"bravo":   {Line: TrackerLine(linear, "SR"), OpenPR: true},
 			"charlie": {Line: TrackerLine(markdown, markdown.Default)},
@@ -262,11 +279,11 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(),
-		"\ntrackers\n  bravo    would get \"Tracker: linear SR\" and a PR on branch tracker-line\n  charlie  would get \"Tracker: markdown tasks/\", left uncommitted\n",
+		"\ntrackers\n  bravo    write \"Tracker: linear SR\", open a PR on branch tracker-line\n  charlie  write \"Tracker: markdown tasks/\" only, has no origin remote\n",
 		`bravo  wrote "Tracker: linear SR" to ~/code/bravo/AGENTS.md`,
 		"bravo  PR opened, back on main",
 		`charlie  wrote "Tracker: markdown tasks/" to ~/code/charlie/AGENTS.md`,
-		"charlie  has no origin remote, so the line is left uncommitted; commit it yourself",
+		"charlie  has no origin remote; the line is left uncommitted, commit it yourself",
 	)
 	if got := read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")); got != "# Bravo\n\nTracker: linear SR\n\nSome text.\n" {
 		t.Fatalf("bravo AGENTS.md = %q", got)
@@ -317,12 +334,12 @@ func TestSkipLeavesTheRepoAsItIsForThisRun(t *testing.T) {
 	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
-		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}, "charlie": {Line: TrackerLine(Backends()[3], "SR")}})
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}, "charlie": {Line: TrackerLine(backendNamed(t, "jira"), "SR")}})
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo    skipped this run", "bravo  skipped", `charlie  wrote "Tracker: jira SR"`)
+	expectAll(t, out.String(), "bravo    skipped; not offered again without --ask-trackers-again", "bravo  skipped", `charlie  wrote "Tracker: jira SR"`)
 	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" {
 		t.Fatal("a skipped repo changed")
 	}
@@ -348,7 +365,7 @@ func TestDirtyTreeWritesTheLineAndSkipsThePROffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), `bravo  wrote "Tracker: github-issues"`, "bravo  has other uncommitted changes, so the line is left uncommitted with them", "charlie  line left uncommitted; commit it yourself")
+	expectAll(t, out.String(), `bravo  wrote "Tracker: github-issues"`, "bravo  has other uncommitted changes; the line is left uncommitted, commit it yourself", "charlie  line left uncommitted; commit it yourself")
 }
 
 func TestFailedPushGoesBackToTheBranchAndIsReportedAtTheEnd(t *testing.T) {
@@ -507,7 +524,7 @@ func TestPRIsOfferedOnlyFromTheDefaultBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo  is on branch feature, not main, so the line is left uncommitted; commit it yourself", "charlie  has no origin/HEAD, so setup can't tell its default branch and the line is left uncommitted; run `git remote set-head origin -a` there, then rerun")
+	expectAll(t, out.String(), "bravo  is on branch feature, not main; the line is left uncommitted, commit it yourself", "charlie  has no origin/HEAD, run `git remote set-head origin -a` there to name its default branch; the line is left uncommitted, commit it yourself")
 	if strings.Contains(strings.Join(shell.commands, "\n"), "checkout -b") {
 		t.Fatalf("opened a PR off the default branch:\n%s", out.String())
 	}
@@ -549,7 +566,7 @@ func TestPRIsOfferedOnlyWhenTheDefaultBranchIsAtItsRemote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo  is on main but not at origin/main, so the line is left uncommitted; push or pull first, then rerun", "charlie  line left uncommitted; commit it yourself")
+	expectAll(t, out.String(), "bravo  is on main but not at origin/main, push or pull first; the line is left uncommitted, commit it yourself", "charlie  line left uncommitted; commit it yourself")
 }
 
 func TestLinkChainEndingOutsideTheRepoIsLeftAlone(t *testing.T) {
@@ -649,6 +666,7 @@ func TestATrackerAnswerAloneIsPending(t *testing.T) {
 	if err := guided(t, opts, script{}); err != nil {
 		t.Fatal(err)
 	}
+	opts.AskTrackersAgain = true
 	session, err := Start(opts)
 	if err != nil {
 		t.Fatal(err)
@@ -696,5 +714,121 @@ func TestATrackerLineWrittenSinceTheQuestionIsLeftAlone(t *testing.T) {
 	expectAll(t, out.String(), `bravo  names its tracker since the question, "Tracker: linear SR", so the answer is left out`)
 	if got := read(t, repo.file); got != "# Bravo\n\nTracker: linear SR\n\nSome text.\n" {
 		t.Fatalf("the write went ahead: %q", got)
+	}
+}
+
+func TestSkippedRepoIsRememberedUntilAskedForAgain(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	bravo := jsonPath(canonical(filepath.Join(home, "code", "bravo")))
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}, "charlie": {Line: "Tracker: github-issues"}})
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "bravo    skipped; not offered again without --ask-trackers-again", "bravo  skipped")
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "\"trackers_skipped\": [\n    \""+bravo+"\"\n  ]") {
+		t.Fatalf("config = %s", got)
+	}
+
+	opts, out = options(t, home, withRoast("1.1.0"), "")
+	err = guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		if len(questions) != 0 {
+			t.Fatalf("asked about a skipped repo: %+v", questions)
+		}
+		return nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "  bravo    not declared, skipped on an earlier run; add --ask-trackers-again to be asked\n  charlie  Tracker: github-issues\n")
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, bravo) {
+		t.Fatalf("a run that asked nothing forgot the skip: %s", got)
+	}
+
+	opts, out = options(t, home, withRoast("1.1.0"), "")
+	opts.AskTrackersAgain = true
+	err = guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		if got := offers(questions); got != "bravo:yes" {
+			t.Fatalf("offers = %q", got)
+		}
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Line: "Tracker: linear SR"}})
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  wrote "Tracker: linear SR"`)
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); strings.Contains(got, "trackers_skipped") {
+		t.Fatalf("a declared repo stayed on the skip list: %s", got)
+	}
+}
+
+func TestSkippedRepoThatNamesItsTrackerDropsOffTheList(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	opts, _ := options(t, home, withRoast("1.1.0"), "")
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "trackers_skipped") {
+		t.Fatalf("config = %s", got)
+	}
+	write(t, filepath.Join(home, "code", "bravo", "AGENTS.md"), "# Bravo\n\nTracker: jira SR\n")
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "  bravo    Tracker: jira SR\n  charlie  not declared, skipped on an earlier run; add --ask-trackers-again to be asked\n")
+	got := read(t, filepath.Join(home, ".squirrel", "config.json"))
+	if strings.Contains(got, jsonPath(canonical(filepath.Join(home, "code", "bravo")))) || !strings.Contains(got, jsonPath(canonical(filepath.Join(home, "code", "charlie")))) {
+		t.Fatalf("config = %s", got)
+	}
+}
+
+func TestOriginIsAskedOnceAndSaysWhetherIssuesAreOn(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	shell := withRoast("1.1.0")
+	shell.versions[in(home, "charlie", "git remote get-url --push origin")] = "git@github.com:me/bravo.git"
+	view := "gh repo view --json hasIssuesEnabled " + quote(runtime.GOOS, "git@github.com:me/bravo.git")
+	ask := func() (string, string, int) {
+		t.Helper()
+		opts, _ := options(t, home, shell, "")
+		session, err := Start(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer session.Close()
+		dirs, _ := session.ReposDirs()
+		questions := session.Trackers(context.Background(), dirs)
+		questions = append(questions, session.Trackers(context.Background(), dirs)...)
+		var guesses, holds []string
+		for _, question := range questions {
+			guesses = append(guesses, question.Guess)
+			holds = append(holds, question.PRHold)
+		}
+		calls := 0
+		for _, command := range shell.commands {
+			if command == view {
+				calls++
+			}
+		}
+		shell.commands = nil
+		return strings.Join(guesses, ","), strings.Join(holds, ","), calls
+	}
+	if guesses, holds, calls := ask(); guesses != "github-issues,github-issues,github-issues,github-issues" || holds != ",,," || calls != 1 {
+		t.Fatalf("issues on: guesses = %q, holds = %q, gh asked %d times", guesses, holds, calls)
+	}
+	shell.versions[view] = `{"hasIssuesEnabled":false}`
+	if guesses, holds, _ := ask(); guesses != ",,," || holds != ",,," {
+		t.Fatalf("issues off: guesses = %q, holds = %q", guesses, holds)
+	}
+	shell.failing = map[string]bool{view: true}
+	hold := "has an origin gh can't see, run gh auth login for that host"
+	if guesses, holds, _ := ask(); guesses != ",,," || holds != strings.Repeat(hold+",", 3)+hold {
+		t.Fatalf("gh failing: guesses = %q, holds = %q", guesses, holds)
 	}
 }

@@ -13,7 +13,9 @@ import (
 // offered checked while one they left out stays out, the skills
 // repos they named, whether they were asked for one, which source each
 // colliding skill name comes from, "squirrel" or "owner/name", and the
-// folders their repos live in, with whether they were asked for those.
+// folders their repos live in, with whether they were asked for those,
+// and the checkouts they skipped on the tracker screens, by canonical
+// path, so a skipped repo is not offered again until --ask-trackers-again.
 type Config struct {
 	Harnesses       []string          `json:"harnesses"`
 	HarnessesFound  []string          `json:"harnesses_found,omitempty"`
@@ -22,6 +24,7 @@ type Config struct {
 	SkillOverrides  map[string]string `json:"skill_overrides,omitempty"`
 	ReposDirs       []string          `json:"repos_dirs,omitempty"`
 	ReposDirsAsked  bool              `json:"repos_dirs_asked,omitempty"`
+	TrackersSkipped []string          `json:"trackers_skipped,omitempty"`
 }
 
 func configPath(home string) string {
