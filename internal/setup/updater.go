@@ -133,6 +133,8 @@ func onPersonsPath(opts Options, command string) (string, bool) {
 	return onPath(runtime.GOOS, opts.Getenv("PATH"), command)
 }
 
+// onPath sets PATH as a statement of its own, so a line of several
+// commands, "npm install -g x && x install", runs every one of them there.
 func onPath(operatingSystem, path, command string) (string, bool) {
 	if path == "" {
 		return "", false
@@ -140,7 +142,7 @@ func onPath(operatingSystem, path, command string) (string, bool) {
 	if operatingSystem == "windows" {
 		return "$env:Path = " + quote(operatingSystem, path) + "; " + command, true
 	}
-	return "PATH=" + quote(operatingSystem, path) + " " + command, true
+	return "PATH=" + quote(operatingSystem, path) + "; " + command, true
 }
 
 // homebrewFormula is the formula a binary belongs to, read off its real

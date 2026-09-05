@@ -39,7 +39,7 @@ func linked(t *testing.T, link, target string) {
 // start of the lookup that runs on it.
 const userPath = "/usr/bin:/bin"
 
-var onUserPath = "PATH=" + quote("darwin", userPath) + " "
+var onUserPath = "PATH=" + quote("darwin", userPath) + "; "
 
 // owned is a machine with every tool outdated and each binary where its
 // owner put it: TruffleHog linked from Homebrew's bin into its Cellar, bgr
@@ -299,6 +299,24 @@ func TestPrefixesAreReadOnceAndOnlyForOutdatedTools(t *testing.T) {
 	}
 }
 
+func TestAnUpdateRunsEveryCommandOfItsLineWhereThePersonsPathFoundTheBinary(t *testing.T) {
+	skipOnWindows(t)
+	home := homeWithClaude(t)
+	shell, opts := owned(t, home)
+	opts.UpdateTools = true
+	opts.Yes = true
+	_ = Run(context.Background(), opts)
+	commands := strings.Join(shell.commands, "\n")
+	for _, want := range []string{onUserPath + "brew upgrade trufflehog", onUserPath + "curl bgr | sh", onUserPath + pinnedInstall} {
+		if !strings.Contains(commands, "\n"+want+"\n") {
+			t.Fatalf("update did not run on the person's PATH, want %q in:\n%s", want, commands)
+		}
+	}
+	if strings.Contains(commands, "\nbrew upgrade trufflehog\n") || strings.Contains(commands, "\n"+pinnedInstall+"\n") {
+		t.Fatalf("an update ran on the shell's PATH:\n%s", commands)
+	}
+}
+
 func TestBrewThatStaysBehindTheReleaseSaysSo(t *testing.T) {
 	skipOnWindows(t)
 	home := homeWithClaude(t)
@@ -331,7 +349,7 @@ func TestWithinIsTheFolderOrInsideIt(t *testing.T) {
 }
 
 func TestOnPathRunsALineOnThePersonsPath(t *testing.T) {
-	if got, ok := onPath("darwin", "/usr/bin:/opt/homebrew/bin", "roast --version"); !ok || got != "PATH='/usr/bin:/opt/homebrew/bin' roast --version" {
+	if got, ok := onPath("darwin", "/usr/bin:/opt/homebrew/bin", "npm install -g x && x install"); !ok || got != "PATH='/usr/bin:/opt/homebrew/bin'; npm install -g x && x install" {
 		t.Fatalf("darwin = %q, %v", got, ok)
 	}
 	if got, ok := onPath("windows", `C:\bin`, "roast --version"); !ok || got != `$env:Path = 'C:\bin'; roast --version` {

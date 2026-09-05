@@ -854,9 +854,12 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	if status.present {
 		verb, done = fmt.Sprintf("updating %s %s to %s", tool.Title, installedLabel(*status), tools.Display(status.latest)), "updated"
 	}
+	// An update runs where the person's PATH found the binary, so every
+	// command in the line, "npm install -g x && x install", runs the binary
+	// they run and not a stale copy the shell's PATH puts first.
 	command := status.line()
 	fmt.Fprintf(out, "  %s: %s\n", verb, command)
-	if err := opts.Shell(ctx, command, out); err != nil {
+	if err := opts.Shell(ctx, status.ownLine(opts, command), out); err != nil {
 		fmt.Fprintf(out, "  FAILED %s: %v\n", tool.Title, err)
 		return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", tool.Title, command, err)
 	}
