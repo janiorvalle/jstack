@@ -346,7 +346,7 @@ func TestResolveLineIsTheShellsOwn(t *testing.T) {
 	if got := resolveLine("darwin", "roast"); got != "command -v roast" {
 		t.Fatalf("darwin = %q", got)
 	}
-	if got := resolveLine("windows", "roast"); got != "(Get-Command roast).Source" {
+	if got := resolveLine("windows", "roast"); got != "(Get-Command roast -ErrorAction SilentlyContinue).Source" {
 		t.Fatalf("windows = %q", got)
 	}
 }

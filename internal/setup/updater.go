@@ -114,10 +114,13 @@ func resolvedFolder(folder string) string {
 	return folder
 }
 
-// resolveLine prints the path of a binary on PATH, in the shell of the OS.
+// resolveLine prints the path of a binary on PATH, in the shell of the OS,
+// and nothing at all when there is none: the shell's output is one stream
+// here, and Get-Command's "not recognized" would otherwise come back as
+// the path.
 func resolveLine(operatingSystem, binary string) string {
 	if operatingSystem == "windows" {
-		return "(Get-Command " + binary + ").Source"
+		return "(Get-Command " + binary + " -ErrorAction SilentlyContinue).Source"
 	}
 	return "command -v " + binary
 }
