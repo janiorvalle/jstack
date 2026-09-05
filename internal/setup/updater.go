@@ -70,10 +70,20 @@ func (l *locator) locate(tool tools.Tool) location {
 	if formula := l.homebrewFormula(real); formula != "" {
 		return location{path: path, owner: byHomebrew, formula: formula}
 	}
-	if within(installFolder(l.opts), path) {
+	if within(resolvedFolder(installFolder(l.opts)), real) {
 		return location{path: path, owner: byInstaller}
 	}
 	return location{path: path, owner: bySomethingElse}
+}
+
+// resolvedFolder is the folder with its own links followed, so a file
+// inside a linked ~/.local/bin still counts as inside it, while a link
+// inside it that leads elsewhere doesn't.
+func resolvedFolder(folder string) string {
+	if resolved, err := filepath.EvalSymlinks(folder); err == nil {
+		return resolved
+	}
+	return folder
 }
 
 // pathOf is what the shell resolves the tool's binary to, "" for a tool
@@ -104,10 +114,7 @@ func (l *locator) homebrewFormula(real string) string {
 	if prefix == "" {
 		return ""
 	}
-	cellar := filepath.Join(prefix, "Cellar")
-	if resolved, err := filepath.EvalSymlinks(cellar); err == nil {
-		cellar = resolved
-	}
+	cellar := resolvedFolder(filepath.Join(prefix, "Cellar"))
 	if !within(cellar, real) {
 		return ""
 	}
@@ -130,11 +137,7 @@ func (l *locator) npmModules() string {
 	if runtime.GOOS == "windows" {
 		return prefix
 	}
-	modules := filepath.Join(prefix, "lib", "node_modules")
-	if resolved, err := filepath.EvalSymlinks(modules); err == nil {
-		modules = resolved
-	}
-	return modules
+	return resolvedFolder(filepath.Join(prefix, "lib", "node_modules"))
 }
 
 // prefix runs a command that prints a folder, once per run.

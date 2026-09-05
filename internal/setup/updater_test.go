@@ -163,6 +163,39 @@ func TestAnNpmLineBinaryOutsideNodesModulesIsSomebodyElses(t *testing.T) {
 	}
 }
 
+func TestALinkInTheInstallersFolderThatLeadsElsewhereIsSomebodyElses(t *testing.T) {
+	skipOnWindows(t)
+	home := homeWithClaude(t)
+	shell, opts := owned(t, home)
+	link := filepath.Join(home, ".local", "bin", "bgr")
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	linked(t, link, filepath.Join(home, ".asdf", "installs", "bgr", "1.6.0", "bin", "bgr"))
+	shell.versions["command -v bgr"] = link
+	status := resolved(t, opts)["bgr"]
+	if status.actionable() || status.owner != bySomethingElse {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestAFileInsideALinkedInstallersFolderIsTheInstallers(t *testing.T) {
+	skipOnWindows(t)
+	home := homeWithClaude(t)
+	shell, opts := owned(t, home)
+	elsewhere := filepath.Join(home, "elsewhere", "bin")
+	if err := os.Rename(filepath.Join(home, ".local", "bin"), elsewhere); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(home, ".local", "bin")); err != nil {
+		t.Fatal(err)
+	}
+	shell.versions["command -v bgr"] = filepath.Join(home, ".local", "bin", "bgr")
+	if status := resolved(t, opts)["bgr"]; status.owner != byInstaller || status.line() != "curl bgr | sh" {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
 func TestPrefixesAreReadOnceAndOnlyForOutdatedTools(t *testing.T) {
 	skipOnWindows(t)
 	home := homeWithClaude(t)
