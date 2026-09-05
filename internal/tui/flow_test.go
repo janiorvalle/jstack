@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -47,10 +48,13 @@ type fakeShell struct {
 	versions map[string]string
 	repos    map[string]map[string]string
 	commands []string
+	guard    sync.Mutex
 }
 
 func (f *fakeShell) run(_ context.Context, command string, out io.Writer) error {
+	f.guard.Lock()
 	f.commands = append(f.commands, command)
+	f.guard.Unlock()
 	if strings.HasPrefix(command, "gh repo clone ") {
 		dir := strings.Split(command, "'")[1]
 		name := filepath.ToSlash(filepath.Join(filepath.Base(filepath.Dir(dir)), filepath.Base(dir)))

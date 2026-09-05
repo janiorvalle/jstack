@@ -237,3 +237,10 @@ The one list per backend from issue 47 asked one Linear team key for every repo 
 - The key comes before the list because the list's title names the team, "Which repos track their work in Linear team SR?". Picking the repos of a named team reads better than picking repos and being asked which team afterwards.
 - A single-team person sees the same screens plus one Enter, on the empty key, and not even that when the team took every repo.
 - GitHub Issues takes no key and markdown tasks has a default folder, so both stay one list. The rule is the backend's shape: an argument with no default is asked per round.
+## The tracker scan runs eight at a time and remembers what gh said
+
+Written 2026-09-05, for issue 50.
+
+With 143 checkouts and 120 origins the screen went blank for over a minute after the harness screen: five git commands per repo and one `gh repo view` per origin, over 800 processes one after another. Now `Session.Trackers` reads every repo through a pool of eight workers, then asks gh about the distinct origins through the same pool, results written back by index so the questions keep their name order. Eight, because a two-core machine must not fork 800 processes, and eight puts a hundred repos under a few seconds. A cancelled context hands out no more work.
+
+What gh said about each origin it could see is saved in the config as `origins`, push URL to issues and when, pruned on apply to the origins the scan met. An origin gh couldn't see is asked again next run, since a failure isn't a fact. The push URL loses what stands before the host, over http a token. `--ask-trackers-again` clears the map along with the skips. The flag path runs no git or gh and keeps the map. Issue 49's live count wraps the per-index work in `forEach`.

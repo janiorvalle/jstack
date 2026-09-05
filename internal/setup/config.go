@@ -15,16 +15,19 @@ import (
 // colliding skill name comes from, "squirrel" or "owner/name", and the
 // folders their repos live in, with whether they were asked for those,
 // and the checkouts they skipped on the tracker screens, by canonical
-// path, so a skipped repo is not offered again until --ask-trackers-again.
+// path, so a skipped repo is not offered again until --ask-trackers-again,
+// and what gh said about each origin it could see, by push URL, so a
+// rerun asks gh only about origins it hasn't met.
 type Config struct {
-	Harnesses       []string          `json:"harnesses"`
-	HarnessesFound  []string          `json:"harnesses_found,omitempty"`
-	SkillRepos      []string          `json:"skill_repos,omitempty"`
-	SkillReposAsked bool              `json:"skill_repos_asked,omitempty"`
-	SkillOverrides  map[string]string `json:"skill_overrides,omitempty"`
-	ReposDirs       []string          `json:"repos_dirs,omitempty"`
-	ReposDirsAsked  bool              `json:"repos_dirs_asked,omitempty"`
-	TrackersSkipped []string          `json:"trackers_skipped,omitempty"`
+	Harnesses       []string               `json:"harnesses"`
+	HarnessesFound  []string               `json:"harnesses_found,omitempty"`
+	SkillRepos      []string               `json:"skill_repos,omitempty"`
+	SkillReposAsked bool                   `json:"skill_repos_asked,omitempty"`
+	SkillOverrides  map[string]string      `json:"skill_overrides,omitempty"`
+	ReposDirs       []string               `json:"repos_dirs,omitempty"`
+	ReposDirsAsked  bool                   `json:"repos_dirs_asked,omitempty"`
+	TrackersSkipped []string               `json:"trackers_skipped,omitempty"`
+	Origins         map[string]OriginFacts `json:"origins,omitempty"`
 }
 
 func configPath(home string) string {

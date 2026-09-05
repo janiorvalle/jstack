@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 )
 
 // trackerRepo is one git checkout under a repos folder, as found on this
@@ -562,25 +564,34 @@ func prHold(state repoState, origin originFacts) string {
 	return ""
 }
 
-// originFacts is what gh says about an origin: seen when gh can reach the
-// repo, so it is on a GitHub host gh is logged into, and issues when the
-// repo has issues enabled, the one thing an origin says about which
-// tracker the repo uses.
+// OriginFacts is what gh said about an origin it could reach, and when:
+// Issues when the repo has issues enabled, the one thing an origin says
+// about which tracker the repo uses. The config keeps them by push URL, so
+// a rerun asks gh only about origins it hasn't met.
+type OriginFacts struct {
+	Issues  bool      `json:"issues"`
+	AskedAt time.Time `json:"asked_at"`
+}
+
+// originFacts is an origin as this run knows it: seen when gh could reach
+// the repo, so it is on a GitHub host gh is logged into. An origin gh
+// couldn't see, not logged in, a host gh doesn't know, no network, is not
+// a fact about the origin, so it is asked once per run and never saved.
 type originFacts struct {
-	seen   bool
-	issues bool
+	seen bool
+	OriginFacts
 }
 
 // guess is the backend key the origin suggests, "" when it says nothing.
 func (o originFacts) guess() string {
-	if o.seen && o.issues {
+	if o.seen && o.Issues {
 		return gitHubIssues
 	}
 	return ""
 }
 
-// readOrigin asks gh about the origin. Any failure, gh not logged in, a
-// host gh doesn't know, no network, reads as an origin gh can't see.
+// readOrigin asks gh about the origin. Any failure reads as an origin gh
+// can't see.
 func readOrigin(ctx context.Context, opts Options, url string) originFacts {
 	var out bytes.Buffer
 	if opts.Shell(ctx, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, url), &out) != nil {
@@ -592,7 +603,7 @@ func readOrigin(ctx context.Context, opts Options, url string) originFacts {
 	if err := json.Unmarshal(out.Bytes(), &answer); err != nil {
 		return originFacts{}
 	}
-	return originFacts{seen: true, issues: answer.HasIssuesEnabled}
+	return originFacts{seen: true, OriginFacts: OriginFacts{Issues: answer.HasIssuesEnabled, AskedAt: opts.Now().UTC().Truncate(time.Second)}}
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {
@@ -600,7 +611,7 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 	state := repoState{}
 	state.clean = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git status --porcelain"), &status) == nil && strings.TrimSpace(status.String()) == ""
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url --push origin"), &origin) == nil {
-		state.origin = strings.TrimSpace(origin.String())
+		state.origin = withoutCredentials(strings.TrimSpace(origin.String()))
 	}
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse --abbrev-ref HEAD"), &branch) == nil {
 		state.branch = strings.TrimSpace(branch.String())
@@ -617,6 +628,31 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 		state.published = len(lines) == 2 && lines[0] == lines[1]
 	}
 	return state
+}
+
+// withoutCredentials is the URL with nothing but the repo in it. A push
+// URL over http can carry a token, as the password in
+// https://me:ghp_x@github.com/me/app, as the user in
+// https://ghp_x@github.com/me/app, or after the path in
+// https://github.com/me/app?token=ghp_x, and the URL names the origin in
+// the config and in the gh calls, where only the repo matters and a token
+// must never land, so over http only the scheme, host, and path stay.
+// Over ssh the user is the login, git in ssh://git@github.com/me/app, so
+// only a password goes. An scp-style URL, git@github.com:me/app.git, has
+// no scheme, so it parses as nothing and stays as it is.
+func withoutCredentials(pushURL string) string {
+	parsed, err := url.Parse(pushURL)
+	if err != nil {
+		return pushURL
+	}
+	if parsed.Scheme == "http" || parsed.Scheme == "https" {
+		return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: parsed.Path}).String()
+	}
+	if _, hasPassword := parsed.User.Password(); hasPassword {
+		parsed.User = url.User(parsed.User.Username())
+		return parsed.String()
+	}
+	return pushURL
 }
 
 // trackerPRBody is the ticket shape the tracker skill asks for.

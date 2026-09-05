@@ -47,7 +47,8 @@ A skill named the same in two sources stops setup until --override says which on
 It also asks once where your repos live, lists each repo's Tracker line, asks which backend
 the ones without one use, a checkbox list per backend, writes the line into each repo, and
 offers to open the PRs. A repo left unchecked is skipped and not offered again unless
---ask-trackers-again is passed.
+--ask-trackers-again is passed, which also asks gh again about every origin instead of
+using what it said on an earlier run.
 `
 
 func main() {
@@ -129,7 +130,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		reposDirs = append(reposDirs, value)
 		return nil
 	})
-	askTrackersAgain := flags.Bool("ask-trackers-again", false, "offer the repos skipped on the tracker screens again")
+	askTrackersAgain := flags.Bool("ask-trackers-again", false, "offer the repos skipped on the tracker screens again, and ask gh again about every origin instead of using what it said before")
 	flags.Func("override", "which source a skill in more than one source comes from, skill=squirrel or skill=owner/name; repeatable", func(value string) error {
 		name, source, ok := strings.Cut(value, "=")
 		if !ok || name == "" || source == "" {
