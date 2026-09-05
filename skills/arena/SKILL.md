@@ -39,7 +39,7 @@ Read every candidate end to end before choosing. Skimming finds the one that loo
 
 Score against the rubric criterion by criterion, not on feel. Compare with the judge. Agreement confirms the pick. Disagreement means one of you is biased or the rubric was vague. Read both reasons before deciding.
 
-Pick the base a future maintainer can extend most easily without breaking anything. When two feel tied, take the cleaner boundary or the smaller one.
+Pick the base a future maintainer can extend most easily without breaking anything. When two feel tied, take the cleaner boundary or the smaller interface.
 
 Write down the pick and the reason in a short synthesis note beside the base, including what the judge said.
 

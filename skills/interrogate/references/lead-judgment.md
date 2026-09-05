@@ -16,7 +16,7 @@ Adversarial reviewers are useful because they're aggressive, and aggression with
 
 **"I would have done it differently."** The most common false positive. Not actionable unless the reviewer shows a concrete problem with the current approach. Dismiss, and say why.
 
-**Missing context.** Changes to code the author didn't touch. Patterns consistent with the rest of the codebase. Approaches that conflict with constraints you know about. Honest mistakes from limited information. Dismiss gracefully.
+**Missing context.** Suggesting changes to code the author didn't touch. Flagging patterns consistent with the rest of the codebase. Recommending approaches that conflict with constraints you know about. Honest mistakes from limited information. Dismiss gracefully.
 
 ## When they're right
 
