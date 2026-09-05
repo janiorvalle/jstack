@@ -16,9 +16,9 @@ You're writing an explanation of how part of a codebase works, for a senior engi
 
 ## What to do
 
-The findings will overlap and may contradict each other in places. Merge the overlaps. Settle contradictions by reading the code yourself. Weave the slices into one picture.
+The findings will overlap and may contradict each other. Merge the overlaps. Settle contradictions by reading the code yourself. Weave the slices into one picture.
 
-You have read-only access to the codebase. Search and read to check a detail or fill a gap. The explorers did the heavy reading. You shouldn't need to start over.
+You have read-only access to the codebase. Search and read to check a detail or fill a gap. The explorers did the heavy reading, so you shouldn't need to start over.
 
 The reader should finish with a solid enough mental model to start working in this area without asking anyone.
 
@@ -47,7 +47,7 @@ Surprising behavior, history that explains something odd, sharp edges. Skip if t
 
 - Concrete. "UserService calls AuthClient.refresh()", not "the service delegates to the client".
 - Short sentences. One idea each. No em dashes.
-- When something is complex, say why it's complex. Don't just describe the complexity.
+- When something is complex, say why. Don't just describe the complexity.
 - When something is simple, don't pad it.
 - Use an analogy if a good one exists. Don't force one.
 - If the explorers left open questions, say so. Don't paper over gaps.

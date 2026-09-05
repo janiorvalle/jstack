@@ -12,7 +12,7 @@ Listing the callers isn't the job. Grep does that in a second. The job is the br
 
 ## Don't trust your own writeup
 
-A blast-radius writeup that sounds right is worth nothing. It reads as convincing whether or not it's true. So don't hand back the writeup. Find the one or two facts the whole thing depends on and prove them by running code.
+A blast-radius writeup reads as convincing whether or not it's true, so on its own it's worth nothing. Find the one or two facts the whole thing depends on and prove them by running code.
 
 For each fact the change's safety rests on, get it as far down this list as is cheap, and say where it stopped.
 
@@ -22,11 +22,11 @@ For each fact the change's safety rests on, get it as far down this list as is c
 4. You ran it. A script or test that calls the real code and fails loud if you're wrong.
 5. You reproduced it in the running app.
 
-Any safety fact you can't get to step four, say so. Don't write it up as settled. Step four is usually one small script that imports the same library the app ships and calls the exact function you're worried about.
+Any safety fact you can't get to step four, say so. Don't write it up as settled. Step four is usually one small script that imports the library the app ships and calls the exact function you're worried about.
 
 ## Steps
 
-1. **Read the change.** The diff, what it adds and removes, and what it now does differently including the part the diff doesn't spell out. Pull the PR and commits the way `why` does.
+1. **Read the change.** The diff, what it adds and removes, and what it now does differently, including the part the diff doesn't spell out. Pull the PR and commits the way `why` does.
 2. **Find the one fact it's safe because of.** Most scary-looking changes are safe because of a single fact, like "this call only drops already-dead cache entries". If that holds, most of the scary cases die together. Spend your time here, not on a long list of maybes.
 3. **Look where grep stops.** Read the source of the library you call, at the pinned version, with any local patch. Work out when things run: microtasks, unmount, teardown, framework lifecycle. Follow what a symbol search misses: the JSON an API returns, a database column, a wire format, another language reading the same bytes, a feature flag, code three hops downstream.
 4. **Be honest about each risk.** Real likelihood, real cost. Keep the risks you confirmed. List the ones you checked and cleared separately. Cite a real file and line. A search that finds nothing is still an answer. Never invent a caller or an API.

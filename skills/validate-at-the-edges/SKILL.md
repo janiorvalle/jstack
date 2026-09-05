@@ -9,7 +9,7 @@ kind: principle
 
 Check data once, where it comes in. Inside, trust the types. Business logic lives in pure functions. The wiring around it is thin and boring.
 
-Validation scattered through the code is noise, it repeats itself, and it makes you feel safe without being safe. Validate once at the edge and the inside gets to be simple.
+Validation scattered through the code is noise. It repeats itself and makes you feel safe without being safe. Validate once at the edge and the inside gets to be simple.
 
 The vendored `typescript-best-practices` skill is upstream text, and it calls this principle `boundary-discipline`. When it points you there, that is this file.
 
@@ -19,7 +19,7 @@ CLI arguments. Config files. User input. Network requests. External APIs. Files 
 
 - **At the edge.** Validate, parse raw data into domain types, return errors, be defensive.
 - **Inside.** Typed data, errors propagate up, no re-checking. No null check deep in a call chain for something the edge already checked. If you can't name which caller passes null, don't write the check.
-- **Across the edge.** Expose domain concepts, not the edge's private shape. Don't re-export transport, storage, framework, or wire types through your public API. General-purpose mechanism stays inside, special-purpose policy sits at the edge.
+- **Across the edge.** Expose domain concepts, not the edge's private shape. Don't re-export transport, storage, framework, or wire types through your public API. General-purpose mechanism stays inside. Special-purpose policy sits at the edge.
 
 ## Keep logic out of the wiring
 

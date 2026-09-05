@@ -5,11 +5,11 @@ description: "Use when building new UI with Tailwind: a page, a section, a compo
 
 # UI
 
-Build new UI that looks like a designer was in the room. The rules live in `references/`, one file per topic. Read the ones that apply before writing any UI code. Err on loading too many, not too few. A rule applies even when it's indirect: heading group rules apply to a hero, landing page rules apply to a single section, surface rules apply to a dashboard card.
+Build new UI that looks like a designer was in the room. The rules live in `references/`, one file per topic. Read the ones that apply before writing any UI code. Err on loading too many. A rule applies even when it's indirect: heading group rules apply to a hero, landing page rules to a single section, surface rules to a dashboard card.
 
 ## Steps
 
-1. Look at the request, the target files, the project's existing conventions, and the components it already has.
+1. Look at the request, the target files, the project's conventions, and the components it already has.
 2. Read every rule file below that could apply.
 3. Build it with the project's framework, component patterns, assets, and Tailwind conventions. Reuse what exists.
 4. Check it at mobile and desktop widths and in every interaction state.

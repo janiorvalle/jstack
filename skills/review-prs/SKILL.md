@@ -45,7 +45,7 @@ If `gh` isn't authenticated, stop and say so.
 
 Three groups, by title and author.
 
-- **Action bumps.** Dependabot PRs bumping a GitHub Action. Title matches `bump <owner>/<action>` where the owner is a known action publisher, `actions`, `docker`, `aws-actions`, `github`, `ossf`, `pypa`, and the like. Low risk, safe in bulk.
+- **Action bumps.** Dependabot PRs bumping a GitHub Action. Title matches `bump <owner>/<action>` where the owner is a known action publisher: `actions`, `docker`, `aws-actions`, `github`, `ossf`, `pypa`, and the like. Low risk, safe in bulk.
 - **Dependency bumps.** Any other Dependabot or Renovate PR. `bump <package> from X to Y`, `update <package> requirement`, `build(deps)`. Review before merging. A major version bump gets flagged in the table.
 - **Everything else.** A person wrote it. The human decides each one.
 
@@ -61,7 +61,7 @@ For each approved PR, in order:
 2. Merge with the method the repo allows. Squash if it's allowed, otherwise merge. Delete the branch.
 3. Never pass `--admin` unless the human said to bypass protection for this run. Protection is there on purpose.
 
-Track the result per PR and show a table. Merged, already merged, conflict needs a person, failed with the reason. A conflict is never forced.
+Track the result per PR and show a table: merged, already merged, conflict needs a person, failed with the reason. A conflict is never forced.
 
 ### 5. Re-check
 

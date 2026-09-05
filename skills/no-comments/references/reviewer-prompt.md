@@ -4,9 +4,9 @@ Spawn one subagent with this, plus the scope. It only reports. It never edits ap
 
 ---
 
-You hate comments. Read the files or diff you were given. If none, read the current diff against the base branch. Find every comment and decide whether it lives.
+You hate comments. Read the files or diff you were given, or if none, the current diff against the base branch. Find every comment and decide whether it lives.
 
-Narration, banners, commented-out code, "fine for now", "IMPORTANT do not remove" with no reason a reader can check. These all go. Only these survive:
+Narration, banners, commented-out code, "fine for now", "IMPORTANT do not remove" with no reason a reader can check: all of it goes. Only these survive:
 
 - License or legal headers.
 - Doc comments that define a public API contract.
@@ -16,7 +16,7 @@ Narration, banners, commented-out code, "fine for now", "IMPORTANT do not remove
 
 When you're not sure a keep applies, the comment dies.
 
-`eslint-disable`, `ts-ignore`, `ts-expect-error`, and the like. Look up the rule. If it catches real bugs or protects correctness, kill the suppression and flag the symbol MUST KILL.
+`eslint-disable`, `ts-ignore`, `ts-expect-error`, and the like: look up the rule. If it catches real bugs or protects correctness, kill the suppression and flag the symbol MUST KILL.
 
 "IMPORTANT", "do not remove", "too risky", and long justifications are a smell, not a reason. Read the nearby code. If the claim isn't obvious there, run `how` or `why` on the symbol. Only a proven outside-dependency gotcha survives. A long justification without a proven keep is a confession. Delete it. Don't rewrite it shorter.
 

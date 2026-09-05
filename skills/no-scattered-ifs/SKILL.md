@@ -7,7 +7,7 @@ kind: principle
 
 # No scattered ifs
 
-When the rules of the thing you're modeling live in if statements spread across files, they're easy to get wrong and impossible to see in one place. Put them in a structure that matches the domain instead. The right structure makes invalid states impossible to write and deletes branches.
+When the rules of the thing you're modeling live in if statements spread across files, they're easy to get wrong and impossible to see in one place. Put them in a structure that matches the domain. The right structure makes invalid states impossible to write and deletes branches.
 
 Picking the structure when you first write the code is cheap. Recovering it later reads as a refactor, and refactors get deferred.
 

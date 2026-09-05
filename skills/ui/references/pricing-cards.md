@@ -1,11 +1,11 @@
 # Pricing cards
 
-These rules apply to pricing tiers, pricing cards, pricing tables, plan comparisons, and any emphasized or "Popular" plan.
+Rules for pricing tiers, pricing cards, pricing tables, plan comparisons, and any emphasized or "Popular" plan.
 
 ## Design rules
 
 - Emphasize a card with its button styling and, if you want, a "Popular" or "Recommended" label. Don't give the whole card a different background color.
-- For the checkmarks in a feature list, follow icons.md. Use `size-4 h-lh` so they center vertically with the text.
+- Checkmarks in a feature list follow icons.md. Use `size-4 h-lh` so they center vertically with the text.
 
 ## Coding rules
 

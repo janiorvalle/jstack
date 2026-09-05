@@ -24,16 +24,16 @@ Rules for inputs, selects, textareas, checkboxes, radio buttons, toggles, search
 
 - Use `max-w-xs` for compact, single-purpose forms like login, sign-up, or single-field inputs. `max-w-sm` and wider is too roomy for focused UI
 - If a text input's font size is smaller than `16px`, add `max-sm:text-base/{lh}` to bump it to `16px` on mobile
-- Never use `outline-offset-*` on custom focus rings for `<input>` and `<textarea>` elements. Use `outline-offset-0` or leave the offset out
-- When using a 2px focus outline on `<input>` or `<textarea>`, inset it with `-outline-offset-1` so it doesn't stick out past the element
+- Never use `outline-offset-*` on custom focus rings for `<input>` and `<textarea>`. Use `outline-offset-0` or leave the offset out
+- A 2px focus outline on `<input>` or `<textarea>` is inset with `-outline-offset-1` so it doesn't stick out past the element
 - Never use the conjoined input + button pattern where they share a border. Put a gap between them or nest the button visually inside the input
 
 ## Coding rules
 
-- Always include a `name` attribute on `<input>`, `<select>`, and `<textarea>` elements
-- Every `<input>`, `<select>`, and `<textarea>` needs either a matching `<label>` linked via `id`/`for`, or an `aria-label` attribute
-- Always set an explicit `type` attribute on `<button>` elements: `type="submit"` inside forms, `type="button"` otherwise
-- Use `placeholder` with `aria-label` instead of visible `<label>` elements for ecommerce/checkout forms where the field's purpose is obvious from context. Still use section headings (e.g. "Shipping address", "Payment") to group related fields
+- Always include a `name` attribute on `<input>`, `<select>`, and `<textarea>`
+- Every `<input>`, `<select>`, and `<textarea>` needs either a matching `<label>` linked via `id`/`for`, or an `aria-label`
+- Always set an explicit `type` on `<button>` elements: `type="submit"` inside forms, `type="button"` otherwise
+- Use `placeholder` with `aria-label` instead of visible `<label>` elements for ecommerce/checkout forms where the field's purpose is obvious from context. Still group related fields under section headings (e.g. "Shipping address", "Payment")
 
 ## Selects
 
@@ -54,13 +54,13 @@ Rules for inputs, selects, textareas, checkboxes, radio buttons, toggles, search
 ## Checkboxes
 
 - Use a native `<input type="checkbox">`
-- All the styles come from CSS based on the input state
-- **Never use JavaScript to toggle classes based on input state.** Use CSS states and variants only
+- All styles come from CSS based on the input state
+- Never use JavaScript to toggle classes based on input state. CSS states and variants only
 - Replace `{brand}` with the right brand color
 - Every class is required. Don't drop any
-- When there's a label, link it to the input with `id` and `for`. Otherwise give the input an `aria-label`
+- With a label, link it to the input with `id` and `for`. Otherwise give the input an `aria-label`
 - To vertically center a checkbox with text next to it, wrap it in an element with `h-lh items-center` and the matching `text-{size}`. Never put `h-lh` on the `inline-grid` wrapper itself. Never use top margins or manual alignment
-- Checkboxes should be larger on mobile, e.g. `size-5 sm:size-4`
+- Checkboxes are larger on mobile, e.g. `size-5 sm:size-4`
 
 ```html
 <span class="group inline-grid size-4 grid-cols-1">
@@ -94,13 +94,13 @@ Rules for inputs, selects, textareas, checkboxes, radio buttons, toggles, search
 ## Radio buttons
 
 - Use a native `<input type="radio">`
-- All the styles come from CSS based on the input state
-- **Never use JavaScript to toggle classes based on input state.** Use CSS states and variants only
+- All styles come from CSS based on the input state
+- Never use JavaScript to toggle classes based on input state. CSS states and variants only
 - Replace `{brand}` with the right brand color
 - Every class is required. Don't drop any
-- When there's a label, link it to the input with `id` and `for`. Otherwise give the input an `aria-label`
+- With a label, link it to the input with `id` and `for`. Otherwise give the input an `aria-label`
 - To vertically center a radio button with text next to it, wrap it in an element with `h-lh items-center` and the matching `text-{size}`. Never put `h-lh` on the `inline-grid` wrapper itself. Never use top margins or manual alignment
-- Radio buttons should be larger on mobile, e.g. `size-5 sm:size-4`
+- Radio buttons are larger on mobile, e.g. `size-5 sm:size-4`
 
 ```html
 <span class="group inline-grid size-4 grid-cols-1">
@@ -117,14 +117,14 @@ Rules for inputs, selects, textareas, checkboxes, radio buttons, toggles, search
 ## Toggles
 
 - Use a native `<input type="checkbox">`
-- All the styles come from CSS based on the input state
-- **Never use JavaScript to toggle classes based on input state.** Use CSS states and variants only
+- All styles come from CSS based on the input state
+- Never use JavaScript to toggle classes based on input state. CSS states and variants only
 - Replace `{brand}` with the right brand color
 - Replace `{gray}` with the right gray color
 - Every class is required. Don't drop any
-- Use `w-9` as the default size. Only change the width to make it larger or smaller
-- Toggles should be larger on mobile, e.g. `w-11 sm:w-9`
-- When there's a label, link it to the input with `id` and `for`. Otherwise give the input an `aria-label`
+- `w-9` is the default size. Only change the width to make it larger or smaller
+- Toggles are larger on mobile, e.g. `w-11 sm:w-9`
+- With a label, link it to the input with `id` and `for`. Otherwise give the input an `aria-label`
 - Remove all `dark:` classes if the site doesn't support dark mode. For always-dark sites, use only the `dark:` variant values as the base classes and drop the `dark:` prefixed versions
 
 ```html

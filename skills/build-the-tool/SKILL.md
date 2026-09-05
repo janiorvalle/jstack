@@ -14,15 +14,15 @@ Two reasons. It's faster, since a script does the same thing every time and reru
 ## How
 
 - **Do the first one by hand.** That's how you learn the recipe. Then write the tool, run it on that same unit, and diff against your hand-done version. Now you trust the tool.
-- **Make it safe to rerun.** A reviewer will run it. So will you, after a fix. Running it twice should give the same result.
+- **Make it safe to rerun.** A reviewer will run it. So will you, after a fix. Running it twice gives the same result.
 - **Pick the right shape.** A codemod or script for edits. A generator for repetitive files. A dump to sqlite and a query for analysis. A rerunnable check for verification.
 - **One script beats a fleet of subagents.** If a tool can process every unit in one pass, run it yourself. Don't fan out agents to hand-apply what a script could do.
-- **When you do fan out, the tool is a skill.** Write the recipe, what counts as done, and what not to touch in one file every subagent reads. That way they all follow the same version instead of each drifting on its own prompt. Keep that file outside their write scope so none of them can quietly change the rules.
+- **When you do fan out, the tool is a skill.** Write the recipe, what counts as done, and what not to touch in one file every subagent reads. They all follow the same version instead of each drifting on its own prompt. Keep that file outside their write scope so none of them can quietly change the rules.
 - **Commit it if the work outlives the session.** The next run reruns it instead of redoing it.
 
 ## The tool's output is the evidence
 
-What the tool produces is what you attach as proof. A diff, a query result, a test log, a recording. Evidence has to be something the work actually produced, never something you wrote up afterward to describe it. Recordings especially: the test runner captures them as a side effect of running, you don't record them by hand. If the tool ran, the proof exists already. If you're assembling proof by hand, you skipped the tool.
+What the tool produces is what you attach as proof. A diff, a query result, a test log, a recording. Evidence is something the work actually produced, never something you wrote up afterward to describe it. Recordings especially: the test runner captures them as a side effect of running, you don't record them by hand. If the tool ran, the proof exists already. If you're assembling proof by hand, you skipped the tool.
 
 ## The bar
 

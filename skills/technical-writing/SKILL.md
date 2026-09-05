@@ -14,9 +14,9 @@ Three rules sit above everything:
 - **Use the everyday word.** Use, not utilize. Help, not facilitate. A long word has to buy its length with precision.
 - **When a rule makes a sentence worse, fix it another way.** The rules serve the reader. A sentence that follows every rule and sounds like a machine has failed.
 
-The codebase is the word list. Write the real symbol, file, flag, or command, not a synonym for it. Don't invent jargon. Say move, delete, a budget that only decreases, not evacuate, ratchet, endgame.
+The codebase is the word list. Write the real symbol, file, flag, or command, not a synonym. Don't invent jargon. Say move, delete, a budget that only decreases, not evacuate, ratchet, endgame.
 
-`voice` applies on top of all of this. It owns the machine-tell catalog.
+`voice` applies on top and owns the machine-tell catalog.
 
 ## Pick the kind first
 
@@ -31,7 +31,7 @@ Don't mix. No reference tables in a tutorial, no hand-holding in reference, no a
 
 ## Write to the reader
 
-- Talk to them as you, present tense. Will only for things that genuinely happen later.
+- Talk to them as you, present tense. Will only for things that happen later.
 - Say who does what. "The compiler checks", not "is checked".
 - Instructions as commands. "Click Submit." Never "should be done".
 - Condition before instruction. "To delete the doc, click Delete." The reader skips what doesn't apply.

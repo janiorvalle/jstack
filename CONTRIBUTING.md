@@ -4,13 +4,13 @@ Thanks for pitching in. jstack is opinionated on purpose, so most contributions 
 
 ## Setup
 
-You need git, Go 1.24 or newer, python3, and gitleaks. Nothing else.
+You need git, Go 1.24 or newer, python3, and gitleaks.
 
 ```sh
 make install-hooks
 ```
 
-That points git at `.githooks/`, where the pre-commit hook runs gitleaks and then the same verify script CI runs.
+That points git at `.githooks/`. The pre-commit hook runs gitleaks, then the verify script CI runs.
 
 ## The gate
 
@@ -18,11 +18,11 @@ That points git at `.githooks/`, where the pre-commit hook runs gitleaks and the
 make verify
 ```
 
-It formats, builds, vets, and tests the binary, then checks that every skill has frontmatter with a name matching its folder, that the workflows table in `AGENTS.md` matches the description lines, and that nothing carries an em dash or names a specific harness. If you change a description line, run `make index` and commit the result.
+It formats, builds, vets, and tests the binary. Then it checks that every skill has frontmatter with a name matching its folder, that the workflows table in `AGENTS.md` matches the description lines, and that nothing carries an em dash or names a specific harness. If you change a description line, run `make index` and commit the result.
 
 ## Writing a skill
 
-Read `skills/voice/SKILL.md` first. Every file here follows it. Then read two or three existing skills to get the shape.
+Read `skills/voice/SKILL.md` first. Every file here follows it. Then read two or three existing skills for the shape.
 
 - One skill, one job. A principle is one rule with a test. A workflow is one procedure with steps.
 - Harness-agnostic. Say "spawn read-only subagents" and "search the code", never a tool name from one harness.
@@ -32,13 +32,13 @@ Read `skills/voice/SKILL.md` first. Every file here follows it. Then read two or
 
 ## Pull requests
 
-One task, one branch. Squash merges only. Commit titles in conventional commit style naming the outcome. The PR description opens with the problem, then the fix, and ends with a line naming the model and harness that made the change if one did.
+One task, one branch. Squash merges only. Commit titles in conventional commit style, naming the outcome. The PR description opens with the problem, then the fix, and ends with a line naming the model and harness that made the change, if one did.
 
 ## Licensing
 
 Contributions are licensed under the MIT License and the contributor license agreement below. The CLA check runs on a contributor's first pull request.
 
-## Contributor License Agreement
+## Contributor license agreement
 
 By commenting `I have read the CLA Document and I hereby sign the CLA` on a pull request, you grant Janior Valle and recipients of this project a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, reproduce, modify, display, perform, sublicense, and distribute your contribution and derivative works under the project's license.
 

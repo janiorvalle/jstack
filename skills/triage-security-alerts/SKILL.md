@@ -11,7 +11,7 @@ You research and recommend. You never dismiss an alert or file a task without a 
 
 ## Config
 
-One file per project, not per repo. Most projects have several repos that share a tracker, an assignee, and conventions.
+One file per project, not per repo, since a project's repos share a tracker, an assignee, and conventions.
 
 `~/.config/jstack/security-triage.<project>.json`:
 
@@ -71,7 +71,7 @@ More than one lockfile isn't always a problem. Tell these apart.
 gh api --paginate "repos/<owner>/<name>/dependabot/alerts?state=open&per_page=100"
 ```
 
-`--paginate` matters. Past a hundred alerts the list silently truncates without it. The output can be several concatenated JSON arrays. Parse them all. The list payload has everything the first pass needs, severity, package, advisory, scope, manifest, fix version.
+Without `--paginate` the list silently truncates past a hundred alerts. The output can be several concatenated JSON arrays. Parse them all. The list payload has everything the first pass needs: severity, package, advisory, scope, manifest, fix version.
 
 ## Group
 
@@ -124,7 +124,7 @@ Bulk is the default at five groups or more. Take shorthand. "2: t, 3: t, 4: t ch
 
 `not_used` is the strongest claim GitHub offers. Never take it on faith.
 
-Always before `(n)`. Optionally before `(t)` when the advisory names one function, because the grep is cheap and the result changes the urgency of the task.
+Always before `(n)`. Optionally before `(t)` when the advisory names one function, since the grep is cheap and the result changes the task's urgency.
 
 1. Name the function or pattern from the advisory.
 2. Grep the local checkout's application code. Skip node_modules, dist, build output, virtualenvs.
@@ -145,7 +145,7 @@ Before bundling, read the current pinned version from the lockfile and compare t
 
 Then bundle one task per tier. Safe bumps never share a task with heavy ones, or the safe work waits on the heavy testing. Replacements get one task per package.
 
-Each task carries a title with the tier and the concrete alert count, the groups with current and target versions and one line on what each resolves, what's deferred to which other task, acceptance including "open alert count drops by at least N", where the lockfiles live and how to regenerate them, the assignee and priority from config, priority raised if any advisory is critical.
+Each task carries: a title with the tier and the concrete alert count; the groups with current and target versions and one line on what each resolves; what's deferred to which other task; acceptance including "open alert count drops by at least N"; where the lockfiles live and how to regenerate them; the assignee and priority from config, priority raised if any advisory is critical.
 
 File it through whatever tracker skill is installed. That skill has its own confirmation step. Don't skip it.
 
@@ -169,4 +169,4 @@ Tasks filed with links, by tier. Alerts dismissed, by reason. Skipped. Resolving
 
 ## Not this skill
 
-Code scanning alerts, the fix is code not a bump. Secret scanning, the fix is rotation and audit. Other vulnerability sources. Repos without Dependabot.
+Code scanning alerts, where the fix is code, not a bump. Secret scanning, where the fix is rotation and audit. Other vulnerability sources. Repos without Dependabot.

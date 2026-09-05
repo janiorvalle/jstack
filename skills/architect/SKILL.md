@@ -6,11 +6,11 @@ disable-model-invocation: true
 
 # Architect
 
-Design before you implement. Sketch the types, the function signatures, the module boundaries, with `not implemented` bodies and pseudocode where the logic is tricky. Get more than one candidate. Pick one. Then write code against it. If the code keeps fighting the sketch, the sketch was wrong. Throw it out.
+Design before you implement. Sketch the types, the function signatures, and the module boundaries, with `not implemented` bodies and pseudocode where the logic is tricky. Get more than one candidate. Pick one. Then write code against it. If the code keeps fighting the sketch, the sketch was wrong. Throw it out.
 
 ## Start
 
-A todo list with one entry per phase. Ground, sketch, agree, implement, scrap. This runs without checkpoints by default, and the list is what shows where you are.
+A todo list with one entry per phase: ground, sketch, agree, implement, scrap. This runs without checkpoints by default, and the list shows where you are.
 
 ## Ground
 
@@ -22,21 +22,21 @@ Skip this only for genuinely greenfield work with nothing to integrate with.
 
 ## Sketch
 
-Run `arena` with the design task and the grounding from the last step. Each runner gets `references/runner-prompt.md`. Each candidate produces a design package shaped by `references/rationale-template.md`. The caller's usage written first, then the types, signatures, and module map derived from it, then the rationale.
+Run `arena` with the design task and the grounding. Each runner gets `references/runner-prompt.md`. Each candidate produces a design package shaped by `references/rationale-template.md`: the caller's usage first, then the types, signatures, and module map derived from it, then the rationale.
 
 Design it twice. At least two candidates that differ in shape, not in flavor, even when the first looks fine. A second version of the first idea doesn't count.
 
 Screen every candidate against `references/design-red-flags.md` before picking. Shallow modules, leaked internals, modules organized by execution order, pass-through methods. Reject or revise.
 
-Compare the survivors on how much each hides behind how small a surface. Prefer the design that pulls complexity into the callee and keeps the public interface small. A rich interface can keep call chains short by concentrating capability instead of spreading it across layers.
+Compare the survivors on how much each hides behind how small an interface. Prefer the design that pulls complexity into the callee and keeps the public interface small. A rich interface keeps call chains short by concentrating capability instead of spreading it across layers.
 
-Arena returns one synthesized design package, with its synthesis decision filled in.
+Arena returns one synthesized design package with its synthesis decision filled in.
 
 ## Agree
 
 Default is no checkpoint. Go straight to implementation with the synthesized design.
 
-The human can opt in. "Architect with checkpoint", "show me before you build". Then surface the design and wait.
+The human can opt in with "architect with checkpoint" or "show me before you build". Then surface the design and wait.
 
 Either way, the sketch can land as its own commit. Later commits read as filling in bodies against a stable contract. Planned breakage during fill-in is fine, that's `break-code-not-data`.
 
@@ -74,4 +74,4 @@ When you scrap:
 
 ## Output
 
-The caller's usage first, the type sketch derived from it. One file of new types and signatures for a small change. A module map plus type definitions for larger work. The rationale beside it, shaped by the template, including the usage sketch and the synthesis decision.
+The caller's usage first, then the type sketch derived from it. One file of new types and signatures for a small change. A module map plus type definitions for larger work. The rationale beside it, shaped by the template, including the usage sketch and the synthesis decision.

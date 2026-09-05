@@ -9,7 +9,7 @@ kind: principle
 
 Do the work as a sequence of small units, each ending in a state you can check. Don't start the next one until the current one is green.
 
-A break caught at the step that caused it is cheap to find. A break caught after a batch is buried under everything you built on top of it. And the same sequence, delivered in order, is what lets a reviewer replay the argument instead of taking your word.
+A break caught at the step that caused it is cheap to find. A break caught after a batch is buried under everything built on top of it. And the same sequence, delivered in order, lets a reviewer replay the argument instead of taking your word.
 
 ## While executing
 

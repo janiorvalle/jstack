@@ -12,12 +12,12 @@ The short version. Claim the work. Get a clean workspace. Understand before you 
 ## Start of every multi-step task
 
 1. The letter, `AGENTS.md` at the root of this repo, is already in your context. It states every principle and ends with a table of every workflow skill and when it applies. Open a skill's full file only when it applies to the task in front of you.
-2. Write a todo list with the flow below in it. If you decide to skip a step, leave it in the list with `skip: <reason>`. Silent skips are how work gets lost.
-3. Check `tools.md` for anything the flow needs that isn't installed. Say so before starting, don't route around it, and install it the way `tools.md` says, `jstack setup` for every tool setup can install, never the install command inside the tool's own skill.
+2. Write a todo list with the flow below in it. If you skip a step, leave it in the list with `skip: <reason>`. Silent skips are how work gets lost.
+3. Check `tools.md` for anything the flow needs that isn't installed. Say so before starting and don't route around it. Install it the way `tools.md` says, `jstack setup` for every tool setup can install, never the install command inside the tool's own skill.
 
 ## The flow
 
-1. **Claim.** Work lives in the tracker. Read the repo's `Tracker:` line from its `AGENTS.md`, or `CLAUDE.md` when that's the file it keeps. When there is none, ask the human which tracker in the Decide shape, one option per backend `tracker` knows, each asking for the one thing that backend needs. Write the answer into that file, or a new `AGENTS.md` when the repo has neither, on its own line near the top, in its own worktree on a branch named `tracker-line`, never in the shared checkout, and offer to open the one-line PR for it through gh. Never pick one silently. Then claim the task before touching project files, record the files you expect to change, and open with the task id. No task, no work. `tracker` has the five verbs, the ticket shape, and the commands for the backend the line names. In a repo that tracks in markdown tasks the claim is a commit, so the branch and worktree from step 2 come first there; creating them touches no project file.
+1. **Claim.** Work lives in the tracker. Read the repo's `Tracker:` line from its `AGENTS.md`, or `CLAUDE.md` when that's the file it keeps. When there is none, ask the human which tracker in the Decide shape, one option per backend `tracker` knows, each asking for the one thing that backend needs. Never pick one silently. Write the answer into that file, or a new `AGENTS.md` when the repo has neither, on its own line near the top, in its own worktree on a branch named `tracker-line`, never in the shared checkout. Offer to open the one-line PR for it through gh. Then claim the task before touching project files, record the files you expect to change, and open with the task id. No task, no work. `tracker` has the five verbs, the ticket shape, and the commands for the backend the line names. In a repo that tracks in markdown tasks the claim is a commit, so the branch and worktree from step 2 come first there. Creating them touches no project file.
 2. **Workspace.** One task, one branch, one worktree, one owner. Never work on the default branch. `worktree` is the whole setup, from checking the registry to a running baseline.
 3. **Understand.** `how` for what the code does today. `why` for why it's shaped that way. `pickup` if you're resuming something that's been sitting. For a bug, reproduce it first and capture the broken state. That's `fix-the-cause`.
 4. **Design.** Name the data shape before writing logic. That's `structure-first`. If the change crosses a module boundary, `architect`. If there's no precedent, `design-it-twice`. If it's big and nothing fits, `figure-it-out`.
@@ -41,7 +41,7 @@ Execution proceeds. Scope gets confirmed. Observable questions get run instead o
 
 ## Delegation
 
-Send bulk to subagents and keep summaries in the main thread. Hand them file pointers, not pasted context. You own every subagent's result. Read the diff, write your own summary. `keep-context-lean`.
+Send bulk to subagents and keep summaries in the main thread. Hand them file pointers, not pasted context. You own every subagent's result: read the diff, write your own summary. `keep-context-lean`.
 
 Nothing in this stack names a harness. Spawn subagents and search the code with whatever your harness gives you. The browser is agent-browser, which `tools.md` lists and `setup-jstack` installs.
 

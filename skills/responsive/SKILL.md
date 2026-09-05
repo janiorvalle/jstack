@@ -5,7 +5,7 @@ description: "Use to make an existing desktop-oriented UI work on mobile and tab
 
 # Responsive
 
-Take a desktop layout and make it work at every width. Audit in this order: page shell, then navigation, then text and forms, then overflow, then the component patterns.
+Take a desktop layout and make it work at every width. Audit in this order: page shell, navigation, text and forms, overflow, then the component patterns.
 
 ## Steps
 

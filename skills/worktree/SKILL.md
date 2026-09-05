@@ -5,7 +5,7 @@ description: "Use before starting work that touches files: creating a worktree, 
 
 # Worktree
 
-Every task gets its own worktree, and every worktree has exactly one owner. This skill is the whole flow: check the registry, claim, create from a clean base, copy local config, pick ports that don't collide, run the baseline, report, and release when done.
+Every task gets its own worktree, and every worktree has exactly one owner.
 
 A lock is coordination data, not a substitute for looking. Always check git status before touching files.
 
@@ -102,7 +102,7 @@ Give every service the worktree runs a port nothing else is using. For compose, 
 
 Install dependencies with the repo's conventions, only if needed. Start the services on your ports. Run migrations and seeds through the repo's wrapper. Then check enough to know it's usable: the API answers, the frontend loads on your port, you can log in with whatever local test account the seed or env provides, and the frontend is talking to your backend, not the other checkout's.
 
-Don't run the full test suite here. This is about a working environment, not a green build.
+Don't run the full test suite here. This is a working environment, not a green build.
 
 ### 8. Report
 

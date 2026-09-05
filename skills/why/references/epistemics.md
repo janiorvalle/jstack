@@ -1,14 +1,14 @@
 # Epistemics
 
-How to talk about confidence when the evidence is old, partial, and sometimes contradictory. Code doesn't carry its own reasons. Those live in commits, PRs, tickets, docs, and chat, all incomplete and some missing. Pretend otherwise and you produce confident guesses the reader will act on.
+How to talk about confidence when the evidence is old, partial, and sometimes contradictory. Code doesn't carry its own reasons. Those live in commits, PRs, tickets, docs, and chat, all incomplete and some missing. Pretend otherwise and the reader acts on a confident guess.
 
 ## Confidence tiers
 
-Every claim in the final output sits in one tier. The tier decides which section it goes in and how it's phrased.
+Every claim in the final output sits in one tier. The tier decides its section and its phrasing.
 
 ### 1. Direct
 
-Someone wrote down the reason. Not "the code does X so the author wanted X". An actual sentence from an author saying why.
+An author wrote the reason down. Not "the code does X so the author wanted X". An actual sentence saying why.
 
 - A PR description: "fixes the bug where users with more than 1000 items couldn't paginate".
 - A ticket: "adding this because Acme asked for it in their security review".
@@ -30,16 +30,16 @@ Phrasing: confident but visibly derived. "The evidence points strongly to X." Li
 
 ### 3. Inferred
 
-A reasonable reading of the context. Nothing supports it directly. The reader should know this is your interpretation.
+A reasonable reading of the context, with nothing supporting it directly. The reader should know it's your interpretation.
 
-- The PR doesn't say why, but the error was in production per the incident channel and the fix merged the same day, so likely a hotfix.
-- Retry count is 3, matching the convention seen elsewhere in the codebase.
+- The PR doesn't say why, but the incident channel puts the error in production and the fix merged the same day, so likely a hotfix.
+- Retry count is 3, matching the convention elsewhere in the codebase.
 
 Phrasing: hedged. "Appears to", "likely", "suggests", "is consistent with". Show the chain. "Given A and B, C seems likely because D."
 
 ### 4. Speculative
 
-Plausible, but thin, and other explanations fit as well.
+Plausible but thin, and other explanations fit as well.
 
 - "This might be a workaround for a browser bug since fixed, but nothing from the time says so."
 - "The threshold could match an SLA commitment, but no SLA doc mentions it."
@@ -54,7 +54,7 @@ Phrasing: say what you searched. "We searched the tracker for A and B, read the 
 
 ## Words that carry confidence
 
-These claim Direct or Supported. Don't use them for inferences. If you use one, the citation goes right next to it.
+These claim Direct or Supported. Don't use them for inferences. The citation goes right next to them.
 
 - because
 - the reason is
@@ -93,11 +93,11 @@ Code that makes sense today may have been written for reasons that no longer app
 
 ## When sources disagree
 
-Show both with citations. The ticket says "for customer X's compliance need". The PR says "cleaning up tech debt". Both might be true, the ticket motivated the work and the PR is the author's framing. Or one is wrong. Let the reader decide.
+Show both with citations. The ticket says "for customer X's compliance need". The PR says "cleaning up tech debt". Both might be true: the ticket motivated the work and the PR is the author's framing. Or one is wrong. Let the reader decide.
 
 ## When there's nothing
 
-An honest "we don't know" tells the reader the answer isn't in the obvious places, that they'll need to ask a person, or that it isn't worth chasing. Name the gap concretely: what question, which sources, what terms, what came back.
+An honest "we don't know" tells the reader the answer isn't in the obvious places, that they'll need to ask a person, or that it isn't worth chasing. Name the gap: what question, which sources, what terms, what came back.
 
 ## Before finalizing
 

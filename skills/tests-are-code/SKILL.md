@@ -7,24 +7,24 @@ kind: principle
 
 # Tests are code
 
-Dirty tests are worse than no tests. They rot, then someone deletes them, then everyone's afraid to change anything. Clean tests are what let you refactor without fear, and that's what makes every other rule in this stack possible.
+Dirty tests are worse than no tests. They rot, someone deletes them, and then everyone's afraid to change anything. Clean tests let you refactor without fear, and that's what makes every other rule in this stack possible.
 
 ## FIRST
 
 - **Fast.** Runs in seconds. A slow test doesn't get run, and a test that doesn't get run doesn't exist.
-- **Independent.** No test depends on another test having run. Any order, any subset, same result.
+- **Independent.** No test depends on another having run. Any order, any subset, same result.
 - **Repeatable.** Same result every run, on every machine, with no network and no clock. A flaky test is a broken test.
 - **Self-validating.** Pass or fail, no human reading output to decide.
 - **Timely.** Written with the change, not after. For a bug, before the fix, so you watch it go red then green.
 
 ## One concept per test
 
-A test checks one thing and its name says what. If the name has "and" in it, it's two tests. If it fails, the name alone should tell you what broke.
+A test checks one thing and its name says what. If the name has "and" in it, it's two tests. When it fails, the name alone should tell you what broke.
 
 ## What isn't coverage
 
 - **A pile of smoke tests.** "It doesn't crash" is not a test of behavior.
-- **Tests that guard deleted features.** When the behavior goes, its tests go with it. Tests protecting how an old implementation worked inside aren't protecting anything.
+- **Tests that guard deleted features.** When the behavior goes, its tests go with it. Tests protecting how an old implementation worked inside protect nothing.
 - **Tests that mirror the code.** If the test restates the implementation line by line, changing the code means changing the test the same way, and the test caught nothing.
 
 ## Fast tier and full tier
