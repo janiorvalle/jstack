@@ -86,21 +86,35 @@ func resolvedFolder(folder string) string {
 	return folder
 }
 
-// pathOf is what the shell resolves the tool's binary to, "" for a tool
-// whose Check line names no single binary or that the shell can't find.
+// pathOf is the binary the person runs, "" for a tool whose Check line
+// names no single binary or that the shell can't find. The shell setup
+// runs its lines in puts ~/.local/bin first on PATH, so a stale copy
+// there would win the lookup while the person's own PATH runs Homebrew's;
+// the lookup runs on the person's PATH first, and only when that finds
+// nothing, the just-installed case the prefix exists for, on the shell's.
 func (l *locator) pathOf(tool tools.Tool) string {
 	if tool.Binary == "" {
 		return ""
 	}
-	return l.firstLine(resolveLine(runtime.GOOS, tool.Binary))
+	if path := l.firstLine(resolveLine(runtime.GOOS, tool.Binary, l.opts.Getenv("PATH"))); path != "" {
+		return path
+	}
+	return l.firstLine(resolveLine(runtime.GOOS, tool.Binary, ""))
 }
 
-// resolveLine prints the path of a binary on PATH, in the shell of the OS.
-func resolveLine(operatingSystem, binary string) string {
+// resolveLine prints the path of a binary, in the shell of the OS, on the
+// PATH given, or on the shell's own when it's "".
+func resolveLine(operatingSystem, binary, path string) string {
 	if operatingSystem == "windows" {
-		return "(Get-Command " + binary + ").Source"
+		if path == "" {
+			return "(Get-Command " + binary + ").Source"
+		}
+		return "$env:Path = " + quote(operatingSystem, path) + "; (Get-Command " + binary + ").Source"
 	}
-	return "command -v " + binary
+	if path == "" {
+		return "command -v " + binary
+	}
+	return "PATH=" + quote(operatingSystem, path) + " command -v " + binary
 }
 
 // homebrewFormula is the formula a binary belongs to, read off its real
