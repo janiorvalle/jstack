@@ -3,6 +3,7 @@ package setup
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,14 +22,16 @@ import (
 // tracks. line is the whole Tracker line, or "" when the repo declares
 // none. hold is why an undeclared repo isn't asked about, "" when it is:
 // the line waits on the tracker-line branch an earlier run made, so
-// asking again would make a second one, or the file links to outside the
-// repo, where a line would speak for every repo that shares it.
+// asking again would make a second one, the file links to outside the
+// repo, where a line would speak for every repo that shares it, or the
+// person skipped it on an earlier run, which skipped records.
 type trackerRepo struct {
-	dir  string
-	name string
-	file string
-	line string
-	hold string
+	dir     string
+	name    string
+	file    string
+	line    string
+	hold    string
+	skipped bool
 }
 
 func (r trackerRepo) declared() bool {
@@ -99,11 +102,17 @@ type backend struct {
 	byDefault string
 }
 
+// gitHubIssues is the one backend an origin can suggest.
+const gitHubIssues = "github-issues"
+
+// backends in the order the screens come: the two that need a key first,
+// then the one the origin can guess, then the folder in the repo for the
+// rest.
 var backends = []backend{
-	{key: "markdown", label: "markdown tasks in the repo", argument: "folder", example: "tasks/", byDefault: "tasks/"},
-	{key: "github-issues", label: "GitHub Issues"},
 	{key: "linear", label: "Linear", argument: "team key", example: "SR"},
 	{key: "jira", label: "Jira", argument: "project key", example: "SR"},
+	{key: gitHubIssues, label: "GitHub Issues"},
+	{key: "markdown", label: "markdown tasks in the repo", argument: "folder", example: "tasks/", byDefault: "tasks/"},
 }
 
 // trackerLine is the line the tracker skill reads, "Tracker: linear SR".
@@ -122,7 +131,7 @@ func guessReposDirs(home string) []string {
 	var found []string
 	for _, name := range reposFolderNames {
 		dir := filepath.Join(home, name)
-		if len(scanDir(dir)) > 0 {
+		if len(scanDir(dir, nil)) > 0 {
 			found = append(found, dir)
 		}
 	}
@@ -175,18 +184,19 @@ func parseReposDirs(answer, home string) ([]string, error) {
 
 // scanRepos reads every named folder. The disk is the only source: no
 // network, no git command, so the plan costs one directory listing per
-// folder and two small reads per checkout.
-func scanRepos(dirs []string) []trackerRepo {
+// folder and two small reads per checkout. skipped is the checkouts an
+// earlier run skipped, by canonical path.
+func scanRepos(dirs []string, skipped map[string]bool) []trackerRepo {
 	var repos []trackerRepo
 	for _, dir := range dirs {
-		repos = append(repos, scanDir(dir)...)
+		repos = append(repos, scanDir(dir, skipped)...)
 	}
 	return repos
 }
 
 // scanDir lists the checkouts one level down: every folder with a .git in
 // it, a folder for a clone or a file for a worktree.
-func scanDir(dir string) []trackerRepo {
+func scanDir(dir string, skipped map[string]bool) []trackerRepo {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -198,7 +208,8 @@ func scanDir(dir string) []trackerRepo {
 			continue
 		}
 		file, line := readTracker(checkout)
-		repos = append(repos, trackerRepo{dir: checkout, name: entry.Name(), file: file, line: line, hold: holdReason(checkout, file, line)})
+		skippedEarlier := skipped[canonical(checkout)]
+		repos = append(repos, trackerRepo{dir: checkout, name: entry.Name(), file: file, line: line, hold: holdReason(checkout, file, line, skippedEarlier), skipped: skippedEarlier})
 	}
 	sort.Slice(repos, func(left, right int) bool { return repos[left].name < repos[right].name })
 	return repos
@@ -206,9 +217,12 @@ func scanDir(dir string) []trackerRepo {
 
 // holdReason is why an undeclared repo isn't asked about, in the words the
 // report shows, or "" when it is.
-func holdReason(checkout, file, line string) string {
+func holdReason(checkout, file, line string, skipped bool) string {
 	if line != "" {
 		return ""
+	}
+	if skipped {
+		return "skipped on an earlier run; add --ask-trackers-again to be asked"
 	}
 	if hasBranch(checkout, trackerBranch) {
 		return "the line waits on branch " + trackerBranch + " until its PR merges; delete the branch to be asked again"
@@ -369,10 +383,17 @@ func printReposPlan(out io.Writer, home string, report reposReport) {
 }
 
 // printTrackerAnswers is the repos half of the plan's answers: the line
-// each undeclared repo gets, or skipped, and whether the PR opens.
-func printTrackerAnswers(out io.Writer, answers []TrackerAnswer) {
+// each undeclared repo gets and whether a PR can carry it, with the reason
+// when it can't, or skipped, which the next run remembers. The PR question
+// comes after the plan, so a line a PR can carry says so and the answer
+// decides.
+func printTrackerAnswers(out io.Writer, answers []TrackerAnswer, questions []TrackerQuestion) {
 	if len(answers) == 0 {
 		return
+	}
+	holds := map[string]string{}
+	for _, question := range questions {
+		holds[question.Dir] = question.PRHold
 	}
 	width := 0
 	for _, answer := range answers {
@@ -380,16 +401,34 @@ func printTrackerAnswers(out io.Writer, answers []TrackerAnswer) {
 	}
 	fmt.Fprintln(out, "\ntrackers")
 	for _, answer := range answers {
-		state := "skipped this run"
-		switch {
+		state := "skipped; not offered again without --ask-trackers-again"
+		switch hold := holds[answer.Dir]; {
 		case answer.Skip:
-		case answer.OpenPR:
-			state = fmt.Sprintf("would get %q and a PR on branch %s", answer.Line, trackerBranch)
+		case hold == "":
+			state = fmt.Sprintf("write %q, open a PR on branch %s", answer.Line, trackerBranch)
 		default:
-			state = fmt.Sprintf("would get %q, left uncommitted", answer.Line)
+			state = fmt.Sprintf("write %q only, %s", answer.Line, hold)
 		}
 		fmt.Fprintf(out, "  %-*s  %s\n", width, answer.Repo, state)
 	}
+}
+
+// rememberSkips is the checkouts the next run leaves out of the tracker
+// screens, by canonical path: the ones skipped on an earlier run and still
+// held, and the ones skipped on this one. A repo that names its tracker
+// since drops off, and so does one whose folder is gone.
+func rememberSkips(report reposReport, answers []TrackerAnswer) []string {
+	skippedNow := map[string]bool{}
+	for _, answer := range answers {
+		skippedNow[answer.Dir] = answer.Skip
+	}
+	var skipped []string
+	for _, repo := range report.repos {
+		if !repo.declared() && (repo.skipped || skippedNow[repo.dir]) {
+			skipped = append(skipped, canonical(repo.dir))
+		}
+	}
+	return skipped
 }
 
 // applyTrackers writes each answer into its repo. The harnesses are done by
@@ -462,21 +501,8 @@ func declareTracker(ctx context.Context, opts Options, repo trackerRepo, line st
 		return err
 	}
 	fmt.Fprintf(out, "  %s  wrote %q to %s\n", repo.name, line, display(opts.Home, repo.file))
-	switch {
-	case !state.clean:
-		fmt.Fprintf(out, "  %s  has other uncommitted changes, so the line is left uncommitted with them\n", repo.name)
-		return nil
-	case !state.hasRemote():
-		fmt.Fprintf(out, "  %s  has no origin remote, so the line is left uncommitted; commit it yourself\n", repo.name)
-		return nil
-	case state.defaultBranch == "":
-		fmt.Fprintf(out, "  %s  has no origin/HEAD, so setup can't tell its default branch and the line is left uncommitted; run `git remote set-head origin -a` there, then rerun\n", repo.name)
-		return nil
-	case !state.onDefaultBranch():
-		fmt.Fprintf(out, "  %s  is on branch %s, not %s, so the line is left uncommitted; commit it yourself\n", repo.name, state.branch, state.defaultBranch)
-		return nil
-	case !state.published:
-		fmt.Fprintf(out, "  %s  is on %s but not at origin/%s, so the line is left uncommitted; push or pull first, then rerun\n", repo.name, state.branch, state.branch)
+	if hold := state.prHold(); hold != "" {
+		fmt.Fprintf(out, "  %s  %s; the line is left uncommitted, commit it yourself\n", repo.name, hold)
 		return nil
 	}
 	if !openPR {
@@ -507,9 +533,67 @@ func (s repoState) onDefaultBranch() bool {
 	return s.defaultBranch != "" && s.branch == s.defaultBranch
 }
 
-// prPossible is true when every check the PR offer needs passes.
-func (s repoState) prPossible() bool {
-	return s.clean && s.hasRemote() && s.onDefaultBranch() && s.published
+// prHold is why git says the PR can't carry the line, in the words the
+// plan and the report show, "" when every check passes.
+func (s repoState) prHold() string {
+	switch {
+	case !s.clean:
+		return "has other uncommitted changes"
+	case !s.hasRemote():
+		return "has no origin remote"
+	case s.defaultBranch == "":
+		return "has no origin/HEAD, run `git remote set-head origin -a` there to name its default branch"
+	case !s.onDefaultBranch():
+		return fmt.Sprintf("is on branch %s, not %s", s.branch, s.defaultBranch)
+	case !s.published:
+		return fmt.Sprintf("is on %s but not at origin/%s, push or pull first", s.branch, s.branch)
+	}
+	return ""
+}
+
+// prHold is why the PR can't carry the line: what git says, then whether
+// gh can see the origin, since gh opens the PR.
+func prHold(state repoState, origin originFacts) string {
+	if hold := state.prHold(); hold != "" {
+		return hold
+	}
+	if !origin.seen {
+		return "has an origin gh can't see, run gh auth login for that host"
+	}
+	return ""
+}
+
+// originFacts is what gh says about an origin: seen when gh can reach the
+// repo, so it is on a GitHub host gh is logged into, and issues when the
+// repo has issues enabled, the one thing an origin says about which
+// tracker the repo uses.
+type originFacts struct {
+	seen   bool
+	issues bool
+}
+
+// guess is the backend key the origin suggests, "" when it says nothing.
+func (o originFacts) guess() string {
+	if o.seen && o.issues {
+		return gitHubIssues
+	}
+	return ""
+}
+
+// readOrigin asks gh about the origin. Any failure, gh not logged in, a
+// host gh doesn't know, no network, reads as an origin gh can't see.
+func readOrigin(ctx context.Context, opts Options, url string) originFacts {
+	var out bytes.Buffer
+	if opts.Shell(ctx, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, url), &out) != nil {
+		return originFacts{}
+	}
+	var answer struct {
+		HasIssuesEnabled bool `json:"hasIssuesEnabled"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &answer); err != nil {
+		return originFacts{}
+	}
+	return originFacts{seen: true, issues: answer.HasIssuesEnabled}
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {

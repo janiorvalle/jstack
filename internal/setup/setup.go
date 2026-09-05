@@ -49,6 +49,7 @@ type Options struct {
 	ForgetSkillRepos []string
 	NoSkillRepo      bool
 	ReposDirs        []string
+	AskTrackersAgain bool
 	Overrides        map[string]string
 	Stdin            io.Reader
 	Stdout           io.Writer
@@ -249,11 +250,11 @@ func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness,
 	return rows.Found(), fromDetect, nil
 }
 
-// planRepos scans the named folders. With none named, the guesses under
-// home go in the report instead, so the hint can say what setup would have
-// scanned.
-func planRepos(home string, reposDirs []string) reposReport {
-	report := reposReport{dirs: reposDirs, repos: scanRepos(reposDirs)}
+// planRepos scans the named folders, holding the checkouts skipped on an
+// earlier run. With none named, the guesses under home go in the report
+// instead, so the hint can say what setup would have scanned.
+func planRepos(home string, reposDirs []string, skipped map[string]bool) reposReport {
+	report := reposReport{dirs: reposDirs, repos: scanRepos(reposDirs, skipped)}
 	if len(reposDirs) == 0 {
 		report.guesses = guessReposDirs(home)
 	}

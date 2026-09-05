@@ -31,7 +31,7 @@ const usage = `squirrel puts the skills, the letter, and the tools into the codi
 
   squirrel setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
                [--skill-repo owner/name] [--forget-skill-repo owner/name] [--no-skill-repo] [--override skill=source]
-               [--repos-dir folder]
+               [--repos-dir folder] [--ask-trackers-again]
   squirrel upgrade
   squirrel version
 
@@ -44,8 +44,10 @@ come from GitHub and npm, and an update runs through whoever installed the binar
 Homebrew one, the tools.md line for one in ~/.local/bin, the pinned npm line for an npm one.
 A skills repo of your own is cloned with gh and its skills/ folder installs beside squirrel's.
 A skill named the same in two sources stops setup until --override says which one to install.
-It also asks once where your repos live, lists each repo's Tracker line, asks for the ones
-that have none, writes the line into the repo, and offers to open the PR.
+It also asks once where your repos live, lists each repo's Tracker line, asks which backend
+the ones without one use, a checkbox list per backend, writes the line into each repo, and
+offers to open the PRs. A repo left unchecked is skipped and not offered again unless
+--ask-trackers-again is passed.
 `
 
 func main() {
@@ -127,6 +129,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		reposDirs = append(reposDirs, value)
 		return nil
 	})
+	askTrackersAgain := flags.Bool("ask-trackers-again", false, "offer the repos skipped on the tracker screens again")
 	flags.Func("override", "which source a skill in more than one source comes from, skill=squirrel or skill=owner/name; repeatable", func(value string) error {
 		name, source, ok := strings.Cut(value, "=")
 		if !ok || name == "" || source == "" {
@@ -167,6 +170,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		ForgetSkillRepos: forgetSkillRepos,
 		NoSkillRepo:      *noSkillRepo,
 		ReposDirs:        reposDirs,
+		AskTrackersAgain: *askTrackersAgain,
 		Overrides:        overrides,
 		Stdin:            stdin,
 		Stdout:           stdout,

@@ -104,7 +104,10 @@ type flow struct {
 	collisions    []collisionScratch
 	reposPick     string
 	reposTyped    string
-	trackers      []trackerScratch
+	questions     []setup.TrackerQuestion
+	trackers      []backendScratch
+	repoPaths     bool
+	openPRs       bool
 	tools         []string
 	toolsInit     bool
 	plan          *setup.Plan
@@ -118,20 +121,18 @@ type collisionScratch struct {
 	pick    string
 }
 
-// trackerScratch is one undeclared repo's answers as the screens collect
-// them. backend is a backend key, or skip.
-type trackerScratch struct {
-	question setup.TrackerQuestion
-	backend  string
+// backendScratch is one backend screen's answers as the screens collect
+// them: the checkouts checked for it and the one thing it needs, typed
+// once for all of them. shown is whether the screen came up yet, since
+// the origin's guesses come checked the first time only.
+type backendScratch struct {
+	backend  setup.Backend
+	dirs     []string
 	argument string
-	openPR   bool
-	forRest  bool
+	shown    bool
 }
 
-const (
-	skip      = "skip"
-	elsewhere = "elsewhere"
-)
+const elsewhere = "elsewhere"
 
 func run(ctx context.Context, session *setup.Session, opts setup.Options, show runner) error {
 	f := &flow{ctx: ctx, session: session, opts: opts, out: opts.Stdout, show: show}
@@ -144,6 +145,8 @@ func run(ctx context.Context, session *setup.Session, opts setup.Options, show r
 		f.trackerScreens,
 		f.toolsScreen,
 		f.planScreen,
+		f.pullRequestScreen,
+		f.applyScreen,
 	)(forward)
 	if err != nil {
 		return err
@@ -158,9 +161,13 @@ func run(ctx context.Context, session *setup.Session, opts setup.Options, show r
 	return f.session.Apply(f.ctx, f.plan, f.answers)
 }
 
-// ask runs one screen and reads how it ended.
+// ask runs one field as a screen and reads how it ended.
 func (f *flow) ask(field huh.Field, summary func() string) (outcome, error) {
-	s := newScreen(field, summary)
+	return f.present(newScreen(field, summary))
+}
+
+// present runs one screen and reads how it ended.
+func (f *flow) present(s *screen) (outcome, error) {
 	if err := f.show(s); err != nil {
 		return quit, fmt.Errorf("[SQUIRREL-TUI] the terminal stopped answering: %w; rerun with --yes and --harness to skip the questions", err)
 	}
@@ -397,195 +404,174 @@ func (f *flow) reposDirs() ([]string, bool, error) {
 	return append(dirs, f.reposPick), true, nil
 }
 
-// trackerScreens asks about every repo that declares no tracker: which
-// backend, what it needs, whether to open the PR, and whether the rest get
-// the same answer.
+// trackerScreens asks about every repo that declares no tracker: one
+// checkbox list per backend, in the order the backends come, over the
+// repos no earlier screen took. Unchecked on every screen means skip, and
+// the next run remembers it. A backend with no repo left to offer is not
+// shown.
 func (f *flow) trackerScreens(entered direction) (outcome, error) {
 	dirs, _, err := f.reposDirs()
 	if err != nil {
 		return quit, err
 	}
 	questions := f.session.Trackers(f.ctx, dirs)
-	if !sameQuestions(f.trackers, questions) {
+	if !sameQuestions(f.questions, questions) {
+		f.questions = questions
 		f.trackers = nil
-		for _, question := range questions {
-			f.trackers = append(f.trackers, trackerScratch{question: question})
+		for _, backend := range setup.Backends() {
+			f.trackers = append(f.trackers, backendScratch{backend: backend})
 		}
 	}
-	var steps []step
+	f.repoPaths = len(dirs) > 1
+	steps := make([]step, 0, len(f.trackers))
 	for index := range f.trackers {
-		steps = append(steps, f.trackerScreensFor(index)...)
+		steps = append(steps, f.backendScreen(index))
 	}
 	return sequence(steps...)(entered)
 }
 
-func sameQuestions(scratch []trackerScratch, questions []setup.TrackerQuestion) bool {
-	if len(scratch) != len(questions) {
+func sameQuestions(known, questions []setup.TrackerQuestion) bool {
+	if len(known) != len(questions) {
 		return false
 	}
 	for index := range questions {
-		if scratch[index].question != questions[index] {
+		if known[index] != questions[index] {
 			return false
 		}
 	}
 	return true
 }
 
-// covered reports whether an earlier repo's answer was given for the rest.
-func (f *flow) covered(index int) bool {
+// offered is the repos the backend screen at index shows: every one no
+// earlier screen took.
+func (f *flow) offered(index int) []setup.TrackerQuestion {
+	taken := map[string]bool{}
 	for _, earlier := range f.trackers[:index] {
-		if earlier.forRest {
-			return true
+		for _, dir := range earlier.dirs {
+			taken[dir] = true
 		}
 	}
-	return false
+	var offered []setup.TrackerQuestion
+	for _, question := range f.questions {
+		if !taken[question.Dir] {
+			offered = append(offered, question)
+		}
+	}
+	return offered
 }
 
-func (f *flow) trackerScreensFor(index int) []step {
+// repoLabel is a repo's row: its name, or its path when more than one
+// repos folder is scanned and two could share a name.
+func (f *flow) repoLabel(question setup.TrackerQuestion) string {
+	if f.repoPaths {
+		return setup.Display(f.opts.Home, question.Dir)
+	}
+	return question.Repo
+}
+
+// backendScreen is one backend's checkbox list, with a second page for the
+// one thing the backend needs when any repo is checked. The first time the
+// screen comes up, the repos whose origin suggests this backend come
+// checked.
+func (f *flow) backendScreen(index int) step {
 	current := &f.trackers[index]
-	remaining := func() []string {
-		var names []string
-		for _, later := range f.trackers[index+1:] {
-			names = append(names, later.question.Repo)
-		}
-		return names
-	}
-	backendOf := func() (setup.Backend, bool) {
-		for _, entry := range setup.Backends() {
-			if entry.Key == current.backend {
-				return entry, true
-			}
-		}
-		return setup.Backend{}, false
-	}
-	line := func() string {
-		chosen, ok := backendOf()
-		if !ok {
-			return skip
-		}
-		return lineFor(chosen, current.argument)
-	}
-	pick := func(direction) (outcome, error) {
-		if f.covered(index) {
+	return func(direction) (outcome, error) {
+		offered := f.offered(index)
+		if len(offered) == 0 {
 			return skipped, nil
 		}
-		options := []huh.Option[string]{huh.NewOption("skip this run", skip)}
-		for _, entry := range setup.Backends() {
-			options = append(options, huh.NewOption(entry.Label, entry.Key))
-		}
-		if current.backend == "" {
-			current.backend = skip
-		}
-		field := huh.NewSelect[string]().
-			Title(fmt.Sprintf("%s declares no tracker. Which one does it use?", current.question.Repo)).
-			Description("The line goes into " + current.question.File + ".").
-			Options(options...).
-			Value(&current.backend)
-		before := current.backend
-		defer func() {
-			// What was typed for one backend is not an answer for another.
-			if current.backend != before {
-				current.argument = ""
-			}
-		}()
-		return f.ask(field, func() string {
-			if chosen, ok := backendOf(); ok && chosen.Argument != "" {
-				return current.question.Repo + "  " + chosen.Label
-			}
-			return current.question.Repo + "  " + line()
-		})
-	}
-	argument := func(direction) (outcome, error) {
-		chosen, ok := backendOf()
-		if f.covered(index) || !ok || chosen.Argument == "" {
-			return skipped, nil
-		}
-		description := "for example " + chosen.Example
-		if chosen.Default != "" {
-			description = "Enter for " + chosen.Default
-		}
-		field := huh.NewInput().
-			Title(chosen.Label + " " + chosen.Argument).
-			Description(description).
-			Placeholder(chosen.Example).
-			Value(&current.argument).
-			Validate(func(typed string) error {
-				if typed == "" && chosen.Default == "" || strings.ContainsAny(typed, " \t") {
-					return fmt.Errorf("the %s is one word, for example %s", chosen.Argument, chosen.Example)
+		guessed := 0
+		for _, question := range offered {
+			if question.Guess == current.backend.Key {
+				guessed++
+				if !current.shown {
+					current.dirs = append(current.dirs, question.Dir)
 				}
-				return nil
-			})
-		return f.ask(field, func() string { return current.question.Repo + "  " + line() })
-	}
-	openPR := func(direction) (outcome, error) {
-		if f.covered(index) || current.backend == skip || !current.question.PROffer {
-			return skipped, nil
-		}
-		field := huh.NewConfirm().
-			Title(fmt.Sprintf("Open a PR for %s?", current.question.Repo)).
-			Description("branch tracker-line, commit \"docs: name the tracker\", through gh").
-			Affirmative("Yes").
-			Negative("No, leave the line uncommitted").
-			Value(&current.openPR)
-		return f.ask(field, func() string {
-			if current.openPR {
-				return current.question.Repo + "  PR through gh"
 			}
-			return current.question.Repo + "  line left uncommitted"
-		})
-	}
-	forRest := func(direction) (outcome, error) {
-		rest := remaining()
-		if f.covered(index) || len(rest) == 0 {
-			return skipped, nil
 		}
-		field := huh.NewConfirm().
-			Title(fmt.Sprintf("Same answer, %s, for the %d remaining?", line(), len(rest))).
-			Description(strings.Join(rest, ", ")).
-			Affirmative("Yes").
-			Negative("No, ask about each").
-			Value(&current.forRest)
-		return f.ask(field, func() string {
-			if current.forRest {
-				return strings.Join(rest, ", ") + "  same answer"
-			}
-			return strings.Join(rest, ", ") + "  asked one by one"
-		})
+		current.shown = true
+		options := make([]huh.Option[string], 0, len(offered))
+		for _, question := range offered {
+			options = append(options, huh.NewOption(f.repoLabel(question), question.Dir))
+		}
+		description := "Space toggles, Enter continues, / filters by name. Unchecked on every screen means skip."
+		if guessed > 0 {
+			description += "\n" + countOf(guessed, "repo") + " checked already, from the origin."
+		}
+		list := huh.NewMultiSelect[string]().
+			Title(fmt.Sprintf("Which repos track their work in %s?", current.backend.Label)).
+			Description(description).
+			Options(options...).
+			Value(&current.dirs)
+		groups := []*huh.Group{huh.NewGroup(list)}
+		if current.backend.Argument != "" {
+			groups = append(groups, huh.NewGroup(argumentField(current)).WithHideFunc(func() bool { return len(current.dirs) == 0 }))
+		}
+		return f.present(newPages(current.summary, groups...))
 	}
-	return []step{pick, argument, openPR, forRest}
 }
 
-// trackerAnswers is what the tracker screens decided, one per undeclared
-// repo, the answer given for the rest carried down the list.
-func (f *flow) trackerAnswers() []setup.TrackerAnswer {
-	var answers []setup.TrackerAnswer
-	var carried *trackerScratch
-	for index := range f.trackers {
-		current := &f.trackers[index]
-		source := current
-		if carried != nil {
-			source = carried
-		}
-		answer := setup.TrackerAnswer{Dir: current.question.Dir, Repo: current.question.Repo, Skip: source.backend == skip || source.backend == ""}
-		if !answer.Skip {
-			for _, entry := range setup.Backends() {
-				if entry.Key == source.backend {
-					answer.Line = lineFor(entry, source.argument)
-				}
+// argumentField takes the one thing a backend needs, once for every repo
+// checked on its screen.
+func argumentField(current *backendScratch) huh.Field {
+	chosen := current.backend
+	description := "for example " + chosen.Example
+	if chosen.Default != "" {
+		description = "Enter for " + chosen.Default
+	}
+	return huh.NewInput().
+		Title(chosen.Label + " " + chosen.Argument + ", the same for every repo checked").
+		Description(description).
+		Placeholder(chosen.Example).
+		Value(&current.argument).
+		Validate(func(typed string) error {
+			if typed == "" && chosen.Default == "" || strings.ContainsAny(typed, " \t") {
+				return fmt.Errorf("the %s is one word, for example %s", chosen.Argument, chosen.Example)
 			}
-			answer.OpenPR = source.openPR && current.question.PROffer
+			return nil
+		})
+}
+
+// summary is the line a backend screen leaves behind: the line's words and
+// how many repos get it.
+func (s *backendScratch) summary() string {
+	if len(s.dirs) == 0 {
+		return s.backend.Key + "  none"
+	}
+	return strings.TrimPrefix(lineFor(s.backend, s.argument), "Tracker: ") + "  " + countOf(len(s.dirs), "repo")
+}
+
+func countOf(count int, noun string) string {
+	if count == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", count, noun)
+}
+
+// trackerAnswers is what the backend screens decided, one per undeclared
+// repo: the line of the first screen that has it checked, or skip when
+// none does, and the PR when the one PR question said yes and the repo can
+// take one.
+func (f *flow) trackerAnswers() []setup.TrackerAnswer {
+	lines := map[string]string{}
+	for _, scratch := range f.trackers {
+		for _, dir := range scratch.dirs {
+			if _, taken := lines[dir]; !taken {
+				lines[dir] = lineFor(scratch.backend, scratch.argument)
+			}
 		}
-		answers = append(answers, answer)
-		if carried == nil && current.forRest {
-			carried = current
-		}
+	}
+	var answers []setup.TrackerAnswer
+	for _, question := range f.questions {
+		line, checked := lines[question.Dir]
+		answers = append(answers, setup.TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: line, Skip: !checked, OpenPR: checked && f.openPRs && question.PRHold == ""})
 	}
 	return answers
 }
 
-// lineFor is the tracker line for a backend and what was typed for it. A
-// backend that takes nothing ignores what was typed for another one
-// before an Esc; one that takes something gets its default for nothing.
+// lineFor is the tracker line for a backend and what was typed for it: a
+// backend that takes nothing ignores the text, one that takes something
+// gets its default for nothing.
 func lineFor(chosen setup.Backend, typed string) string {
 	if chosen.Argument == "" {
 		return setup.TrackerLine(chosen, "")
@@ -640,9 +626,13 @@ func (f *flow) toolsScreen(direction) (outcome, error) {
 	})
 }
 
-// planScreen prints the plan and asks to apply it. With nothing to apply
-// there is nothing to confirm, and the run goes straight to the report.
-func (f *flow) planScreen(direction) (outcome, error) {
+// planScreen prints the plan, the last thing before the confirms. Walked
+// into backward it shows nothing, so Esc from a confirm lands on the
+// screen before the plan.
+func (f *flow) planScreen(entered direction) (outcome, error) {
+	if entered == backward {
+		return skipped, nil
+	}
 	answers, err := f.collect()
 	if err != nil {
 		return quit, err
@@ -655,10 +645,49 @@ func (f *flow) planScreen(direction) (outcome, error) {
 	plan.Print(f.out, f.opts, answers)
 	if !plan.Pending() {
 		fmt.Fprintln(f.out, "\nEverything is in place. Nothing to apply.")
-		f.confirmed = true
+	}
+	return skipped, nil
+}
+
+// pullRequestScreen asks once whether every line a PR can carry gets one.
+// The plan above names each repo that can and why the rest can't.
+func (f *flow) pullRequestScreen(direction) (outcome, error) {
+	holds := map[string]string{}
+	for _, question := range f.questions {
+		holds[question.Dir] = question.PRHold
+	}
+	possible := 0
+	for _, answer := range f.answers.Trackers {
+		if !answer.Skip && holds[answer.Dir] == "" {
+			possible++
+		}
+	}
+	if possible == 0 {
 		return skipped, nil
 	}
+	field := huh.NewConfirm().
+		Title(fmt.Sprintf("Open %s?", countOf(possible, "pull request"))).
+		Description("Each on branch tracker-line, commit \"docs: name the tracker\", through gh. No writes the lines and leaves them uncommitted.").
+		Affirmative("Yes").
+		Negative("No").
+		Value(&f.openPRs)
+	result, err := f.ask(field, func() string {
+		if f.openPRs {
+			return "pull requests  yes"
+		}
+		return "pull requests  no, lines left uncommitted"
+	})
+	f.answers.Trackers = f.trackerAnswers()
+	return result, err
+}
+
+// applyScreen is the one confirm. With nothing to apply there is nothing
+// to confirm, and the run goes straight to the report.
+func (f *flow) applyScreen(direction) (outcome, error) {
 	f.confirmed = true
+	if !f.plan.Pending() {
+		return skipped, nil
+	}
 	field := huh.NewConfirm().
 		Title("Apply?").
 		Description("Everything above happens now.").

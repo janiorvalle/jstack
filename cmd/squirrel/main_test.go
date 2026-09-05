@@ -64,11 +64,11 @@ func TestSkillRepoFlagsReachTheRunAndRepeat(t *testing.T) {
 	var captured setup.Options
 	upgraded := false
 	var stdout, stderr bytes.Buffer
-	code := runWith([]string{"setup", "--skill-repo", "me/work-skills", "--skill-repo", "me/more", "--forget-skill-repo", "me/old", "--no-skill-repo", "--override", "voice=me/work-skills", "--override", "how=squirrel", "--repos-dir", "/home/test/code", "--repos-dir", "/home/test/src"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
+	code := runWith([]string{"setup", "--skill-repo", "me/work-skills", "--skill-repo", "me/more", "--forget-skill-repo", "me/old", "--no-skill-repo", "--override", "voice=me/work-skills", "--override", "how=squirrel", "--repos-dir", "/home/test/code", "--repos-dir", "/home/test/src", "--ask-trackers-again"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
-	if strings.Join(captured.SkillRepos, ",") != "me/work-skills,me/more" || strings.Join(captured.ForgetSkillRepos, ",") != "me/old" || !captured.NoSkillRepo || captured.Overrides["voice"] != "me/work-skills" || captured.Overrides["how"] != "squirrel" || strings.Join(captured.ReposDirs, ",") != "/home/test/code,/home/test/src" {
+	if strings.Join(captured.SkillRepos, ",") != "me/work-skills,me/more" || strings.Join(captured.ForgetSkillRepos, ",") != "me/old" || !captured.NoSkillRepo || captured.Overrides["voice"] != "me/work-skills" || captured.Overrides["how"] != "squirrel" || strings.Join(captured.ReposDirs, ",") != "/home/test/code,/home/test/src" || !captured.AskTrackersAgain {
 		t.Fatalf("options = %+v", captured)
 	}
 	code = runWith([]string{"setup", "--override", "voice"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))

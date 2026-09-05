@@ -2,6 +2,7 @@ package tui
 
 import (
 	"io"
+	"slices"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -32,9 +33,17 @@ type screen struct {
 
 var escape = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
 
-// newScreen wraps one field. Filtering a list is off: every list here is
-// short, and the filter's own Esc would fight the screen's.
+// newScreen wraps one field.
 func newScreen(field huh.Field, summary func() string) *screen {
+	return newPages(summary, huh.NewGroup(field))
+}
+
+// newPages wraps a form of one group per page, shown one after the other:
+// a list, then the one thing its backend needs. A Select's filter is off,
+// since its lists are short and the filter's own Esc would fight the
+// screen's; a MultiSelect keeps its filter, and the screen hands Esc to
+// the field while the filter is open.
+func newPages(summary func() string, groups ...*huh.Group) *screen {
 	theme := huh.ThemeCharm()
 	helper := help.New()
 	helper.Styles = theme.Help
@@ -42,7 +51,7 @@ func newScreen(field huh.Field, summary func() string) *screen {
 	keys.Select.Filter.SetEnabled(false)
 	keys.Select.SetFilter.SetEnabled(false)
 	keys.Select.ClearFilter.SetEnabled(false)
-	form := huh.NewForm(huh.NewGroup(field)).WithTheme(theme).WithKeyMap(keys).WithShowHelp(false)
+	form := huh.NewForm(groups...).WithTheme(theme).WithKeyMap(keys).WithShowHelp(false)
 	return &screen{form: form, summary: summary, help: helper}
 }
 
@@ -54,7 +63,11 @@ func (s *screen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if s.done {
 		return s, nil
 	}
-	if pressed, ok := msg.(tea.KeyMsg); ok && pressed.Type == tea.KeyEsc {
+	if size, ok := msg.(tea.WindowSizeMsg); ok {
+		// One line stays free for the help below the form.
+		s.form = s.form.WithHeight(size.Height - 1)
+	}
+	if pressed, ok := msg.(tea.KeyMsg); ok && pressed.Type == tea.KeyEsc && !s.fieldTakesEsc() {
 		s.done, s.outcome = true, back
 		return s, tea.Quit
 	}
@@ -71,6 +84,18 @@ func (s *screen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, tea.Quit
 	}
 	return s, cmd
+}
+
+// fieldTakesEsc reports whether the focused field has a use for Esc right
+// now, closing or clearing its filter, so the screen's back waits for the
+// next one.
+func (s *screen) fieldTakesEsc() bool {
+	for _, binding := range s.form.GetFocusedField().KeyBinds() {
+		if binding.Enabled() && slices.Contains(binding.Keys(), "esc") {
+			return true
+		}
+	}
+	return false
 }
 
 // View is the form while the question is open, then the one line that

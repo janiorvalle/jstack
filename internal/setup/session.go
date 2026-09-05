@@ -33,6 +33,7 @@ type Session struct {
 	scanned     []TrackerQuestion
 	scannedFor  string
 	scannedYet  bool
+	origins     map[string]originFacts
 }
 
 // Start reads what every screen needs. Nothing on the machine changes.
@@ -46,7 +47,7 @@ func Start(opts Options) (*Session, error) {
 		return nil, err
 	}
 	rows := harness.Resolve(opts.Home, opts.Getenv)
-	return &Session{opts: opts, embedded: embedded, config: config, rows: rows, found: harness.Keys(rows.Found())}, nil
+	return &Session{opts: opts, embedded: embedded, config: config, rows: rows, found: harness.Keys(rows.Found()), origins: map[string]originFacts{}}, nil
 }
 
 // HarnessChoice is one row of the harness screen. Checked is the pick to
@@ -187,22 +188,26 @@ func ParseReposDirs(answer, home string) ([]string, error) {
 	return parseReposDirs(answer, home)
 }
 
-// TrackerQuestion is one repo the tracker question is for this run. Dir
+// TrackerQuestion is one repo the tracker screens are for this run. Dir
 // is the checkout, what an answer names, since two repos folders can each
 // hold a repo called app. Repo is its name, for the screen. File is where
-// the line would be written, shown the way the report shows paths.
-// PROffer is true when the repo could take the PR: a clean tree on its
-// default branch at the remote's commit, with an origin gh can push to,
-// read before any write so the line itself never counts as pending.
+// the line would be written, shown the way the report shows paths. Guess
+// is the backend key the origin suggests, github-issues for a repo gh can
+// see with issues enabled, "" when the origin says nothing. PRHold is why
+// the PR can't be opened, in words, "" when it can: a clean tree on its
+// default branch at the remote's commit, with an origin gh can see, read
+// before any write so the line itself never counts as pending.
 type TrackerQuestion struct {
-	Dir     string
-	Repo    string
-	File    string
-	PROffer bool
+	Dir    string
+	Repo   string
+	File   string
+	Guess  string
+	PRHold string
 }
 
 // Trackers scans the folders and reads each undeclared repo's state, once
-// per set of folders.
+// per set of folders. A repo skipped on an earlier run is left out unless
+// --ask-trackers-again was passed.
 func (s *Session) Trackers(ctx context.Context, reposDirs []string) []TrackerQuestion {
 	key := strings.Join(reposDirs, ",")
 	if s.scannedYet && s.scannedFor == key {
@@ -210,11 +215,39 @@ func (s *Session) Trackers(ctx context.Context, reposDirs []string) []TrackerQue
 	}
 	s.scannedYet, s.scannedFor = true, key
 	s.scanned = nil
-	for _, repo := range planRepos(s.opts.Home, reposDirs).undeclared() {
+	for _, repo := range planRepos(s.opts.Home, reposDirs, s.skippedEarlier()).undeclared() {
 		state := readRepoState(ctx, s.opts, repo.dir)
-		s.scanned = append(s.scanned, TrackerQuestion{Dir: repo.dir, Repo: repo.name, File: display(s.opts.Home, repo.file), PROffer: state.prPossible()})
+		origin := s.origin(ctx, state.origin)
+		s.scanned = append(s.scanned, TrackerQuestion{Dir: repo.dir, Repo: repo.name, File: display(s.opts.Home, repo.file), Guess: origin.guess(), PRHold: prHold(state, origin)})
 	}
 	return s.scanned
+}
+
+// skippedEarlier is the checkouts the tracker screens leave out this run:
+// the ones skipped on an earlier run, or none with --ask-trackers-again.
+func (s *Session) skippedEarlier() map[string]bool {
+	skipped := map[string]bool{}
+	if s.opts.AskTrackersAgain {
+		return skipped
+	}
+	for _, dir := range s.config.TrackersSkipped {
+		skipped[dir] = true
+	}
+	return skipped
+}
+
+// origin is what gh says about an origin, asked once per origin per run,
+// so two checkouts of one repo cost one call and Esc costs nothing.
+func (s *Session) origin(ctx context.Context, url string) originFacts {
+	if url == "" {
+		return originFacts{}
+	}
+	facts, ok := s.origins[url]
+	if !ok {
+		facts = readOrigin(ctx, s.opts, url)
+		s.origins[url] = facts
+	}
+	return facts
 }
 
 // Backend is one of the trackers the tracker skill knows. Argument names
@@ -302,13 +335,16 @@ type Answers struct {
 	Trackers       []TrackerAnswer
 }
 
-// Plan is what a run would do, ready to print and apply.
+// Plan is what a run would do, ready to print and apply. questions is
+// what the tracker screens asked, for the reasons the plan shows beside
+// each answer; nil on the flag path, which asks nothing.
 type Plan struct {
-	picked   []harness.Harness
-	current  plan
-	trackers []TrackerAnswer
-	embedded assets
-	noted    bool
+	picked    []harness.Harness
+	current   plan
+	trackers  []TrackerAnswer
+	questions []TrackerQuestion
+	embedded  assets
+	noted     bool
 }
 
 // Plan works out what the answers mean for every harness, tool, and repo.
@@ -322,13 +358,13 @@ func (s *Session) Plan(ctx context.Context, answers Answers) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	current := plan{harnesses: harnessPlans, catalog: s.gathered, repos: planRepos(s.opts.Home, answers.ReposDirs), tools: append([]toolStatus(nil), s.toolStatuses(ctx)...)}
+	current := plan{harnesses: harnessPlans, catalog: s.gathered, repos: planRepos(s.opts.Home, answers.ReposDirs, s.skippedEarlier()), tools: append([]toolStatus(nil), s.toolStatuses(ctx)...)}
 	for index := range current.tools {
 		status := &current.tools[index]
 		status.install = status.actionable() && answers.Tools[status.tool.Title]
 	}
 	markSkillPresence(s.opts, picked, current.tools)
-	return &Plan{picked: picked, current: current, trackers: answers.Trackers, embedded: s.embedded}, nil
+	return &Plan{picked: picked, current: current, trackers: answers.Trackers, questions: s.scanned, embedded: s.embedded}, nil
 }
 
 // Print shows the plan the way the report shows the outcome: each harness,
@@ -338,7 +374,7 @@ func (p *Plan) Print(out io.Writer, opts Options, answers Answers) {
 	printPlan(out, opts.Home, p.embedded, p.current)
 	p.noted = noteInstallFolderOffPath(opts, out)
 	printReposPlan(out, opts.Home, p.current.repos)
-	printTrackerAnswers(out, answers.Trackers)
+	printTrackerAnswers(out, answers.Trackers, p.questions)
 }
 
 // Pending reports whether applying the plan would change anything beyond
@@ -389,6 +425,7 @@ func (s *Session) Apply(ctx context.Context, p *Plan, answers Answers) error {
 		SkillOverrides:  rememberOverrides(s.config.SkillOverrides, p.current.catalog.unreachable(), p.current.catalog.picks),
 		ReposDirs:       answers.ReposDirs,
 		ReposDirsAsked:  answers.ReposDirsAsked,
+		TrackersSkipped: rememberSkips(p.current.repos, answers.Trackers),
 	}
 	if err := saveConfig(opts.Home, saved); err != nil {
 		return err
