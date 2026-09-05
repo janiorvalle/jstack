@@ -67,7 +67,7 @@ Each tool ships its own skill and installs it. `tools.md` has the check, version
 - `tools.md` names the tools the flow expects and how to get them. A `(windows)` line runs there in PowerShell, the plain line is POSIX shell for macOS and Linux. The agent-browser line pins the CLI version because its skill text ships inside the CLI, and `scripts/tool-bump.py` moves that pin through a weekly PR.
 - `vendor.json` pins the third-party skills in `skills/`, the ones whose tool jstack doesn't control, so their text changes through a reviewed PR. `scripts/vendor-bump.py` copies each in at its pin, and a weekly workflow opens a bump PR when upstream moves. Our own tools, roast, bgr, and tokenomnom, ship their skill with the binary instead.
 - `cmd/jstack` and `internal/` are the binary, with the skills, the letter, `tools.md`, and `vendor.json` embedded at build time, so setup runs from anywhere.
-- `tasks/` is this repo's own tracker, markdown tasks in the `tracker` skill's shape, named by the `Tracker:` line at the top of the letter. Setup leaves that line out of what it installs.
+- This repo tracks its own work in GitHub Issues, named by the `Tracker:` line at the top of the letter. Setup leaves that line out of what it installs.
 - `decisions.md` records the choices made while building this, so nobody relitigates them.
 
 ## Development

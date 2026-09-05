@@ -1,6 +1,6 @@
 # A letter to the agent
 
-Tracker: markdown tasks/
+Tracker: github-issues
 
 A letter from the human you work for to you, the agent. We build bold projects together. Going with the flow and using existing solutions won't get us there.
 
