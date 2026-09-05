@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/janiorvalle/jstack"
-	"github.com/janiorvalle/jstack/internal/prompt"
 	"github.com/janiorvalle/jstack/internal/setup"
 	"github.com/janiorvalle/jstack/internal/tools"
+	"github.com/janiorvalle/jstack/internal/tui"
 	"github.com/janiorvalle/jstack/internal/upgrade"
 )
 
@@ -35,21 +35,28 @@ const usage = `jstack puts the skills, the letter, and the tools into the coding
   jstack upgrade
   jstack version
 
-setup prints the plan first. With a terminal it asks which harnesses and which tools, then applies.
-Without one it changes nothing unless --yes is passed. Picks are saved in ~/.jstack/config.json.
-Each tool is missing, outdated, or current; the latest versions come from GitHub and npm.
+With a terminal, setup is a guided flow: one screen per question, arrow keys and space to
+pick, Enter to continue, Esc to go back. Saved answers come preselected, so a rerun with
+nothing changed is one Enter. The plan comes last with a confirm; nothing is written before it.
+Without a terminal it prints the plan and changes nothing unless --yes is passed. Picks are
+saved in ~/.jstack/config.json. Each tool is missing, outdated, or current; the latest versions
+come from GitHub and npm, and an update runs through whoever installed the binary: brew for a
+Homebrew one, the tools.md line for one in ~/.local/bin, the pinned npm line for an npm one.
 A skills repo of your own is cloned with gh and its skills/ folder installs beside jstack's.
 A skill named the same in two sources stops setup until --override says which one to install.
-It also asks once where your repos live, lists each repo's Tracker line, and with a terminal
-asks for the ones that have none, writes the line into the repo, and offers to open the PR.
+It also asks once where your repos live, lists each repo's Tracker line, asks for the ones
+that have none, writes the line into the repo, and offers to open the PR.
 `
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
+// dependencies is what the commands reach outside for. setup is the plan
+// and flags path, guided the screens; a terminal without --yes gets guided.
 type dependencies struct {
 	setup       func(context.Context, setup.Options) error
+	guided      func(context.Context, setup.Options) error
 	upgrade     func(context.Context, string, io.Writer) error
 	home        func() (string, error)
 	interactive func() bool
@@ -58,6 +65,7 @@ type dependencies struct {
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return runWith(args, stdin, stdout, stderr, dependencies{
 		setup:       setup.Run,
+		guided:      tui.Run,
 		upgrade:     upgrade.Run,
 		home:        os.UserHomeDir,
 		interactive: stdinIsTerminal,
@@ -70,8 +78,9 @@ func runWith(args []string, stdin io.Reader, stdout, stderr io.Writer, deps depe
 		return 2
 	}
 	// setup keeps the default signal handling: Ctrl-C at a question ends the
-	// process before anything is written. upgrade turns signals into a
-	// cancelled context so a download stops cleanly.
+	// screens before anything is written, and during the apply ends the
+	// process. upgrade turns signals into a cancelled context so a download
+	// stops cleanly.
 	switch args[0] {
 	case "setup":
 		return runSetup(context.Background(), args[1:], stdin, stdout, stderr, deps)
@@ -141,7 +150,11 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		fmt.Fprintf(stderr, "jstack: [JSTACK-HOME] cannot find the home directory: %v; set HOME and rerun\n", err)
 		return 1
 	}
-	err = deps.setup(ctx, setup.Options{
+	runSetup := deps.setup
+	if deps.interactive() && !*yes {
+		runSetup = deps.guided
+	}
+	err = runSetup(ctx, setup.Options{
 		Files:            jstack.Files,
 		Home:             home,
 		Getenv:           os.Getenv,
@@ -150,7 +163,6 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		UpdateTools:      *updateTools,
 		KeepInstructions: *keepInstructions,
 		Yes:              *yes,
-		Interactive:      deps.interactive(),
 		SkillRepos:       skillRepos,
 		ForgetSkillRepos: forgetSkillRepos,
 		NoSkillRepo:      *noSkillRepo,
@@ -162,7 +174,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		Latest:           tools.Lookup{Client: &http.Client{Timeout: 5 * time.Second}}.Latest,
 		Now:              time.Now,
 	})
-	if errors.Is(err, prompt.ErrQuit) {
+	if errors.Is(err, tui.ErrQuit) {
 		fmt.Fprintln(stdout, "\nQuit. Nothing changed.")
 		return 0
 	}

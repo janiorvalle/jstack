@@ -4,9 +4,10 @@ jstack expects a few tools on the machine. Each ships its own skill, which the t
 
 If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. The install command is this file's `Install` line, the one `jstack setup` runs, never the one inside the tool's own skill. Then read the skill the tool installed and follow it.
 
-`jstack setup` runs every check below, installs each present tool's skill, and reports each tool as missing, outdated, or current. It parses the `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines:
+`jstack setup` runs every check below, installs each present tool's skill, and reports each tool as missing, outdated, or current. It parses the `Check`, `Version`, `Repo`, `Install`, `Formula`, `Skill install`, and `Skill folder` lines:
 
 - `Version` prints the installed version. The latest comes from the GitHub releases of the `Repo` line, or from npm when the install line is `npm install -g`.
+- An update runs through whoever installed the binary. `Check` is `command -v <binary>`, so setup asks the shell where the binary is: an npm install line updates with its own line wherever node lives; a binary under `brew --prefix` gets `brew upgrade <formula>`, the binary's name unless a `Formula` line names the formula; one in `~/.local/bin` gets the `Install` line; one anywhere else is shown with its path and left alone, since the install line would drop a second copy that loses on PATH.
 - A pinned line, `npm install -g name@1.2.3`, makes the pin the latest: behind it is outdated, past it is ahead, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one.
 - A `Check` line with no `Install` line is a prerequisite. Setup checks for it and points here when it's missing, never installs or updates it. git and gh are the prerequisites.
 - Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, `Check (windows)`, which wins on that OS and runs in Windows PowerShell. The suffix is Go's OS name: `windows`, `darwin`, or `linux`. A command that's the same in both shells, `roast --version`, carries no suffix.

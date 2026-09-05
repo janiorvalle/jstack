@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/janiorvalle/jstack/internal/prompt"
 	"github.com/janiorvalle/jstack/internal/skills"
 )
 
@@ -41,12 +40,15 @@ func (r skillRepo) usable() bool {
 
 // catalog is every place skills come from this run, jstack's embedded folder
 // first and then each usable repo, and which source each name more than one
-// of them holds is taken from.
+// of them holds is taken from. collisions is every such name; open is the
+// ones the flags and the saved picks didn't settle, still to be asked.
 type catalog struct {
-	repos   []skillRepo
-	sources []skills.Source
-	picks   map[string]string
-	held    []string
+	repos      []skillRepo
+	sources    []skills.Source
+	collisions []skills.Collision
+	picks      map[string]string
+	open       []skills.Collision
+	held       []string
 }
 
 // close lets go of the clone folders. Windows won't remove a folder while
@@ -111,24 +113,6 @@ func chooseRepos(saved []string, opts Options) ([]string, error) {
 		}
 	}
 	return repos, nil
-}
-
-// askRepo asks once for a skills repo of the human's own. Enter skips.
-func askRepo(ask *prompt.Prompt, out io.Writer) (string, error) {
-	for {
-		answer, err := ask.Ask("\nDo you have a skills repo of your own? owner/name, Enter to skip:")
-		if err != nil {
-			return "", err
-		}
-		if answer == "" {
-			return "", nil
-		}
-		name, err := repoName(answer)
-		if err == nil {
-			return name, nil
-		}
-		fmt.Fprintln(out, err)
-	}
 }
 
 // syncRepos clones each repo that isn't on the machine yet and pulls each
@@ -392,11 +376,12 @@ func printOverrides(out io.Writer, collisions []skills.Collision, picks map[stri
 	}
 }
 
-// resolveCollisions picks a source for every name more than one source
-// holds: a --override flag first, then the saved pick, then the human when
-// there is a terminal. Without one the refusal names the flag that picks.
-func resolveCollisions(ask *prompt.Prompt, collisions []skills.Collision, saved, flags map[string]string) (map[string]string, error) {
-	picks := map[string]string{}
+// settleCollisions picks a source for every name more than one source
+// holds from a --override flag first, then the saved pick, and returns the
+// names neither settles, for the guided flow to ask about. Without a
+// terminal, the refusal for the first open one names the flag that picks.
+func settleCollisions(collisions []skills.Collision, saved, flags map[string]string) (picks map[string]string, open []skills.Collision, err error) {
+	picks = map[string]string{}
 	byName := map[string]skills.Collision{}
 	for _, collision := range collisions {
 		byName[collision.Name] = collision
@@ -404,10 +389,10 @@ func resolveCollisions(ask *prompt.Prompt, collisions []skills.Collision, saved,
 	for name, source := range flags {
 		collision, ok := byName[name]
 		if !ok {
-			return nil, fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in more than one source, so there is nothing to override; %s", name, collisionList(collisions))
+			return nil, nil, fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in more than one source, so there is nothing to override; %s", name, collisionList(collisions))
 		}
 		if !holds(collision, source) {
-			return nil, fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in %s; it is in %s; example: --override %s=%s", name, source, strings.Join(collision.Sources, " and "), name, collision.Sources[1])
+			return nil, nil, fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in %s; it is in %s; example: --override %s=%s", name, source, strings.Join(collision.Sources, " and "), name, collision.Sources[1])
 		}
 		picks[name] = source
 	}
@@ -419,16 +404,9 @@ func resolveCollisions(ask *prompt.Prompt, collisions []skills.Collision, saved,
 			picks[collision.Name] = source
 			continue
 		}
-		if ask == nil {
-			return nil, refusal(collision)
-		}
-		source, err := askCollision(ask, collision)
-		if err != nil {
-			return nil, err
-		}
-		picks[collision.Name] = source
+		open = append(open, collision)
 	}
-	return picks, nil
+	return picks, open, nil
 }
 
 func collisionList(collisions []skills.Collision) string {
@@ -450,20 +428,16 @@ func refusal(collision skills.Collision) error {
 	return fmt.Errorf("[JSTACK-SKILL-COLLISION] skill %q is in %s, and there is no terminal to ask which one goes into the harnesses; rerun with %s, or rename the folder in %s", collision.Name, strings.Join(collision.Sources, " and "), strings.Join(flags, ", "), strings.Join(without(collision.Sources, "jstack"), " or "))
 }
 
-func askCollision(ask *prompt.Prompt, collision skills.Collision) (string, error) {
-	labels := make([]string, 0, len(collision.Sources)+1)
-	for _, source := range collision.Sources {
-		labels = append(labels, useWording(source))
-	}
-	labels = append(labels, "rename it yourself")
-	index, err := ask.Choose(fmt.Sprintf("Skill %q is in %s. Which one goes into the harnesses?", collision.Name, strings.Join(collision.Sources, " and ")), labels)
-	if err != nil {
-		return "", err
-	}
-	if index == len(collision.Sources) {
-		return "", fmt.Errorf("[JSTACK-SKILL-COLLISION] setup stopped so you can rename the %q folder in %s; push, then rerun jstack setup. The harnesses are unchanged", collision.Name, strings.Join(without(collision.Sources, "jstack"), " or "))
-	}
-	return collision.Sources[index], nil
+// renameStop is the error for the pick that leaves the collision to the
+// person: setup stops before touching a harness.
+func renameStop(collision skills.Collision) error {
+	return fmt.Errorf("[JSTACK-SKILL-COLLISION] setup stopped so you can rename the %q folder in %s; push, then rerun jstack setup. The harnesses are unchanged", collision.Name, strings.Join(without(collision.Sources, "jstack"), " or "))
+}
+
+// UseWording is how the collision screen names each choice: keep jstack's,
+// or use the repo's.
+func UseWording(source string) string {
+	return useWording(source)
 }
 
 func useWording(source string) string {

@@ -67,25 +67,28 @@ func TestPullLineChangesIntoTheCloneAndSyncsFromTheRepoItself(t *testing.T) {
 func TestRepoQuestionIsAskedOnceAndRememberedWhenSkipped(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
-	opts, out := options(t, home, shell, "\n\n\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out := options(t, home, shell, "")
+	session, err := Start(opts)
+	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "Do you have a skills repo of your own? owner/name, Enter to skip:")
+	if session.SkillRepoAsked() {
+		t.Fatal("the question counts as asked before the first run")
+	}
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(out.String(), "skill repos") {
 		t.Fatalf("a skipped question printed a repos section:\n%s", out.String())
 	}
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"skill_repos_asked": true`) || strings.Contains(got, `"skill_repos"`+`:`) {
 		t.Fatalf("config = %q", got)
 	}
-	opts, out = options(t, home, shell, "\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	if session, err = Start(opts); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out.String(), "skills repo of your own") {
-		t.Fatalf("asked again:\n%s", out.String())
+	if !session.SkillRepoAsked() {
+		t.Fatal("asked again")
 	}
 }
 
@@ -106,26 +109,34 @@ func TestNoSkillRepoFlagRecordsTheAnswerHeadlessly(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"skill_repos_asked": true`) {
 		t.Fatalf("config = %q", got)
 	}
-	opts, out = options(t, home, shell, "\n\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out = options(t, home, shell, "")
+	session, err := Start(opts)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out.String(), "skills repo of your own") || strings.Contains(out.String(), "--no-skill-repo") {
-		t.Fatalf("asked or hinted after the answer was recorded:\n%s", out.String())
+	if !session.SkillRepoAsked() {
+		t.Fatal("asked after the answer was recorded")
+	}
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "--no-skill-repo") {
+		t.Fatalf("hinted after the answer was recorded:\n%s", out.String())
 	}
 }
 
-func TestRepoQuestionRejectsABadNameAndAsksAgain(t *testing.T) {
+func TestRepoQuestionRejectsABadNameAndTakesAGoodOne(t *testing.T) {
+	if _, err := RepoName("not a repo"); err == nil || !strings.Contains(err.Error(), `"not a repo" is not owner/name`) {
+		t.Fatalf("err = %v", err)
+	}
 	home := homeWithClaude(t)
 	shell := withRepo()
-	opts, out := options(t, home, shell, "not a repo\nme/work-skills\n\n\ny\n")
-	opts.Interactive = true
+	opts, out := options(t, home, shell, "")
 	opts.Overrides = map[string]string{"voice": "jstack"}
-	if err := Run(context.Background(), opts); err != nil {
+	if err := guided(t, opts, script{skillRepo: "https://github.com/me/work-skills.git"}); err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), `"not a repo" is not owner/name`, "me/work-skills  ~/.jstack/repos/me/work-skills, cloned, 2 skills")
+	expectAll(t, out.String(), "me/work-skills  ~/.jstack/repos/me/work-skills, cloned, 2 skills")
 }
 
 func TestRepoSkillsInstallBesideJstacksWithTheirSourceNamed(t *testing.T) {
@@ -200,13 +211,23 @@ func TestRerunPullsTheRepoAndUpdatesAChangedSkillWithABackup(t *testing.T) {
 func TestCollisionAsksAndRemembersThePick(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRepo()
-	opts, out := options(t, home, shell, "me/work-skills\n\n2\n\ny\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out := options(t, home, shell, "")
+	session, err := Start(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open, err := session.Gather(context.Background(), []string{workSkills})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open) != 1 || open[0].Name != "voice" || strings.Join(open[0].Sources, ",") != "jstack,me/work-skills" {
+		t.Fatalf("open collisions = %+v", open)
+	}
+	session.Close()
+	if err := guided(t, opts, script{skillRepo: workSkills, picks: map[string]string{"voice": workSkills}}); err != nil {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(),
-		"Skill \"voice\" is in jstack and me/work-skills. Which one goes into the harnesses?\n  1. keep jstack's\n  2. use me/work-skills's\n  3. rename it yourself\nPick 1 to 3, q quits: ",
 		"voice  overridden by me/work-skills, not installed from jstack",
 		"changed  voice (me/work-skills)\n",
 	)
@@ -216,13 +237,16 @@ func TestCollisionAsksAndRemembersThePick(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"skill_overrides\": {\n    \"voice\": \"me/work-skills\"\n  }") {
 		t.Fatalf("config = %q", got)
 	}
-	opts, out = options(t, home, shell, "\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out = options(t, home, shell, "")
+	if session, err = Start(opts); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out.String(), "Which one goes into the harnesses?") {
-		t.Fatalf("asked again:\n%s", out.String())
+	defer session.Close()
+	if open, err = session.Gather(context.Background(), []string{workSkills}); err != nil || len(open) != 0 {
+		t.Fatalf("asked again: open = %+v, err = %v", open, err)
+	}
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
 	}
 	expectAll(t, out.String(), "voice  overridden by me/work-skills, not installed from jstack", "same     3 skills")
 }
@@ -230,9 +254,8 @@ func TestCollisionAsksAndRemembersThePick(t *testing.T) {
 func TestRenameChoiceStopsSetupWithTheHarnessesUntouched(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRepo()
-	opts, _ := options(t, home, shell, "me/work-skills\n\n3\n")
-	opts.Interactive = true
-	err := Run(context.Background(), opts)
+	opts, _ := options(t, home, shell, "")
+	err := guided(t, opts, script{skillRepo: workSkills, picks: map[string]string{"voice": Rename}})
 	if err == nil || !strings.Contains(err.Error(), `rename the "voice" folder in me/work-skills`) {
 		t.Fatalf("err = %v", err)
 	}

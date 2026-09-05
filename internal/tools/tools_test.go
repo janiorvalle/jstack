@@ -70,6 +70,39 @@ func TestParseReadsThePinFromAnNpmInstallLine(t *testing.T) {
 	}
 }
 
+func TestParseReadsTheBinaryFromAOneCommandCheckLine(t *testing.T) {
+	for check, want := range map[string]string{
+		"command -v roast":  "roast",
+		"Get-Command roast": "roast",
+		"command -v git && command -v gh && gh auth status":     "",
+		"Get-Command git, gh -ErrorAction Stop; gh auth status": "",
+	} {
+		if got := binaryFrom(check); got != want {
+			t.Fatalf("binaryFrom(%q) = %q, want %q", check, got, want)
+		}
+	}
+	parsed := parseFor("## roast\n\n- Check: `command -v roast`\n- Check (windows): `Get-Command roast`\n", "windows")
+	if len(parsed) != 1 || parsed[0].Binary != "roast" {
+		t.Fatalf("parsed = %+v", parsed)
+	}
+}
+
+func TestParseReadsTheFormulaLine(t *testing.T) {
+	parsed := Parse("## bgr\n\n- Check: `command -v bgr`\n- Formula: `better-git-review`\n\n## roast\n\n- Check: `command -v roast`\n")
+	if len(parsed) != 2 || parsed[0].Formula != "better-git-review" || parsed[1].Formula != "" {
+		t.Fatalf("parsed = %+v", parsed)
+	}
+}
+
+func TestNpmInstalledReadsTheInstallLine(t *testing.T) {
+	if !(Tool{Command: "npm install -g agent-browser@0.36.0 && agent-browser install"}).NpmInstalled() {
+		t.Fatal("an npm install line is not npm installed")
+	}
+	if (Tool{Command: "curl -fsSL https://x/install.sh | sh"}).NpmInstalled() || (Tool{}).NpmInstalled() {
+		t.Fatal("a curl line or no line is npm installed")
+	}
+}
+
 func TestParseEmptyText(t *testing.T) {
 	if got := Parse(""); len(got) != 0 {
 		t.Fatalf("parsed %+v", got)
