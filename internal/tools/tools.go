@@ -21,9 +21,13 @@ const Doc = "https://github.com/janiorvalle/jstack/blob/main/tools.md"
 // names its section of Doc, the only thing setup can offer for it. Pin is
 // the version the Install line installs when it names one, as "v1.2.3", so
 // setup compares against it instead of asking a registry; moving it is a PR.
+// Binary is the executable the Check line looks for, "command -v roast" or
+// "Get-Command roast", so setup can ask where it is and who put it there;
+// a Check line shaped any other way gives "".
 type Tool struct {
 	Title        string
 	Check        string
+	Binary       string
 	Version      string
 	Repo         string
 	Install      string
@@ -37,6 +41,7 @@ var (
 	versionToken = regexp.MustCompile(`v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?`)
 	npmPin       = regexp.MustCompile(`^npm install -g [^@\s]+@(\S+)`)
 	backtickSpan = regexp.MustCompile("`([^`]+)`")
+	binaryCheck  = regexp.MustCompile(`^(?:command -v|Get-Command) (\S+)$`)
 )
 
 // Parse returns the tools in tools.md order for the OS the binary runs on.
@@ -65,6 +70,7 @@ func parseFor(markdown, operatingSystem string) []Tool {
 		parsed = append(parsed, Tool{
 			Title:        strings.TrimSpace(title),
 			Check:        check,
+			Binary:       binaryFrom(check),
 			Version:      quoted(lineFor(section, "Version", operatingSystem)),
 			Repo:         strings.TrimSpace(lineFor(section, "Repo", operatingSystem)),
 			Install:      install,
@@ -118,6 +124,23 @@ func commandFrom(line string) string {
 		steps = append(steps, match[1])
 	}
 	return strings.Join(steps, " && ")
+}
+
+// binaryFrom reads the executable a one-command Check line looks for. The
+// prerequisites' line checks several things at once and names no single
+// binary, which is fine: setup never updates a prerequisite.
+func binaryFrom(check string) string {
+	match := binaryCheck.FindStringSubmatch(check)
+	if match == nil {
+		return ""
+	}
+	return match[1]
+}
+
+// NpmInstalled reports whether the tool's install line is an npm install,
+// so the binary belongs to npm wherever node put it.
+func (t Tool) NpmInstalled() bool {
+	return npmPackage.MatchString(t.Command)
 }
 
 // pinFrom reads the version an "npm install -g name@1.2.3" line pins. Any

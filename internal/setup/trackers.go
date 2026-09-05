@@ -11,8 +11,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-
-	"github.com/janiorvalle/jstack/internal/prompt"
 )
 
 // trackerRepo is one git checkout under a repos folder, as found on this
@@ -149,35 +147,6 @@ func chooseReposDirs(config Config, opts Options) (dirs []string, asked bool, er
 		}
 	}
 	return dirs, config.ReposDirsAsked || len(opts.ReposDirs) > 0, nil
-}
-
-// askReposDirs asks once where the repos live. Enter takes the first guess,
-// or skips when there is none; typed paths must exist, comma separated for
-// more than one.
-func askReposDirs(ask *prompt.Prompt, out io.Writer, home string, guesses []string) ([]string, error) {
-	question := "\nWhere do your repos live? A folder with a git checkout in each subfolder."
-	if len(guesses) > 0 {
-		question += fmt.Sprintf(" Found %s. Enter takes %s; or type paths, comma separated:", displayList(home, guesses), display(home, guesses[0]))
-	} else {
-		question += " Type a path, comma separated for more than one, Enter to skip:"
-	}
-	for {
-		answer, err := ask.Ask(question)
-		if err != nil {
-			return nil, err
-		}
-		if answer == "" {
-			if len(guesses) > 0 {
-				return guesses[:1], nil
-			}
-			return nil, nil
-		}
-		dirs, err := parseReposDirs(answer, home)
-		if err == nil {
-			return dirs, nil
-		}
-		fmt.Fprintln(out, err)
-	}
 }
 
 // parseReposDirs turns what the person typed into folders that exist. A
@@ -399,19 +368,35 @@ func printReposPlan(out io.Writer, home string, report reposReport) {
 	}
 }
 
-// trackerPick is one answer to the tracker question: a line to write, or
-// skip; forAll carries it down the rest of the list.
-type trackerPick struct {
-	line   string
-	skip   bool
-	forAll bool
+// printTrackerAnswers is the repos half of the plan's answers: the line
+// each undeclared repo gets, or skipped, and whether the PR opens.
+func printTrackerAnswers(out io.Writer, answers []TrackerAnswer) {
+	if len(answers) == 0 {
+		return
+	}
+	width := 0
+	for _, answer := range answers {
+		width = max(width, len(answer.Repo))
+	}
+	fmt.Fprintln(out, "\ntrackers")
+	for _, answer := range answers {
+		state := "skipped this run"
+		switch {
+		case answer.Skip:
+		case answer.OpenPR:
+			state = fmt.Sprintf("would get %q and a PR on branch %s", answer.Line, trackerBranch)
+		default:
+			state = fmt.Sprintf("would get %q, left uncommitted", answer.Line)
+		}
+		fmt.Fprintf(out, "  %-*s  %s\n", width, answer.Repo, state)
+	}
 }
 
-// applyTrackers asks for every repo that declares no tracker and writes
-// the answer into the repo. The harnesses are done by now, so a repo that
-// fails is reported at the end instead of stopping the run, and q at any
-// question leaves the rest as they are.
-func applyTrackers(ctx context.Context, opts Options, ask *prompt.Prompt, report reposReport) error {
+// applyTrackers writes each answer into its repo. The harnesses are done by
+// now, so a repo that fails is reported at the end instead of stopping the
+// run. Without answers, the run had no terminal: the undeclared repos are
+// listed and nothing is written, since someone's repo is their code.
+func applyTrackers(ctx context.Context, opts Options, report reposReport, answers []TrackerAnswer) error {
 	out := opts.Stdout
 	undeclared := report.undeclared()
 	if len(report.dirs) == 0 {
@@ -422,36 +407,29 @@ func applyTrackers(ctx context.Context, opts Options, ask *prompt.Prompt, report
 		fmt.Fprintln(out, "  every repo names its tracker")
 		return nil
 	}
-	if ask == nil {
+	if len(answers) == 0 {
 		fmt.Fprintf(out, "  %d not declared: %s; rerun with a terminal to name the tracker of each one\n", len(undeclared), repoNames(undeclared))
 		return nil
 	}
+	byDir := map[string]trackerRepo{}
+	for _, repo := range report.repos {
+		byDir[repo.dir] = repo
+	}
 	var failures []error
-	var carried *trackerPick
-	for index, repo := range undeclared {
-		pick := carried
-		if pick == nil {
-			answer, err := askTracker(ask, out, repo, undeclared[index+1:])
-			if errors.Is(err, prompt.ErrQuit) {
-				fmt.Fprintf(out, "  stopped; still undeclared: %s\n", repoNames(undeclared[index:]))
-				return errors.Join(failures...)
-			}
-			if err != nil {
-				return err
-			}
-			pick = &answer
-			if answer.forAll {
-				carried = pick
-			}
+	for _, answer := range answers {
+		repo, ok := byDir[answer.Dir]
+		if !ok {
+			continue
 		}
-		if pick.skip {
+		if repo.declared() {
+			fmt.Fprintf(out, "  %s  names its tracker since the question, %q, so the answer is left out\n", repo.name, repo.line)
+			continue
+		}
+		if answer.Skip {
 			fmt.Fprintf(out, "  %s  skipped\n", repo.name)
 			continue
 		}
-		if err := declareTracker(ctx, opts, ask, repo, pick.line); errors.Is(err, prompt.ErrQuit) {
-			fmt.Fprintf(out, "  stopped; still undeclared: %s\n", repoNames(undeclared[index+1:]))
-			return errors.Join(failures...)
-		} else if err != nil {
+		if err := declareTracker(ctx, opts, repo, answer.Line, answer.OpenPR); err != nil {
 			fmt.Fprintf(out, "  %s  FAILED: %v\n", repo.name, err)
 			failures = append(failures, fmt.Errorf("%s: %w", repo.name, err))
 		}
@@ -462,76 +440,23 @@ func applyTrackers(ctx context.Context, opts Options, ask *prompt.Prompt, report
 	return fmt.Errorf("[JSTACK-TRACKERS] the harnesses are done, but %d repo step(s) failed:\n%w", len(failures), errors.Join(failures...))
 }
 
-// askTracker is the numbered pick, the argument the backend needs, and,
-// while other repos are still undeclared, whether the answer is for them
-// too.
-func askTracker(ask *prompt.Prompt, out io.Writer, repo trackerRepo, remaining []trackerRepo) (trackerPick, error) {
-	labels := make([]string, 0, len(backends)+1)
-	for _, entry := range backends {
-		labels = append(labels, entry.label)
-	}
-	labels = append(labels, "skip")
-	index, err := ask.Choose(fmt.Sprintf("%s declares no tracker. Which one does it use?", repo.name), labels)
-	if err != nil {
-		return trackerPick{}, err
-	}
-	pick := trackerPick{skip: index == len(backends)}
-	if !pick.skip {
-		argument, err := askArgument(ask, out, backends[index])
-		if err != nil {
-			return trackerPick{}, err
-		}
-		pick.line = trackerLine(backends[index], argument)
-	}
-	if len(remaining) > 0 {
-		answer := pick.line
-		if pick.skip {
-			answer = "skip"
-		}
-		forAll, err := ask.Confirm(fmt.Sprintf("Same answer, %s, for the %d remaining (%s)?", answer, len(remaining), repoNames(remaining)), false)
-		if err != nil {
-			return trackerPick{}, err
-		}
-		pick.forAll = forAll
-	}
-	return pick, nil
-}
-
-func askArgument(ask *prompt.Prompt, out io.Writer, chosen backend) (string, error) {
-	if chosen.argument == "" {
-		return "", nil
-	}
-	question := fmt.Sprintf("%s %s, for example %s:", chosen.label, chosen.argument, chosen.example)
-	if chosen.byDefault != "" {
-		question = fmt.Sprintf("%s %s, Enter for %s:", chosen.label, chosen.argument, chosen.byDefault)
-	}
-	for {
-		answer, err := ask.Ask(question)
-		if err != nil {
-			return "", err
-		}
-		if answer == "" {
-			answer = chosen.byDefault
-		}
-		if answer != "" && !strings.ContainsAny(answer, " \t") {
-			return answer, nil
-		}
-		fmt.Fprintf(out, "The %s is one word, for example %s.\n", chosen.argument, chosen.example)
-	}
-}
-
-// declareTracker writes the line into the repo, then offers the PR when
-// the tree had nothing else pending, the repo has an origin to push to, its
-// push URL since that is where the branch goes, and
+// declareTracker writes the line into the repo, then opens the PR the
+// person asked for when the tree had nothing else pending, the repo has an
+// origin to push to, its push URL since that is where the branch goes, and
 // it sits on its default branch, so the PR carries the line and nothing
 // else. Every check runs before the write, so the line itself never counts
-// as the pending change.
-func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo trackerRepo, line string) error {
+// as the pending change, and again here, since the answer was given a few
+// screens ago.
+func declareTracker(ctx context.Context, opts Options, repo trackerRepo, line string, openPR bool) error {
 	out := opts.Stdout
 	state := readRepoState(ctx, opts, repo.dir)
 	content, err := os.ReadFile(repo.file)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("cannot read %q: %w; make it readable and rerun", repo.file, err)
+	}
+	if declared := findTrackerLine(string(content)); declared != "" {
+		fmt.Fprintf(out, "  %s  names its tracker since the question, %q, so the answer is left out\n", repo.name, declared)
+		return nil
 	}
 	if err := writeFile(repo.file, withTrackerLine(string(content), line)); err != nil {
 		return err
@@ -554,11 +479,7 @@ func declareTracker(ctx context.Context, opts Options, ask *prompt.Prompt, repo 
 		fmt.Fprintf(out, "  %s  is on %s but not at origin/%s, so the line is left uncommitted; push or pull first, then rerun\n", repo.name, state.branch, state.branch)
 		return nil
 	}
-	agreed, err := ask.Confirm(fmt.Sprintf("Open a PR for %s? branch %s, commit \"docs: name the tracker\", through gh", repo.name, trackerBranch), false)
-	if err != nil {
-		return err
-	}
-	if !agreed {
+	if !openPR {
 		fmt.Fprintf(out, "  %s  line left uncommitted; commit it yourself\n", repo.name)
 		return nil
 	}
@@ -584,6 +505,11 @@ func (s repoState) hasRemote() bool {
 
 func (s repoState) onDefaultBranch() bool {
 	return s.defaultBranch != "" && s.branch == s.defaultBranch
+}
+
+// prPossible is true when every check the PR offer needs passes.
+func (s repoState) prPossible() bool {
+	return s.clean && s.hasRemote() && s.onDefaultBranch() && s.published
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {

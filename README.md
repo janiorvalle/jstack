@@ -16,7 +16,7 @@ The opinions are the point. A human stays in the merge seat. Every claim ships w
 curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh
 ```
 
-That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup finds the coding agents on the machine, shows what it would do, and asks which to install into. Then it copies the skills, puts the letter in each harness's instructions file, and offers the tools the flow needs. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.jstack/backup/`.
+That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, a skills repo of your own, where your repos live, the tracker for any repo that hasn't named one, and which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back. The last screen is the plan with a confirm, and nothing in a harness or a repo of yours changes before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.jstack/backup/`.
 
 On Windows, in PowerShell:
 
@@ -26,9 +26,9 @@ irm https://raw.githubusercontent.com/janiorvalle/jstack/main/install.ps1 | iex
 
 That puts `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack` on your user PATH and runs `jstack setup`, with the tool checks and installs in Windows PowerShell.
 
-Run `jstack setup` again any time. It remembers the harnesses you picked. `jstack upgrade` fetches the newest release and reruns setup.
+Run `jstack setup` again any time. Your saved answers come preselected, so a rerun with nothing changed is one Enter, and a harness installed since last time shows up checked. `jstack upgrade` fetches the newest release and reruns setup.
 
-Setup asks two more questions, once each. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: it's cloned with gh under `~/.jstack/repos`, pulled on every run, and its skills go beside jstack's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared` and, with a terminal, asks about each undeclared one: one of the four backends the `tracker` skill knows, or skip, same for all if you like. Then it writes the line into the repo's `AGENTS.md` and offers a one-line PR through gh.
+Two questions are asked once. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: setup clones it with gh under `~/.jstack/repos`, pulls it every run, and installs its skills beside jstack's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared`. For each undeclared one it asks which of the four backends the `tracker` skill knows, or skip, with a same-for-the-rest shortcut, and whether to open the one-line PR through gh. The line lands in the repo's `AGENTS.md` after the confirm.
 
 Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing in the harnesses (a skills repo you named is still refreshed):
 
@@ -48,7 +48,7 @@ Restart your harness so the skills load. Then start any multi-step task with `/j
 
 ## Tools
 
-The flow leans on three tools. `jstack setup` offers each one that's missing or behind its latest release.
+The flow leans on three tools. `jstack setup` offers each one that's missing or behind its latest release, and an update runs through whoever installed the binary: `brew upgrade` for a Homebrew one, the `tools.md` line for one in `~/.local/bin`, the pinned npm line for an npm one. A binary anywhere else is shown with its path and left to you.
 
 - **roast**, the independent review gate. A different model reviews the diff until it says well done. It needs TruffleHog for its secret scan, and setup installs that too.
 - **bgr**, the review walkthrough. Its HTML is the last piece of evidence before turn-in.

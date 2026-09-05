@@ -1,6 +1,8 @@
 // Package setup is the whole flow: detect harnesses, fetch the skills repos
-// the human named, plan what the skills, the letter, and the tools need, ask
-// the human, apply, and report.
+// the human named, plan what the skills, the letter, and the tools need,
+// apply, and report. Run is the path without a terminal, driven by flags;
+// the guided flow reads its facts and hands its answers through a Session,
+// so the same plan and the same apply serve both.
 package setup
 
 import (
@@ -21,7 +23,6 @@ import (
 
 	"github.com/janiorvalle/jstack/internal/harness"
 	"github.com/janiorvalle/jstack/internal/letter"
-	"github.com/janiorvalle/jstack/internal/prompt"
 	"github.com/janiorvalle/jstack/internal/skills"
 	"github.com/janiorvalle/jstack/internal/tools"
 )
@@ -33,7 +34,8 @@ type Shell func(ctx context.Context, command string, output io.Writer) error
 // Latest finds the newest published version of a tool, as "v1.2.3".
 type Latest func(ctx context.Context, tool tools.Tool) (string, error)
 
-// Options is everything Run needs from the outside world.
+// Options is everything Run needs from the outside world. Stdin is the
+// terminal the guided flow reads keys from; Run never reads it.
 type Options struct {
 	Files            fs.FS
 	Home             string
@@ -43,7 +45,6 @@ type Options struct {
 	UpdateTools      bool
 	KeepInstructions bool
 	Yes              bool
-	Interactive      bool
 	SkillRepos       []string
 	ForgetSkillRepos []string
 	NoSkillRepo      bool
@@ -73,13 +74,20 @@ type harnessPlan struct {
 
 // toolStatus is one tool as found on the machine. installed and latest are
 // "v1.2.3" or "" when unknown; a tool with no Version line never has either.
-// install is the agreed action: an install when missing, an update when
-// outdated.
+// path is where a present tool's binary is, and onOwnPath whether the
+// person's own PATH finds it there, which decides where the lines that
+// run the tool run. owner and formula are who put it there, read only for
+// outdated tools since only the update offer depends on them. install is
+// the agreed action: an install when missing, an update when outdated.
 type toolStatus struct {
 	tool         tools.Tool
 	present      bool
 	installed    string
 	latest       string
+	path         string
+	onOwnPath    bool
+	owner        owner
+	formula      string
 	skillPresent bool
 	install      bool
 }
@@ -99,9 +107,23 @@ func (status toolStatus) outdated() bool {
 	return tools.Outdated(status.installed, status.latest)
 }
 
-// actionable is true when setup has a line it could run for this tool.
+// actionable is true when setup has a line it could run for this tool: the
+// install line when it's missing, the owner's update line when it's
+// outdated.
 func (status toolStatus) actionable() bool {
-	return status.tool.Command != "" && (!status.present || status.outdated())
+	return status.line() != "" && (!status.present || status.outdated())
+}
+
+// line is the command setup would run for this tool: the install line when
+// it's missing, the update line when it's present.
+func (status toolStatus) line() string {
+	if !status.present {
+		return status.tool.Command
+	}
+	if status.tool.Command == "" {
+		return ""
+	}
+	return status.update()
 }
 
 type plan struct {
@@ -119,135 +141,61 @@ const (
 	fromFlag
 )
 
-// Run prints the plan, asks what it has to, applies, and reports. Without a
-// terminal it changes nothing unless Yes is set.
+// Run prints the plan and, with Yes, applies it with what the flags say.
+// Without Yes it changes nothing in the harnesses and prints the flags that
+// would; a skills repo named earlier is still refreshed.
 func Run(ctx context.Context, opts Options) error {
-	embedded, err := loadAssets(opts.Files)
+	session, err := Start(opts)
 	if err != nil {
 		return err
 	}
-	config, err := loadConfig(opts.Home)
-	if err != nil {
-		return err
-	}
-	rows := harness.Resolve(opts.Home, opts.Getenv)
-	picked, source, err := choose(opts, rows, config)
+	defer session.Close()
+	picked, _, err := choose(opts, session.rows, session.config)
 	if err != nil {
 		return err
 	}
 	out := opts.Stdout
-	printHarnesses(out, opts.Home, rows, picked)
-	var ask *prompt.Prompt
-	if opts.Interactive && !opts.Yes {
-		ask = prompt.New(opts.Stdin, out)
-	}
-	repoNames, err := chooseRepos(config.SkillRepos, opts)
+	printHarnesses(out, opts.Home, session.rows, picked)
+	repoNames, err := session.SkillRepos()
 	if err != nil {
 		return err
 	}
-	asked := config.SkillReposAsked || opts.NoSkillRepo || len(repoNames) > 0
-	if ask != nil && !asked {
-		name, err := askRepo(ask, out)
-		if err != nil {
-			return err
-		}
-		if name != "" {
-			repoNames = append(repoNames, name)
-		}
-		asked = true
-	}
-	reposDirs, reposAsked, err := chooseReposDirs(config, opts)
+	asked := session.SkillRepoAsked()
+	reposDirs, reposAsked, err := chooseReposDirs(session.config, opts)
 	if err != nil {
 		return err
 	}
-	if ask != nil && !reposAsked {
-		chosen, err := askReposDirs(ask, out, opts.Home, guessReposDirs(opts.Home))
-		if err != nil {
-			return err
-		}
-		reposDirs = append(reposDirs, chosen...)
-		reposAsked = true
-	}
-	skillSources, err := gatherSources(ctx, opts, ask, embedded, config, repoNames)
+	open, err := session.Gather(ctx, repoNames)
 	if err != nil {
 		return err
 	}
-	defer skillSources.close()
-	current, err := buildPlan(ctx, opts, embedded, skillSources, picked, reposDirs)
+	if len(open) > 0 {
+		return refusal(open[0])
+	}
+	if err := session.PickSources(nil); err != nil {
+		return err
+	}
+	answers := Answers{
+		Harnesses:      harness.Keys(picked),
+		SkillRepos:     repoNames,
+		SkillRepoAsked: asked,
+		ReposDirs:      reposDirs,
+		ReposDirsAsked: reposAsked,
+		Tools:          map[string]bool{},
+	}
+	for _, choice := range session.Tools(ctx) {
+		answers.Tools[choice.Title] = choice.Checked
+	}
+	current, err := session.Plan(ctx, answers)
 	if err != nil {
 		return err
 	}
-	printPlan(out, opts.Home, embedded, current)
-	noted := noteInstallFolderOffPath(opts, out)
-	printReposPlan(out, opts.Home, current.repos)
-	if !opts.Interactive && !opts.Yes {
-		printRerun(out, opts, picked, current, asked)
+	current.Print(out, opts, answers)
+	if !opts.Yes {
+		printRerun(out, opts, picked, current.current, asked)
 		return nil
 	}
-	if ask != nil {
-		if source == fromDetect {
-			repicked, err := askHarnesses(ask, opts.Home, rows, picked)
-			if err != nil {
-				return err
-			}
-			if strings.Join(harness.Keys(repicked), ",") != strings.Join(harness.Keys(picked), ",") {
-				picked = repicked
-				if current, err = replan(opts, embedded, picked, current); err != nil {
-					return err
-				}
-				printPlan(out, opts.Home, embedded, current)
-			}
-		} else {
-			apply, err := ask.Confirm(fmt.Sprintf("\nApply to %s?", names(picked)), true)
-			if err != nil {
-				return err
-			}
-			if !apply {
-				fmt.Fprintln(out, "Nothing changed in the harnesses.")
-				return nil
-			}
-		}
-		if err := askTools(ask, opts, current); err != nil {
-			return err
-		}
-	} else {
-		for index := range current.tools {
-			status := &current.tools[index]
-			status.install = agreedByFlag(opts, *status)
-		}
-	}
-	if len(picked) == 0 {
-		fmt.Fprintln(out, "\nNo harness picked. Nothing changed in the harnesses. Pass --harness claude,codex to name one.")
-		return nil
-	}
-	backupRoot, err := reserveBackup(opts.Home, opts.Now().Format("20060102-150405"), current)
-	if err != nil {
-		return err
-	}
-	if err := applyHarnesses(opts, embedded, current, backupRoot); err != nil {
-		return err
-	}
-	saved := Config{
-		Harnesses:       harness.Keys(picked),
-		SkillRepos:      repoNames,
-		SkillReposAsked: asked,
-		SkillOverrides:  rememberOverrides(config.SkillOverrides, current.catalog.unreachable(), current.catalog.picks),
-		ReposDirs:       reposDirs,
-		ReposDirsAsked:  reposAsked,
-	}
-	if err := saveConfig(opts.Home, saved); err != nil {
-		return err
-	}
-	if err := writeScripts(embedded, opts.Home); err != nil {
-		return err
-	}
-	toolsErr := applyTools(ctx, opts, current, picked, backupRoot)
-	trackersErr := applyTrackers(ctx, opts, ask, current.repos)
-	if !noted {
-		noteInstallFolderOffPath(opts, out)
-	}
-	fmt.Fprintf(out, "\nharness picks saved to %s\nrestart the harness so the skills load.\n", display(opts.Home, configPath(opts.Home)))
-	return errors.Join(toolsErr, trackersErr)
+	return session.Apply(ctx, current, answers)
 }
 
 func loadAssets(files fs.FS) (assets, error) {
@@ -301,46 +249,6 @@ func choose(opts Options, rows harness.Table, config Config) ([]harness.Harness,
 	return rows.Found(), fromDetect, nil
 }
 
-// gatherSources fetches the repos, prints them, and settles every skill name
-// more than one source holds, asking when there is a terminal and refusing
-// with the flag when there isn't.
-func gatherSources(ctx context.Context, opts Options, ask *prompt.Prompt, embedded assets, config Config, repoNames []string) (catalog, error) {
-	skillSources := holdBack(buildCatalog(embedded, syncRepos(ctx, opts, repoNames)), config.SkillOverrides)
-	printRepos(opts.Stdout, opts.Home, skillSources.repos)
-	printHeld(opts.Stdout, skillSources, config.SkillOverrides)
-	collisions, err := skills.Collisions(skillSources.sources)
-	if err != nil {
-		skillSources.close()
-		return catalog{}, err
-	}
-	picks, err := resolveCollisions(ask, collisions, config.SkillOverrides, opts.Overrides)
-	if err != nil {
-		skillSources.close()
-		return catalog{}, err
-	}
-	printOverrides(opts.Stdout, collisions, picks)
-	skillSources.picks = picks
-	return skillSources, nil
-}
-
-func buildPlan(ctx context.Context, opts Options, embedded assets, skillSources catalog, picked []harness.Harness, reposDirs []string) (plan, error) {
-	harnessPlans, err := planHarnesses(opts, embedded, skillSources, picked)
-	if err != nil {
-		return plan{}, err
-	}
-	current := plan{harnesses: harnessPlans, catalog: skillSources, repos: planRepos(opts.Home, reposDirs)}
-	for _, tool := range embedded.tools {
-		status := toolStatus{tool: tool, present: opts.Shell(ctx, tool.Check, io.Discard) == nil}
-		if status.present {
-			status.installed = installedVersion(ctx, opts, tool)
-		}
-		current.tools = append(current.tools, status)
-	}
-	lookupLatest(ctx, opts, current.tools)
-	markSkillPresence(opts, picked, current.tools)
-	return current, nil
-}
-
 // planRepos scans the named folders. With none named, the guesses under
 // home go in the report instead, so the hint can say what setup would have
 // scanned.
@@ -352,12 +260,28 @@ func planRepos(home string, reposDirs []string) reposReport {
 	return report
 }
 
-func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string {
-	if tool.Version == "" {
+// installedVersion is what the tool the person runs prints: the version
+// line runs on their own PATH when the binary is there, since the shell's
+// puts ~/.local/bin ahead of it and a stale copy there would answer for
+// the Homebrew binary they use, and on the shell's when it isn't, the
+// just-installed case.
+func installedVersion(ctx context.Context, opts Options, status toolStatus) string {
+	if status.tool.Version == "" {
 		return ""
 	}
+	return versionPrinted(ctx, opts, status.ownLine(opts, status.tool.Version))
+}
+
+// runToolLine runs a line that runs the tool itself, its skill install,
+// where the person's own PATH finds the binary, so it's the binary they
+// run that installs its skill, and a failure there is the failure.
+func runToolLine(ctx context.Context, opts Options, status toolStatus, command string) error {
+	return opts.Shell(ctx, status.ownLine(opts, command), io.Discard)
+}
+
+func versionPrinted(ctx context.Context, opts Options, line string) string {
 	var output bytes.Buffer
-	if err := opts.Shell(ctx, tool.Version, &output); err != nil {
+	if err := opts.Shell(ctx, line, &output); err != nil {
 		return ""
 	}
 	return tools.ParseVersion(output.String())
@@ -397,18 +321,6 @@ func agreedByFlag(opts Options, status toolStatus) bool {
 		return opts.UpdateTools
 	}
 	return opts.InstallTools
-}
-
-// replan redoes the harness half after a new pick. The tool checks already ran
-// and their answers don't depend on the pick, only the skill presence does.
-func replan(opts Options, embedded assets, picked []harness.Harness, current plan) (plan, error) {
-	harnessPlans, err := planHarnesses(opts, embedded, current.catalog, picked)
-	if err != nil {
-		return plan{}, err
-	}
-	current.harnesses = harnessPlans
-	markSkillPresence(opts, picked, current.tools)
-	return current, nil
 }
 
 func planHarnesses(opts Options, embedded assets, skillSources catalog, picked []harness.Harness) ([]harnessPlan, error) {
@@ -609,8 +521,10 @@ func toolState(status toolStatus) string {
 		return fmt.Sprintf("missing %s, which setup doesn't install. get it by hand, %s", status.tool.Title, status.tool.Install)
 	case !status.present:
 		return fmt.Sprintf("missing %s. install: %s", status.tool.Title, status.tool.Install)
+	case status.outdated() && status.update() == "":
+		return fmt.Sprintf("%s %s %s, %s %s, at %s, which setup didn't put there; update it the way it was installed", offset(status), status.tool.Title, installedLabel(status), reference(status), tools.Display(status.latest), status.path)
 	case status.outdated():
-		return fmt.Sprintf("%s %s %s, %s %s. update: %s", offset(status), status.tool.Title, installedLabel(status), reference(status), tools.Display(status.latest), status.tool.Install)
+		return fmt.Sprintf("%s %s %s, %s %s. update: %s", offset(status), status.tool.Title, installedLabel(status), reference(status), tools.Display(status.latest), status.updateShown())
 	case status.tool.Version == "":
 		return "ok " + status.tool.Title
 	case status.installed == "":
@@ -619,6 +533,16 @@ func toolState(status toolStatus) string {
 		return fmt.Sprintf("ok %s %s, latest unknown", status.tool.Title, tools.Display(status.installed))
 	}
 	return fmt.Sprintf("ok %s %s", status.tool.Title, tools.Display(status.installed))
+}
+
+// toolOffer is the line the tools screen shows for an actionable tool: the
+// install for a missing one, the update for an outdated one, with the line
+// that would run.
+func toolOffer(status toolStatus) string {
+	if !status.present {
+		return fmt.Sprintf("install %s: %s", status.tool.Title, status.line())
+	}
+	return fmt.Sprintf("update %s %s to %s: %s", status.tool.Title, installedLabel(status), tools.Display(status.latest), status.line())
 }
 
 // offset says which way the installed version is off: ahead when a pinned
@@ -707,53 +631,6 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 			fmt.Fprintf(out, "  add --keep-instructions to append the letter to %s instead of replacing it\n", display(opts.Home, entry.harness.InstructionsPath()))
 		}
 	}
-}
-
-func askHarnesses(ask *prompt.Prompt, home string, rows harness.Table, picked []harness.Harness) ([]harness.Harness, error) {
-	labels := make([]string, 0, len(rows))
-	selected := make([]bool, 0, len(rows))
-	for _, entry := range rows {
-		state := "not found"
-		if entry.Installed() {
-			state = "found"
-		}
-		labels = append(labels, fmt.Sprintf("%-11s %s, %s", entry.Name, rootWithVariable(home, entry), state))
-		selected = append(selected, contains(picked, entry))
-	}
-	chosen, err := ask.MultiSelect("Install into which harnesses?", labels, selected)
-	if err != nil {
-		return nil, err
-	}
-	var keys []string
-	for index, entry := range rows {
-		if chosen[index] {
-			keys = append(keys, entry.Key)
-		}
-	}
-	return rows.ByKeys(keys)
-}
-
-func askTools(ask *prompt.Prompt, opts Options, current plan) error {
-	for index := range current.tools {
-		status := &current.tools[index]
-		if !status.actionable() {
-			continue
-		}
-		if agreedByFlag(opts, *status) {
-			status.install = true
-			continue
-		}
-		question := fmt.Sprintf("\nInstall %s? (%s)", status.tool.Title, status.tool.Command)
-		if status.present {
-			question = fmt.Sprintf("\nUpdate %s %s to %s? (%s)", status.tool.Title, installedLabel(*status), tools.Display(status.latest), status.tool.Command)
-		}
-		agreed, err := ask.Confirm(question, false)
-		if err != nil {
-			return err
-		}
-		status.install = agreed
-	}
-	return nil
 }
 
 // reserveBackup picks the backup folder for this run. When something will be
@@ -951,7 +828,7 @@ func applyTool(ctx context.Context, opts Options, status toolStatus, picked []ha
 		fmt.Fprintln(out, line+", skill present")
 		return nil
 	}
-	if err := opts.Shell(ctx, status.tool.SkillInstall, io.Discard); err != nil {
+	if err := runToolLine(ctx, opts, status, status.tool.SkillInstall); err != nil {
 		fmt.Fprintf(out, "%s, skill install FAILED via %s: %v\n", line, status.tool.SkillInstall, err)
 		return fmt.Errorf("%s: `%s` failed: %v; run it by hand so the tool's skill is in place", status.tool.Title, status.tool.SkillInstall, err)
 	}
@@ -977,24 +854,33 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	if status.present {
 		verb, done = fmt.Sprintf("updating %s %s to %s", tool.Title, installedLabel(*status), tools.Display(status.latest)), "updated"
 	}
-	fmt.Fprintf(out, "  %s: %s\n", verb, tool.Command)
-	if err := opts.Shell(ctx, tool.Command, out); err != nil {
+	// An update runs where the person's PATH found the binary, so every
+	// command in the line, "npm install -g x && x install", runs the binary
+	// they run and not a stale copy the shell's PATH puts first.
+	command := status.line()
+	fmt.Fprintf(out, "  %s: %s\n", verb, command)
+	if err := opts.Shell(ctx, status.ownLine(opts, command), out); err != nil {
 		fmt.Fprintf(out, "  FAILED %s: %v\n", tool.Title, err)
-		return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", tool.Title, tool.Command, err)
+		return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", tool.Title, command, err)
 	}
 	if err := opts.Shell(ctx, tool.Check, io.Discard); err != nil {
 		fmt.Fprintf(out, "  FAILED %s: %s, but its check still fails\n", tool.Title, done)
-		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; read the install output above: if the download failed, run the install line again; if it put %s in a folder that is not on PATH, add that folder to PATH in your shell profile and open a new terminal; then rerun jstack setup", tool.Title, tool.Command, tool.Check, tool.Title)
+		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; read the install output above: if the download failed, run the install line again; if it put %s in a folder that is not on PATH, add that folder to PATH in your shell profile and open a new terminal; then rerun jstack setup", tool.Title, command, tool.Check, tool.Title)
 	}
 	status.present = true
-	status.installed = installedVersion(ctx, opts, tool)
+	status.locate(ctx, opts)
+	status.installed = installedVersion(ctx, opts, *status)
 	if status.outdated() && status.installed == "" {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` prints no version\n", tool.Title, done, tool.Version)
-		return fmt.Errorf("%s: `%s` ran, but `%s` prints no version, so the pinned %s can't be confirmed; run it by hand and fix what it prints, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.latest))
+		return fmt.Errorf("%s: `%s` ran, but `%s` prints no version, so the pinned %s can't be confirmed; run it by hand and fix what it prints, then rerun jstack setup", tool.Title, command, tool.Version, tools.Display(status.latest))
+	}
+	if status.outdated() && status.owner == byHomebrew {
+		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the latest is %s; Homebrew's formula is behind the release, rerun jstack setup once `brew upgrade` has it", tool.Title, command, tool.Version, tools.Display(status.installed), tools.Display(status.latest))
 	}
 	if status.outdated() {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
-		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the %s is %s; another %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, tool.Command, tool.Version, tools.Display(status.installed), reference(*status), tools.Display(status.latest), tool.Title)
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the %s is %s; another %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, command, tool.Version, tools.Display(status.installed), reference(*status), tools.Display(status.latest), tool.Title)
 	}
 	if status.installed == "" {
 		fmt.Fprintf(out, "  %s %s\n", done, tool.Title)

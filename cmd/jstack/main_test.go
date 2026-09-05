@@ -11,18 +11,29 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/janiorvalle/jstack/internal/prompt"
 	"github.com/janiorvalle/jstack/internal/setup"
+	"github.com/janiorvalle/jstack/internal/tui"
 )
 
+// fakeDependencies captures the options either setup path gets and records
+// which one ran, guided for the screens or setup for the flags.
 func fakeDependencies(captured *setup.Options, upgraded *bool, err error) dependencies {
-	return dependencies{
-		setup: func(_ context.Context, opts setup.Options) error {
+	return fakeDependenciesRan(captured, upgraded, err, new(string))
+}
+
+func fakeDependenciesRan(captured *setup.Options, upgraded *bool, err error, ran *string) dependencies {
+	capture := func(path string) func(context.Context, setup.Options) error {
+		return func(_ context.Context, opts setup.Options) error {
+			*ran = path
 			if captured != nil {
 				*captured = opts
 			}
 			return err
-		},
+		}
+	}
+	return dependencies{
+		setup:  capture("setup"),
+		guided: capture("guided"),
 		upgrade: func(context.Context, string, io.Writer) error {
 			*upgraded = true
 			return err
@@ -40,7 +51,7 @@ func TestSetupFlagsReachTheRun(t *testing.T) {
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
-	if captured.Harness != "claude,codex" || !captured.InstallTools || !captured.UpdateTools || !captured.KeepInstructions || !captured.Yes || !captured.Interactive || captured.Home != "/home/test" || captured.Files == nil || captured.Shell == nil {
+	if captured.Harness != "claude,codex" || !captured.InstallTools || !captured.UpdateTools || !captured.KeepInstructions || !captured.Yes || captured.Home != "/home/test" || captured.Files == nil || captured.Shell == nil || captured.Stdin == nil {
 		t.Fatalf("options = %+v", captured)
 	}
 	t.Setenv("CODEX_HOME", "/work/codex")
@@ -66,10 +77,32 @@ func TestSkillRepoFlagsReachTheRunAndRepeat(t *testing.T) {
 	}
 }
 
+func TestTerminalGetsTheScreensAndYesOrNoTerminalGetsTheFlags(t *testing.T) {
+	upgraded := false
+	var stdout, stderr bytes.Buffer
+	for _, run := range []struct {
+		args        []string
+		interactive bool
+		want        string
+	}{
+		{[]string{"setup"}, true, "guided"},
+		{[]string{"setup", "--yes"}, true, "setup"},
+		{[]string{"setup"}, false, "setup"},
+		{[]string{"setup", "--yes"}, false, "setup"},
+	} {
+		ran := ""
+		deps := fakeDependenciesRan(nil, &upgraded, nil, &ran)
+		deps.interactive = func() bool { return run.interactive }
+		if code := runWith(run.args, strings.NewReader(""), &stdout, &stderr, deps); code != 0 || ran != run.want {
+			t.Fatalf("%v with terminal %v: code = %d, ran %q, want %q", run.args, run.interactive, code, ran, run.want)
+		}
+	}
+}
+
 func TestSetupQuitIsNotAnError(t *testing.T) {
 	upgraded := false
 	var stdout, stderr bytes.Buffer
-	code := runWith([]string{"setup"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(nil, &upgraded, prompt.ErrQuit))
+	code := runWith([]string{"setup"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(nil, &upgraded, tui.ErrQuit))
 	if code != 0 || !strings.Contains(stdout.String(), "Quit. Nothing changed.") {
 		t.Fatalf("code = %d, stdout = %q", code, stdout.String())
 	}

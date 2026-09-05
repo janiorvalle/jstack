@@ -204,6 +204,115 @@ func options(t *testing.T, home string, shell *fakeShell, stdin string) (Options
 	}, &out
 }
 
+// script is the answers a test gives where the guided flow would show a
+// screen. Nil harnesses take the checked ones, nil trackers skip every
+// undeclared repo, nil tools take what the flags agreed to.
+type script struct {
+	harnesses []string
+	skillRepo string
+	picks     map[string]string
+	reposDirs []string
+	trackers  func([]TrackerQuestion) []TrackerAnswer
+	tools     func([]ToolChoice) map[string]bool
+}
+
+// guided drives a session the way the guided flow does: facts out, answers
+// in, plan, print, apply.
+func guided(t *testing.T, opts Options, given script) error {
+	t.Helper()
+	ctx := context.Background()
+	session, err := Start(opts)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	choices, err := session.Harnesses()
+	if err != nil {
+		return err
+	}
+	answers := Answers{Harnesses: given.harnesses, SkillRepoAsked: true, ReposDirsAsked: true, Tools: map[string]bool{}}
+	if answers.Harnesses == nil {
+		for _, choice := range choices {
+			if choice.Checked {
+				answers.Harnesses = append(answers.Harnesses, choice.Key)
+			}
+		}
+	}
+	if answers.SkillRepos, err = session.SkillRepos(); err != nil {
+		return err
+	}
+	if !session.SkillRepoAsked() && given.skillRepo != "" {
+		name, err := RepoName(given.skillRepo)
+		if err != nil {
+			return err
+		}
+		answers.SkillRepos = append(answers.SkillRepos, name)
+	}
+	open, err := session.Gather(ctx, answers.SkillRepos)
+	if err != nil {
+		return err
+	}
+	picks := map[string]string{}
+	for _, collision := range open {
+		picks[collision.Name] = given.picks[collision.Name]
+	}
+	if err := session.PickSources(picks); err != nil {
+		return err
+	}
+	if answers.ReposDirs, err = session.ReposDirs(); err != nil {
+		return err
+	}
+	if !session.ReposDirsAsked() {
+		if given.reposDirs != nil {
+			answers.ReposDirs = append(answers.ReposDirs, given.reposDirs...)
+		} else if guesses := session.ReposDirGuesses(); len(guesses) > 0 {
+			answers.ReposDirs = append(answers.ReposDirs, guesses[0])
+		}
+	}
+	questions := session.Trackers(ctx, answers.ReposDirs)
+	if given.trackers != nil {
+		answers.Trackers = given.trackers(questions)
+	} else {
+		for _, question := range questions {
+			answers.Trackers = append(answers.Trackers, TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Skip: true})
+		}
+	}
+	tools := session.Tools(ctx)
+	agreed := map[string]bool{}
+	if given.tools != nil {
+		agreed = given.tools(tools)
+	}
+	for _, choice := range tools {
+		answers.Tools[choice.Title] = choice.Checked || agreed[choice.Title]
+	}
+	plan, err := session.Plan(ctx, answers)
+	if err != nil {
+		return err
+	}
+	plan.Print(opts.Stdout, opts, answers)
+	return session.Apply(ctx, plan, answers)
+}
+
+// checked is the keys the harness screen would start with.
+func checked(t *testing.T, opts Options) []string {
+	t.Helper()
+	session, err := Start(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	choices, err := session.Harnesses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, choice := range choices {
+		if choice.Checked {
+			keys = append(keys, choice.Key)
+		}
+	}
+	return keys
+}
+
 func homeWithClaude(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -279,7 +388,7 @@ func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 	if got := read(t, filepath.Join(backup, "CLAUDE.md")); got != "# my own notes\n" {
 		t.Fatalf("CLAUDE.md backup = %q", got)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ]\n}\n" {
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ],\n  \"harnesses_found\": [\n    \"claude\"\n  ]\n}\n" {
 		t.Fatalf("config = %q", got)
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;roast install-skill" {
@@ -335,7 +444,7 @@ func TestVariableMovesTheRowThroughPlanAndApply(t *testing.T) {
 	if exists(filepath.Join(home, ".codex")) {
 		t.Fatal("~/.codex was created although CODEX_HOME points elsewhere")
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\",\n    \"codex\"\n  ]\n}\n" {
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\",\n    \"codex\"\n  ],\n  \"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]\n}\n" {
 		t.Fatalf("config = %q", got)
 	}
 }
@@ -354,20 +463,29 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast\n")
 	write(t, filepath.Join(home, ".codex", "skills", "roast", "SKILL.md"), "roast\n")
 	shell.commands = nil
-	opts, out := options(t, home, shell, "\n\n\n")
-	opts.Interactive = true
+	opts, out := options(t, home, shell, "")
 	opts.Now = func() time.Time { return time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC) }
-	if err := Run(context.Background(), opts); err != nil {
+	if got := strings.Join(checked(t, opts), ","); got != "claude,codex" {
+		t.Fatalf("checked = %q, want the saved picks", got)
+	}
+	session, err := Start(opts)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out.String(), "Install into which harnesses?") {
-		t.Fatalf("asked for harnesses again:\n%s", out.String())
+	if _, err := session.Gather(context.Background(), nil); err != nil {
+		t.Fatal(err)
 	}
-	for _, expected := range []string{"Apply to Claude Code, Codex? [Y/n]", "skills   up to date in ~/.claude/skills", "letter   up to date in ~/.claude/CLAUDE.md", "ok roast 1.1.0, skill present"} {
-		if !strings.Contains(out.String(), expected) {
-			t.Fatalf("output missing %q:\n%s", expected, out.String())
-		}
+	plan, err := session.Plan(context.Background(), Answers{Harnesses: []string{"claude", "codex"}, Tools: map[string]bool{}})
+	if err != nil {
+		t.Fatal(err)
 	}
+	if plan.Pending() {
+		t.Fatal("a rerun with nothing changed has something pending")
+	}
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), "skills   up to date in ~/.claude/skills", "letter   up to date in ~/.claude/CLAUDE.md", "ok roast 1.1.0, skill present")
 	if exists(filepath.Join(home, ".jstack", "backup", "20260903-110000")) {
 		t.Fatal("a backup was made with nothing changed")
 	}
@@ -376,17 +494,25 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
-	opts, out := options(t, home, shell, "\n\n3\n\ny\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out := options(t, home, shell, "")
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want the found harness", got)
+	}
+	shell.commands = nil
+	err := guided(t, opts, script{
+		harnesses: []string{"claude", "opencode"},
+		tools: func(choices []ToolChoice) map[string]bool {
+			if len(choices) != 2 || choices[0].Actionable || choices[1].Label != "install roast: curl roast | sh" || choices[1].Checked {
+				t.Fatalf("tools = %+v", choices)
+			}
+			return map[string]bool{"roast": true}
+		},
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"Install into which harnesses?",
-		"1. [x] Claude Code",
-		"3. [ ] OpenCode",
 		"OpenCode  ~/.config/opencode/skills",
-		"Install roast? (curl roast | sh) [y/N]",
 		"installing roast: curl roast | sh",
 		"installed roast 1.1.0",
 		"ok roast 1.1.0, skill installed via roast install-skill",
@@ -403,6 +529,101 @@ func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
 		t.Fatalf("commands = %v", shell.commands)
+	}
+}
+
+func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
+	home := homeWithClaude(t)
+	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
+	if err := guided(t, opts, script{harnesses: []string{"claude"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want the saved pick", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude,codex" {
+		t.Fatalf("checked = %q, want the new Codex offered checked", got)
+	}
+	if err := guided(t, opts, script{harnesses: []string{"claude"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want Codex to stay unchecked once offered and left out", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude,cursor" {
+		t.Fatalf("checked = %q, want only the newly found Cursor added", got)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+		t.Fatalf("config = %q", got)
+	}
+	opts.Harness = "pi"
+	if got := strings.Join(checked(t, opts), ","); got != "pi" {
+		t.Fatalf("checked = %q, want the flag alone", got)
+	}
+}
+
+func TestAConfigFromBeforeTheFoundSetKeepsAnExcludedHarnessOut(t *testing.T) {
+	home := homeWithClaude(t)
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"]}`)
+	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want a harness the old config left out to stay out", got)
+	}
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+		t.Fatalf("config = %q, want the found set saved from this run on", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude,cursor" {
+		t.Fatalf("checked = %q, want the newly found Cursor offered", got)
+	}
+}
+
+func TestAHarnessGoneForOneRunKeepsItsExclusion(t *testing.T) {
+	home := homeWithClaude(t)
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude","codex"]}`)
+	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+		t.Fatalf("config = %q, want Codex still known while its folder is gone", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want Codex to stay out when its folder is back", got)
+	}
+}
+
+func TestHarnessLeftOutByTheFlagStaysOutOnTheScreen(t *testing.T) {
+	home := homeWithClaude(t)
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
+	opts.Harness = "claude"
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	opts.Harness, opts.Yes = "", false
+	if got := strings.Join(checked(t, opts), ","); got != "claude" {
+		t.Fatalf("checked = %q, want Codex left out by --harness to stay out", got)
 	}
 }
 
@@ -493,13 +714,17 @@ func TestTerminalYesToUpdateRunsTheInstallLineAndReinstallsTheSkill(t *testing.T
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
 	shell := withRoast("1.0.0")
-	opts, out := options(t, home, shell, "\n\n\ny\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out := options(t, home, shell, "")
+	err := guided(t, opts, script{tools: func(choices []ToolChoice) map[string]bool {
+		if choices[1].Label != "update roast 1.0.0 to 1.1.0: curl roast | sh" {
+			t.Fatalf("tools = %+v", choices)
+		}
+		return map[string]bool{"roast": true}
+	}})
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"Update roast 1.0.0 to 1.1.0? (curl roast | sh) [y/N]",
 		"updating roast 1.0.0 to 1.1.0: curl roast | sh",
 		"updated roast 1.1.0",
 		"ok roast 1.1.0, skill installed via roast install-skill",
@@ -517,9 +742,8 @@ func TestTerminalNoToUpdateLeavesItOutdated(t *testing.T) {
 	home := homeWithClaude(t)
 	write(t, filepath.Join(home, ".claude", "skills", "roast", "SKILL.md"), "roast 1.0.0\n")
 	shell := withRoast("1.0.0")
-	opts, out := options(t, home, shell, "\n\n\nn\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out := options(t, home, shell, "")
+	if err := guided(t, opts, script{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "outdated roast 1.0.0, latest 1.1.0. update: curl roast | sh, skill present") {
@@ -633,9 +857,8 @@ func TestUpdateThatLeavesTheOldVersionOnPathIsAnError(t *testing.T) {
 func TestTerminalNoToToolKeepsItMissing(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := &fakeShell{present: map[string]bool{"check-git": true}, latest: map[string]string{"roast": "v1.1.0"}}
-	opts, out := options(t, home, shell, "\n\n\nn\n")
-	opts.Interactive = true
-	if err := Run(context.Background(), opts); err != nil {
+	opts, out := options(t, home, shell, "")
+	if err := guided(t, opts, script{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "missing roast. install: curl roast | sh") {
@@ -663,7 +886,7 @@ func TestHarnessFlagOverridesSavedPicks(t *testing.T) {
 	if read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")) != "voice v1\n" {
 		t.Fatal("claude was touched")
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"pi"`) || strings.Contains(got, "claude") {
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses\": [\n    \"pi\"\n  ]") {
 		t.Fatalf("config = %q", got)
 	}
 }
@@ -1100,14 +1323,16 @@ func TestMissingPrerequisiteIsNeverAskedAboutOrInstalled(t *testing.T) {
 	home := homeWithClaude(t)
 	shell := withRoast("1.1.0")
 	shell.present["check-git"] = false
-	opts, out := options(t, home, shell, "\n\n\n")
-	opts.Interactive = true
+	opts, out := options(t, home, shell, "")
 	opts.InstallTools = true
-	if err := Run(context.Background(), opts); err != nil {
+	err := guided(t, opts, script{tools: func(choices []ToolChoice) map[string]bool {
+		if choices[0].Title != "git" || choices[0].Actionable || choices[0].Checked || choices[0].State != missingGit {
+			t.Fatalf("a prerequisite is offered: %+v", choices[0])
+		}
+		return nil
+	}})
+	if err != nil {
 		t.Fatal(err)
-	}
-	if strings.Contains(out.String(), "Install git?") {
-		t.Fatalf("asked to install a prerequisite:\n%s", out.String())
 	}
 	if strings.Count(out.String(), missingGit) != 2 {
 		t.Fatalf("the plan and the report both name the prerequisite once:\n%s", out.String())

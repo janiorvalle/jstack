@@ -1,0 +1,248 @@
+package setup
+
+import (
+	"bytes"
+	"context"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+// owner is who put a tool's binary where it is. The tools.md install line
+// only updates what it installed, so the owner decides the update offer: a
+// binary Homebrew put under its prefix gets brew's line, and one something
+// else put somewhere setup doesn't know gets no offer, since the install
+// line would drop a second copy that loses to the first on PATH.
+type owner int
+
+const (
+	// byInstaller is the tools.md install line's own folder, ~/.local/bin on
+	// macOS and Linux and %LOCALAPPDATA%\Programs on Windows. Also what a
+	// tool setup can't locate is taken as: the check passed, so the tool is
+	// there, and nothing says it's anywhere else.
+	byInstaller owner = iota
+	byNpm
+	byHomebrew
+	bySomethingElse
+)
+
+// location is where a present tool's binary was found, who owns it, and
+// for Homebrew the formula, read off the Cellar path.
+type location struct {
+	path    string
+	owner   owner
+	formula string
+}
+
+// locator answers where a binary is, where Homebrew and npm keep what they
+// install, each through the shell setup runs its lines in. The prefixes
+// are read once per run, the first time a tool's path has to be compared
+// with them.
+type locator struct {
+	ctx      context.Context
+	opts     Options
+	prefixes map[string]string
+}
+
+// locate finds where the person's own PATH runs the tool's binary, or
+// where the shell's finds it when theirs doesn't, the just-installed
+// case. The shell's PATH puts ~/.local/bin first, so a stale copy there
+// would otherwise stand in for the Homebrew binary the person runs.
+func (status *toolStatus) locate(ctx context.Context, opts Options) {
+	status.path, status.onOwnPath = "", false
+	if status.tool.Binary == "" {
+		return
+	}
+	resolve := resolveLine(runtime.GOOS, status.tool.Binary)
+	if line, ok := onPersonsPath(opts, resolve); ok {
+		if path := firstLine(ctx, opts, line); path != "" {
+			status.path, status.onOwnPath = path, true
+			return
+		}
+	}
+	status.path = firstLine(ctx, opts, resolve)
+}
+
+// ownLine is a line that runs the tool, on the person's own PATH when
+// that is where the binary was found, else on the shell's.
+func (status toolStatus) ownLine(opts Options, command string) string {
+	if status.onOwnPath {
+		if line, ok := onPersonsPath(opts, command); ok {
+			return line
+		}
+	}
+	return command
+}
+
+// owned is who put a located binary where it is, by where it really is
+// once links are followed: an npm install line's binary under node's
+// global node_modules, or a link into Homebrew's Cellar, or a file in the
+// installer's folder. A binary in Homebrew's bin that isn't a link into
+// the Cellar is not Homebrew's, whatever put it there, and brew upgrade
+// would leave it standing.
+func (l *locator) owned(status toolStatus) location {
+	path := status.path
+	if path == "" {
+		return location{owner: byInstaller}
+	}
+	real := path
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		real = resolved
+	}
+	if status.tool.NpmInstalled() {
+		if within(l.npmModules(), real) {
+			return location{path: path, owner: byNpm}
+		}
+		return location{path: path, owner: bySomethingElse}
+	}
+	if formula := l.homebrewFormula(real); formula != "" {
+		return location{path: path, owner: byHomebrew, formula: formula}
+	}
+	if within(resolvedFolder(installFolder(l.opts)), real) {
+		return location{path: path, owner: byInstaller}
+	}
+	return location{path: path, owner: bySomethingElse}
+}
+
+// resolvedFolder is the folder with its own links followed, so a file
+// inside a linked ~/.local/bin still counts as inside it, while a link
+// inside it that leads elsewhere doesn't.
+func resolvedFolder(folder string) string {
+	if resolved, err := filepath.EvalSymlinks(folder); err == nil {
+		return resolved
+	}
+	return folder
+}
+
+// resolveLine prints the path of a binary on PATH, in the shell of the OS,
+// and nothing at all when there is none: the shell's output is one stream
+// here, and Get-Command's "not recognized" would otherwise come back as
+// the path.
+func resolveLine(operatingSystem, binary string) string {
+	if operatingSystem == "windows" {
+		return "(Get-Command " + binary + " -ErrorAction SilentlyContinue).Source"
+	}
+	return "command -v " + binary
+}
+
+// onPersonsPath is the line run on the PATH setup started with, the
+// person's own, instead of the shell's, which puts the installer's folder
+// first. False when setup started with no PATH at all, where the shell's
+// is the only one there is.
+func onPersonsPath(opts Options, command string) (string, bool) {
+	return onPath(runtime.GOOS, opts.Getenv("PATH"), command)
+}
+
+// onPath sets PATH as a statement of its own, so a line of several
+// commands, "npm install -g x && x install", runs every one of them there.
+func onPath(operatingSystem, path, command string) (string, bool) {
+	if path == "" {
+		return "", false
+	}
+	if operatingSystem == "windows" {
+		return "$env:Path = " + quote(operatingSystem, path) + "; " + command, true
+	}
+	return "PATH=" + quote(operatingSystem, path) + "; " + command, true
+}
+
+// homebrewFormula is the formula a binary belongs to, read off its real
+// path under the Cellar, <prefix>/Cellar/<formula>/<version>/..., or ""
+// when it isn't there. Windows has no Homebrew.
+func (l *locator) homebrewFormula(real string) string {
+	if runtime.GOOS == "windows" {
+		return ""
+	}
+	prefix := l.prefix("brew --prefix")
+	if prefix == "" {
+		return ""
+	}
+	cellar := resolvedFolder(filepath.Join(prefix, "Cellar"))
+	if !within(cellar, real) {
+		return ""
+	}
+	relative, err := filepath.Rel(cellar, real)
+	if err != nil {
+		return ""
+	}
+	formula, _, _ := strings.Cut(filepath.ToSlash(relative), "/")
+	return formula
+}
+
+// npmModules is where npm keeps the global packages: lib/node_modules under
+// the global prefix on macOS and Linux, the prefix itself on Windows, where
+// the .cmd shims sit beside node_modules.
+func (l *locator) npmModules() string {
+	prefix := l.prefix("npm prefix -g")
+	if prefix == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return prefix
+	}
+	return resolvedFolder(filepath.Join(prefix, "lib", "node_modules"))
+}
+
+// prefix runs a command that prints a folder, once per run.
+func (l *locator) prefix(command string) string {
+	if l.prefixes == nil {
+		l.prefixes = map[string]string{}
+	}
+	if answer, done := l.prefixes[command]; done {
+		return answer
+	}
+	l.prefixes[command] = l.firstLine(command)
+	return l.prefixes[command]
+}
+
+func (l *locator) firstLine(command string) string {
+	return firstLine(l.ctx, l.opts, command)
+}
+
+// firstLine is the first line a command prints, "" when it fails.
+func firstLine(ctx context.Context, opts Options, command string) string {
+	var output bytes.Buffer
+	if err := opts.Shell(ctx, command, &output); err != nil {
+		return ""
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(output.String()), "\n")
+	return strings.TrimSpace(line)
+}
+
+// installFolder is where the tools.md install lines put their binaries.
+func installFolder(opts Options) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(opts.Getenv("LOCALAPPDATA"), "Programs")
+	}
+	return filepath.Join(opts.Home, ".local", "bin")
+}
+
+// within reports whether path is folder or inside it.
+func within(folder, path string) bool {
+	if folder == "" {
+		return false
+	}
+	relative, err := filepath.Rel(filepath.Clean(folder), filepath.Clean(path))
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+// update is the line that brings an outdated tool to the latest where it
+// is, "" when nobody setup knows put it there.
+func (status toolStatus) update() string {
+	switch status.owner {
+	case byHomebrew:
+		return "brew upgrade " + status.formula
+	case bySomethingElse:
+		return ""
+	}
+	return status.tool.Command
+}
+
+// updateShown is the update line as the plan and the report show it: the
+// tools.md text for the install line, which may carry words for a person,
+// or the brew line as it runs.
+func (status toolStatus) updateShown() string {
+	if status.owner == byHomebrew {
+		return status.update()
+	}
+	return status.tool.Install
+}
