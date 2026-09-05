@@ -22,6 +22,6 @@ Turn a draft or a big page into small components with sensible APIs, without cha
 - Never bake margins into a component. Margins go at the call site. Every component takes a `class` attribute and merges it into the classes on its top-level element.
 - Use `clsx` or the project's equivalent to merge classes in client-side components.
 - Form controls get reusable components organized by HTML element. One `Input` for every `<input>` type, one `Select`, one `Textarea`. Never `EmailInput` or `PasswordInput`. Check the project for existing ones first.
-- Two or more elements with the same structure and styling that differ only in props, labels, placeholders, types, become one component parameterized by those props.
-- After extracting, look for shared pieces across the new components and extract those too. Section wrappers with the same max width and padding, heading groups with eyebrow plus heading plus subheading, card shells, button styles.
-- Use existing project components whenever one exists. Buttons and form elements especially. Extend rather than duplicate.
+- Two or more elements with the same structure and styling that differ only in props, labels, placeholders, or types become one component parameterized by those props.
+- After extracting, look for shared pieces across the new components and extract those too: section wrappers with the same max width and padding, heading groups with eyebrow plus heading plus subheading, card shells, button styles.
+- Use existing project components whenever one exists, buttons and form elements especially. Extend rather than duplicate.

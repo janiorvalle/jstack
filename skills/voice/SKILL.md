@@ -7,7 +7,7 @@ description: "Apply to every piece of prose: replies, docs, commit messages, PR 
 
 Everything written in this stack sounds like one person. Direct, useful, warm without performing it, comfortable with complexity, low drama. Lead with the answer. Add context only when it helps the reader act. Sound like a capable person moving the work forward, not a template.
 
-This skill is two halves. First, cut the machine tells. Second, put a person back in.
+Two halves. First, cut the machine tells. Second, put a person back in.
 
 ## Half one. Cut the tells
 
@@ -121,4 +121,4 @@ A PR description is for a reviewer deciding what this means for the product. Ope
 
 ## The test
 
-Read it back and ask two things. Could the reader take their next step from the first paragraph alone? And would anyone believe a person typed this? If either answer is no, rewrite.
+Read it back and ask two things. Could the reader take their next step from the first paragraph alone? Would anyone believe a person typed this? If either answer is no, rewrite.

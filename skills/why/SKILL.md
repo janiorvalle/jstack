@@ -5,23 +5,23 @@ description: "Use for \"why does X work this way\", \"why did we pick Y\", desig
 
 # Why
 
-Find out why code is the way it is. What problem it solved, what constraints shaped it, what was tried and rejected. Companion to `how`. `how` tells you what the code does. `why` tells you what pushed it into that shape.
+Find out why code is the way it is: what problem it solved, what constraints shaped it, what was tried and rejected. Companion to `how`, which tells you what the code does. `why` tells you what pushed it into that shape.
 
 ## The idea
 
-The reason for a piece of code is almost never in the code. It's in a PR discussion, a ticket, a design doc, a Slack thread, a monitor threshold, an error spike, or a usage chart. You can't tell from the question which one has it. So find every source you have access to, search them all at once, and report what each one said, including the ones that said nothing. An empty result from the ticket tracker is a fact: nobody ticketed this.
+The reason for a piece of code is almost never in the code. It's in a PR discussion, a ticket, a design doc, a Slack thread, a monitor threshold, an error spike, or a usage chart, and the question doesn't tell you which. So find every source you have access to, search them all at once, and report what each one said, including the ones that said nothing. An empty result from the ticket tracker is a fact: nobody ticketed this.
 
-Default to searching everything. The cost of an investigator coming back empty is one subagent. The cost of missing the design doc that exists is a wrong answer.
+Default to searching everything. An investigator coming back empty costs one subagent. Missing the design doc that exists costs a wrong answer.
 
 ## How to think
 
 You're a careful investigator working from partial records. Commit messages lie. Tickets go stale. The author may have left. Be honest about what you know versus what you're guessing.
 
 - **Evidence first, story second.** Collect, then see what the pieces support. Never pick a story and go looking for evidence that fits.
-- **Quote and cite.** Every claim about intent points at a commit, PR, ticket, doc, message, or code comment. A reader should be able to follow any claim to its source in under a minute. No citation means it's an inference and gets labeled as one.
-- **Hedge on purpose.** "Appears to", "likely", "suggests" when the evidence is indirect. "Because" only when someone actually wrote the reason down.
+- **Quote and cite.** Every claim about intent points at a commit, PR, ticket, doc, message, or code comment a reader can reach in under a minute. No citation means it's an inference and gets labeled as one.
+- **Hedge on purpose.** "Appears to", "likely", "suggests" when the evidence is indirect. "Because" only when someone wrote the reason down.
 - **Show contradictions.** If the ticket says one thing and the PR says another, show both. Don't pick the tidier one.
-- **Name the gaps.** "We searched the tracker for A and B and found nothing" is an answer. A confident guess in its place is worse than nothing, because the reader will act on it.
+- **Name the gaps.** "We searched the tracker for A and B and found nothing" is an answer. A confident guess in its place is worse, because the reader will act on it.
 - **Don't read intent off the code.** "It checks for null so the author must have wanted to handle null" is mechanics, not motivation.
 - **The user's guess is a hypothesis, not a conclusion.** "I assume this is for performance?" gets checked like any other candidate.
 
@@ -38,11 +38,11 @@ The target is a chunk of code, a pattern, a feature, or a named decision. The qu
 - Why does this still exist. Dead-code territory.
 - What's the history of X. Broad sweep.
 
-If the target is vague, take your best guess from context, say what you took it to mean, and go. Don't ask. The human can redirect.
+If the target is vague, take your best guess from context, say what you took it to mean, and go. Don't ask; the human can redirect.
 
 ## Step 2. Anchor in the code
 
-Before spawning anyone, build the anchor yourself. It's cheap and every investigator needs it.
+Build the anchor yourself before spawning anyone. It's cheap, and every investigator needs it.
 
 - File paths and line ranges.
 - Key symbols.
@@ -72,9 +72,9 @@ List the MCPs and tools available in this session. Map each to one evidence cate
 
 If an MCP could fit two categories, pick the one it's mainly for and note it. Write the coverage map down. It goes in the final output.
 
-Spawn one investigator per category that has a source, all at once. One investigator per source. Don't give one agent three MCPs. Each source has its own query vocabulary and result shape, and an agent juggling several covers none well.
+Spawn one investigator per category that has a source, all at once. One investigator per source. Don't give one agent three MCPs: each source has its own query vocabulary and result shape.
 
-Investigators need tool access. If your harness has a read-only mode that strips MCPs, don't use it. They still shouldn't write anything. That's an instruction, not a sandbox.
+Investigators need tool access, so don't use a read-only mode that strips MCPs. They still shouldn't write anything. That's an instruction, not a sandbox.
 
 Each investigator gets:
 
@@ -91,41 +91,21 @@ Only with a written reason that goes in the final output. Two valid ones:
 - No tool for that category in this session. That's a gap, not a choice. Say so.
 - The source can't apply. A build-time script has no runtime errors. High bar. "Probably nothing there" doesn't clear it.
 
-If the target is a single trivial commit and the PR description already answers the question, you can answer inline. Only after confirming every available source would be redundant, and say you did. This should be rare.
+If the target is a single trivial commit and the PR description already answers the question, you can answer inline, only after confirming every available source would be redundant, and say you did. This should be rare.
 
 ## Step 4. Synthesize
 
-Spawn one synthesizer with `references/synthesizer-prompt.md`, every investigator's findings including the empty ones, the skipped sources with reasons, the anchor, the question, and `references/epistemics.md`. It needs tool access too, to spot-check citations.
-
-It writes the final answer, claims sorted by how well the evidence supports them, gaps named, sources listed.
+Spawn one synthesizer with `references/synthesizer-prompt.md`, every investigator's findings including the empty ones, the skipped sources with reasons, the anchor, the question, and `references/epistemics.md`. It needs tool access too, to spot-check citations. It writes the final answer: claims sorted by how well the evidence supports them, gaps named, sources listed.
 
 ## Step 5. Present
 
-Show the synthesizer's output. Light edits for clarity are fine. Do not touch the confidence language. Dropping the hedges to sound more sure is the exact failure this skill exists to prevent.
+Show the synthesizer's output. Light edits for clarity are fine. Do not touch the confidence language; dropping the hedges is the failure this skill exists to prevent.
 
-Lead with the plain version. The first few sentences say what we found and how sure we are, in words someone outside the project can follow. Detail below.
+Lead with the plain version: what we found and how sure we are, in words someone outside the project can follow. Detail below.
 
 ## Output
 
-The synthesizer produces this. Keep the sections that apply.
-
-**The question.** Restated in a sentence.
-
-**The code.** Paths, lines, symbols. Two lines to orient a reader.
-
-**What we found.** Claims with direct citations. Present tense, quoted or closely paraphrased.
-
-**What we can reasonably infer.** Claims supported by indirect evidence. Each one shows its chain: given A and B, likely C. Hedged.
-
-**Competing hypotheses.** When the evidence fits more than one story. Each with evidence for and against. Skip if there's one clear answer.
-
-**What we don't know.** Specific. What was searched, with what terms, and what came back empty. Who would know.
-
-**Sources consulted.** One line per category. What was searched, what was found, or "no results", or "skipped, reason". This is how the reader judges coverage.
-
-**Confidence summary.** One or two sentences on how solid the whole thing is.
-
-If the question is a prelude to changing the code, add a short block after the sources: what to preserve, what's safe to change, what to avoid, what the risk is.
+The format is in `references/synthesizer-prompt.md`, from the plain-version lead through the sources and confidence summary, plus the block for a reader about to change the code. Keep the sections that apply.
 
 ## Ways this goes wrong
 
@@ -141,5 +121,5 @@ If the question is a prelude to changing the code, add a short block after the s
 
 - `references/epistemics.md`. Confidence tiers and phrasing. The synthesizer follows it.
 - `references/investigator-prompt.md`. The brief each investigator gets.
-- `references/sources.md`. One section per evidence category, what it holds, how to search it, what good evidence looks like, pitfalls. Plus the incident angle.
+- `references/sources.md`. One section per evidence category: what it holds, how to search it, what good evidence looks like, pitfalls. Plus the incident angle.
 - `references/synthesizer-prompt.md`. The brief for the synthesizer, including the output format.

@@ -1,16 +1,14 @@
 # Sources
 
-One section per evidence category. Give each investigator the section for its category, adapted to the tool actually available. The examples name common tools. Swap in whatever the team uses. The incident angle at the end gets added to every investigator when the target looks defensive.
-
-Every section has the same shape. What the source holds, how to search it, what good evidence looks like, what goes wrong, what to return.
+One section per evidence category, each with the same shape: what the source holds, how to search it, what good evidence looks like, what goes wrong, what to return. Give each investigator the section for its category, adapted to the tool actually available. The examples name common tools; swap in whatever the team uses. Add the incident angle at the end to every investigator when the target looks defensive.
 
 ---
 
 ## 1. Source control
 
-Git plus the PR host (GitHub, GitLab). Always available. The most trustworthy source because it's tied to the diff that shipped.
+Git plus the PR host (GitHub, GitLab). Always available. The most trustworthy source, since it's tied to the diff that shipped.
 
-**What it holds.** Commit messages, dates, authors, diffs. PR descriptions, review comments, discussion threads. Inline comments, TODOs, FIXMEs, deprecation notes. ADRs if the repo keeps them. Tests, whose names often encode the edge case that motivated a change. Files changed together in the same commits. Changelogs. Ticket ids in commit messages and PR bodies.
+**What it holds.** Commit messages, dates, authors, diffs. PR descriptions, review comments, discussion threads. Inline comments, TODOs, FIXMEs, deprecation notes. ADRs if the repo keeps them. Tests, whose names often encode the edge case behind a change. Files changed together. Changelogs. Ticket ids in commit messages and PR bodies.
 
 **How to search.**
 
@@ -31,9 +29,9 @@ The reviews and comments fields on the PR are where the signal is.
 
 **Good evidence.** A PR description that explains the problem, not just the change. A long review thread where alternatives were debated. An inline comment explaining a non-obvious constraint. A test named for the edge case. A commit message citing a ticket or incident.
 
-**What goes wrong.** Squash merges lose the branch commits, fall back to the PR body and comments. "Small refactor" sometimes hides a behavior change, read the diff not the message. A pattern may have been copied without understanding, find where it first appeared and investigate that commit. Bot commits (dependabot, renovate, backports) carry no motivation, skip them. The code itself is not evidence of intent.
+**What goes wrong.** Squash merges lose the branch commits; fall back to the PR body and comments. "Small refactor" sometimes hides a behavior change; read the diff, not the message. A pattern may have been copied without understanding; find where it first appeared and investigate that commit. Bot commits (dependabot, renovate, backports) carry no motivation, skip them. The code itself is not evidence of intent.
 
-**Return.** Every commit, PR, or comment that bears on the question. Exact text quoted, hash or PR number or file and line, author and date, whether it's direct or circumstantial.
+**Return.** Every commit, PR, or comment that bears on the question. Exact text quoted, hash or PR number or file and line, author and date, direct or circumstantial.
 
 ---
 
@@ -41,7 +39,7 @@ The reviews and comments fields on the PR are where the signal is.
 
 Jira, Linear, GitHub Issues, Monday, Shortcut. Where the product and business reason usually lives. "Customer X asked for it." "Needed for the Q3 compliance push."
 
-**What it holds.** Issues with descriptions and comments. Parent and child relationships, the parent often has the why. Attached specs. Labels that classify motivation (customer request, incident follow-up, compliance, perf). Status changes that explain scope shifts. Links to PRs.
+**What it holds.** Issues with descriptions and comments. Parent and child relationships; the parent often has the why. Attached specs. Labels that classify motivation (customer request, incident follow-up, compliance, perf). Status changes that explain scope shifts. Links to PRs.
 
 **How to search.**
 
@@ -53,7 +51,7 @@ Jira, Linear, GitHub Issues, Monday, Shortcut. Where the product and business re
 
 **Good evidence.** A description stating the business problem. A comment recording a decision: "went with B because A would touch billing". A parent issue named like an initiative. An attached spec. A label like customer:acme or incident-followup.
 
-**What goes wrong.** Scope drift, the ticket was closed and reopened with a different scope, read the whole history. Template boilerplate, "improve user experience" is not a reason. Stale tickets describing a plan that changed, check dates against the ship date. Duplicate chains, follow duplicate-of back to the canonical one. No access, note it as a gap.
+**What goes wrong.** Scope drift; the ticket was closed and reopened with a different scope, so read the whole history. Template boilerplate; "improve user experience" is not a reason. Stale tickets describing a plan that changed; check dates against the ship date. Duplicate chains; follow duplicate-of back to the canonical one. No access is a gap, note it.
 
 **Return.** For each relevant issue: id and title, the motivation quoted from the description or a comment, labels and parent, author and dates, link.
 
@@ -61,7 +59,7 @@ Jira, Linear, GitHub Issues, Monday, Shortcut. Where the product and business re
 
 ## 3. Long-form docs
 
-Confluence, Notion, Google Docs. Where the reason is written out before it becomes code, for anything big enough to get a doc.
+Confluence, Notion, Google Docs. Where the reason gets written out before it becomes code, for anything big enough to get a doc.
 
 **What it holds.** PRDs, specs, RFCs, ADRs, design review notes, team pages, postmortems, runbooks, strategy docs.
 
@@ -75,7 +73,7 @@ Confluence, Notion, Google Docs. Where the reason is written out before it becom
 
 **Good evidence.** A problem statement or motivation section matching the target. An alternatives-considered or rejected-approaches section. A postmortem naming the target as the fix for an incident. Meeting notes recording "decided X because Y" in the same date range as the PR. An ADR filled in non-trivially.
 
-**What goes wrong.** The doc describes the plan, the code does something else, flag the divergence. Boilerplate why sections. The relevant doc isn't linked from anywhere, search broadly. Several drafts, find the final one by date. No access, gap.
+**What goes wrong.** The doc describes the plan and the code does something else; flag the divergence. Boilerplate why sections. The relevant doc isn't linked from anywhere; search broadly. Several drafts; find the final one by date. No access is a gap.
 
 **Return.** For each doc: title and URL, authors and last updated, the motivation quoted with section, linked pages, draft or final.
 
@@ -83,7 +81,7 @@ Confluence, Notion, Google Docs. Where the reason is written out before it becom
 
 ## 4. Team chat
 
-Slack, Teams, Discord. Where the real decisions often happen, especially for changes too small for a doc. Also the most fragile source. Threads get deleted, channels archived, search degrades.
+Slack, Teams, Discord. Where the real decisions often happen, especially for changes too small for a doc. Also the most fragile source: threads get deleted, channels archived, search degrades.
 
 **What it holds.** Real-time discussion of problems and decisions. Incident channels. Design threads. Questions answered by seniors that never reached a doc. Post-merge discussion of why something was revisited.
 
@@ -98,7 +96,7 @@ Slack, Teams, Discord. Where the real decisions often happen, especially for cha
 
 **Good evidence.** A thread where tradeoffs were debated. An incident channel message describing the bug this prevents. A reviewer question with an authoritative answer. A PM or support engineer explaining a customer ask.
 
-**What goes wrong.** Retention cliffs, note the date before which nothing exists. DMs aren't searchable, a known blind spot. "Lol just do it" isn't a decision. A single message without its thread reads differently. If the tool needs auth and fails, stop and report the gap. Don't invent.
+**What goes wrong.** Retention cliffs; note the date before which nothing exists. DMs aren't searchable, a known blind spot. "Lol just do it" isn't a decision. A single message without its thread reads differently. If the tool needs auth and fails, stop and report the gap. Don't invent.
 
 **Return.** For each thread: channel, permalink, participants, date range, key quotes verbatim with attribution, what the thread was about.
 
@@ -106,7 +104,7 @@ Slack, Teams, Discord. Where the real decisions often happen, especially for cha
 
 ## 5. Observability
 
-Datadog, Grafana, New Relic, Honeycomb. The runtime record. What actually happened in production, versus what was planned.
+Datadog, Grafana, New Relic, Honeycomb. The runtime record: what happened in production, versus what was planned.
 
 **What it holds.** Metrics, and a metric's existence is itself evidence someone cared. Monitors and alerts, the thresholds a team decided were worth waking someone for. Dashboards. Traces and spans. Logs. Formal incidents with timelines. Notebooks with investigations.
 
@@ -114,14 +112,14 @@ Datadog, Grafana, New Relic, Honeycomb. The runtime record. What actually happen
 
 1. Find the owning service and its dependencies.
 2. Dashboards and monitors first. They say what the team watches. A monitor threshold that matches a code constant is often the answer to "why is this clamped at N".
-3. Metrics near the target. Was there a spike right before the PR merged, stable after?
+3. Metrics near the target. A spike right before the PR merged, stable after?
 4. Logs, narrowed hard. Symbols, error strings, feature names, always time-bounded to a window around the change. Aggregate rather than dump.
 5. Spans and traces for timeouts, retries, slow paths, cross-service behavior.
 6. Incidents around the date the target was added, especially if it looks defensive.
 
 **Good evidence.** A monitor whose query and threshold match what the code enforces. A dashboard by the target's author with widgets matching what the code measures. A metric spiking right before the merge and flat after. An incident referencing the target or its error strings. Logs showing the exact error pattern in the window before the change.
 
-**What goes wrong.** Correlation isn't causation, other changes landed in the same window, check neighbors. A chart reflects its author's framing, not the reason for a line of code. Metrics get renamed or expire, missing data is a gap not a null. Common strings return thousands of logs, narrow by service, tag, time. Instrumented doesn't mean caused, cross-reference with commit dates.
+**What goes wrong.** Correlation isn't causation; other changes landed in the same window, check neighbors. A chart reflects its author's framing, not the reason for a line of code. Metrics get renamed or expire; missing data is a gap, not a null. Common strings return thousands of logs; narrow by service, tag, time. Instrumented doesn't mean caused; cross-reference with commit dates.
 
 **Return.** For each item: type, name, id or link, owner and dates, the specific condition or query or quote, how strongly it connects to the target.
 
@@ -129,7 +127,7 @@ Datadog, Grafana, New Relic, Honeycomb. The runtime record. What actually happen
 
 ## 6. Error tracking
 
-Sentry, Rollbar, Bugsnag, PostHog error tracking. The archive of what went wrong. For defensive or corrective code, often holds the direct motivation: the exception, the stack trace, the frequency that made someone add the check.
+Sentry, Rollbar, Bugsnag, PostHog error tracking. The archive of what went wrong. For defensive or corrective code it often holds the direct motivation: the exception, the stack trace, the frequency that made someone add the check.
 
 **What it holds.** Issues grouped by fingerprint with counts and first and last seen. Individual events with stack traces and context. Releases with associated issues. Session replays. Issue comments and assignments, sometimes with root-cause notes.
 
@@ -145,7 +143,7 @@ The most useful thing here is timing. "Issue X first seen Jan 2, peaked at 500 a
 
 **Good evidence.** An issue first seen shortly before the PR and last seen shortly after. A stack trace through the target function. An author comment on the issue describing the fix. The PR referencing the issue URL. High counts that stop after the release containing the target.
 
-**What goes wrong.** Refactors regroup the same error under a new id, an issue ending abruptly may have just moved. A release has many commits, stopping at v2.14 doesn't prove this commit did it. The error may have stopped because upstream changed. "Resolved" is a human marker, not proof of a fix. Sampling makes low counts misleading.
+**What goes wrong.** Refactors regroup the same error under a new id; an issue ending abruptly may have just moved. A release has many commits; stopping at v2.14 doesn't prove this commit did it. The error may have stopped because upstream changed. "Resolved" is a human marker, not proof of a fix. Sampling makes low counts misleading.
 
 **Return.** For each issue: id and title, project, first and last seen, count and sampling if known, releases, a stack trace excerpt showing relevance, timing against the ship date, link, any author notes.
 
@@ -155,11 +153,11 @@ The most useful thing here is timing. "Issue X first seen Jan 2, peaked at 500 a
 
 PostHog, a warehouse like Databricks, Snowflake, or BigQuery, experiment and flag tables. The product and data view, next to observability's infra view. What users did, which experiments ran, how usage evolved, where a threshold number came from.
 
-**What it holds.** Product events, feature usage, clicks, submissions, client-reported errors. Usage and billing events. Experiment exposures and flag data, schema varies by company. Query history and warehouse system tables. Pipeline lineage. Notebooks, usually not queryable, name them as a gap if you suspect the reason is in one.
+**What it holds.** Product events, feature usage, clicks, submissions, client-reported errors. Usage and billing events. Experiment exposures and flag data, schema varies by company. Query history and warehouse system tables. Pipeline lineage. Notebooks, usually not queryable; name them as a gap if you suspect the reason is in one.
 
 **How to search.**
 
-Orient first. Schemas differ. List tables and describe them before trusting a name. Time-bound every query, a window around the ship date, usually 30 days each side. Prefer typed models over raw event tables. Never dump rows, return counts and percentiles.
+Orient first. Schemas differ, so list tables and describe them before trusting a name. Time-bound every query to a window around the ship date, usually 30 days each side. Prefer typed models over raw event tables. Never dump rows; return counts and percentiles.
 
 Patterns that pay off:
 
@@ -171,7 +169,7 @@ Patterns that pay off:
 
 **Good evidence.** An error-classifying event dropping to near zero after a defensive PR. An exposure row naming the target's flag with a shipped decision near the date. A pre-ship distribution whose p99 equals the constant in the code.
 
-**What goes wrong.** Instrumented doesn't mean caused, pair with a commit citation. A step in volume may mean logging started, not behavior changed, check for instrumentation PRs in the window. Schema drift, the property may not have existed then. Refresh lag on modeled tables. Reporting from a table you never confirmed exists. The window predates retention, that's a gap not a null.
+**What goes wrong.** Instrumented doesn't mean caused; pair with a commit citation. A step in volume may mean logging started, not behavior changed; check for instrumentation PRs in the window. Schema drift; the property may not have existed then. Refresh lag on modeled tables. Reporting from a table you never confirmed exists. The window predates retention; that's a gap, not a null.
 
 **Return.** For each finding: type, fully-qualified table and the exact query, time window, compact numbers, timing against the ship date, direct or circumstantial or weak.
 
@@ -191,6 +189,6 @@ Inside your own source, look for incident history:
 - Error tracking: issues whose first and last seen bracket the ship date, traces through the target.
 - Product analytics: an error-classified event spiking during an incident window and dropping after the target shipped.
 
-If you find an incident link, fetch the full postmortem. The action items section ties directly to code changes. When several sources corroborate, an incident id in a ticket, in a postmortem, in a chat thread linking the PR, and an event count dropping after the fix, the evidence is strong.
+If you find an incident link, fetch the full postmortem. The action items section ties directly to code changes. When several sources corroborate, the evidence is strong: an incident id in a ticket, in a postmortem, in a chat thread linking the PR, and an event count dropping after the fix.
 
 Skip this angle for code that doesn't look defensive.

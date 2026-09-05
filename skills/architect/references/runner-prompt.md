@@ -8,9 +8,9 @@ You're producing one candidate design. Others are producing theirs at the same t
 
 The orchestrator compares candidates on these. Apply them.
 
-- **Caller's usage first.** Write the readme-style usage and two or three real call sites before the types. Then derive the types from them. The usage is the spec. When they disagree, fix the types.
+- **Caller's usage first.** Write the readme-style usage and two or three real call sites before the types. Derive the types from them. The usage is the spec. When they disagree, fix the types.
 - **Data shapes first.** Get the core types right and the code becomes obvious. Trace each dominant access pattern through the structure. If the answer is "we'll add a map or a cache later", the structure is wrong.
-- **Small surface, deep behind it.** Compare what the public interface hides against how big it is. Prefer a simple interface that pulls complexity into the callee, even if the callee gets less simple. No transport or wire types on the public surface. Parse into domain types behind it.
+- **Small interface, deep behind it.** Compare what the public interface hides against how big it is. Prefer a simple interface that pulls complexity into the callee, even if the callee gets less simple. No transport or wire types on the public interface. Parse into domain types behind it.
 - **Shared state.** If two actors might both write, ask what happens. If the answer isn't "nothing", give each its own state and merge when reading.
 - **Boundaries visible.** `not implemented` for bodies, pseudocode for tricky logic, doc comments stating intent and what must stay true. A reader should trace data from input to output from the types and signatures alone.
 - **Invariants in types.** A type that can't be misused beats a runtime check beats a comment.

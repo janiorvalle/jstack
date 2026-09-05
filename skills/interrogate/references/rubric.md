@@ -60,7 +60,7 @@ Is the complexity earning its keep?
 - Configuration for cases that don't exist.
 - Dead code, unused imports, leftover parameters.
 - "Just in case" paths with no callers.
-- Compatibility scaffolding from a migration that's finished.
+- Compatibility code from a migration that's finished.
 - Every feature, control, and option earning its place.
 
 Simpler is better unless simpler is wrong.
@@ -71,9 +71,9 @@ Don't stop at "this could be a bit cleaner". Look for the move that makes whole 
 
 - A file crossing from under a thousand lines to over is a strong smell. Ask whether it should be split first.
 - New ad hoc conditionals or one-off branches dropped into an unrelated flow are a design problem, not a style nit. Push the logic into a helper, a state machine, or its own module.
-- Thin wrappers, identity helpers, pass-throughs. Indirection with no clarity bought.
+- Thin wrappers, identity helpers, pass-throughs. Indirection that buys no clarity.
 - Unnecessary optionality, `unknown`, `any`, or cast-heavy code where a clear type boundary could exist.
-- Logic leaking out of its canonical layer, or a bespoke one-off where a shared helper already exists.
+- Logic leaking out of its canonical layer, or a one-off where a shared helper already exists.
 - Independent work serialized for no reason, or related updates that can leave state half-applied.
 
 Prioritize structural regressions and missed simplifications, then tangled branching, then boundary and type concerns, then the small stuff. A few high-conviction findings beat a long list of cosmetic ones.

@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Interrogate
 
-One reviewer per model, same prompt, same rubric. The signal comes from model diversity, not from assigned personas. Different models have different blind spots. Two models flagging the same thing independently is strong. One model alone is worth reading, weighted lower.
+One reviewer per model, same prompt, same rubric. The signal comes from model diversity, not from assigned personas, because different models have different blind spots. Two models flagging the same thing independently is strong. One model alone is worth reading, weighted lower.
 
 The deliverable is a verdict. Do not auto-apply anything.
 
@@ -16,7 +16,7 @@ What to review, from context. Files or a diff the human pointed at. The full cha
 
 ## Step 2. State the intent
 
-One paragraph. What is this code trying to do? From the human's message, commit messages, the PR description, the code. Reviewers challenge whether the work achieves the intent well, not whether the intent is right. If you're not sure what the intent is, ask before spawning anyone.
+One paragraph. What is this code trying to do? Take it from the human's message, commit messages, the PR description, the code. Reviewers challenge whether the work achieves the intent well, not whether the intent is right. If you're not sure what the intent is, ask before spawning anyone.
 
 ## Step 3. Spawn reviewers
 
@@ -34,7 +34,7 @@ As results come back:
 
 ## Step 5. Lead judgment
 
-You're the lead reviewer, a pragmatic senior engineer. Not a neutral aggregator. `references/lead-judgment.md` has the full framework. Reviewers saw a slice and a paragraph. You have the whole conversation, the constraints, what was already tried, what the next PR handles. Use that.
+You're the lead reviewer, a pragmatic senior engineer, not a neutral aggregator. `references/lead-judgment.md` has the full framework. Reviewers saw a slice and a paragraph. You have the whole conversation, the constraints, what was already tried, what the next PR handles. Use that.
 
 Sort every finding:
 
@@ -49,13 +49,13 @@ Each finding carries which models raised it, its bucket, and a one-line reason.
 
 **Intent.** The paragraph from step 2.
 
-**Act on.** Each with location, the finding, who raised it, the reason. If the list has more than five, you aren't filtering hard enough.
+**Act on.** Each with location, the finding, who raised it, the reason. More than five means you aren't filtering hard enough.
 
 **Consider.** Same shape.
 
 **Noted.** One line each.
 
-**Dismissed.** One line each with why. This section is how the human checks your judgment. Don't hide it.
+**Dismissed.** One line each with why. This is how the human checks your judgment. Don't hide it.
 
 **Verdict.** Two or three sentences. Ship it, fix the act-on list first, or rethink.
 

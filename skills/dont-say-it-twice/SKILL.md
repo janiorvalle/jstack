@@ -17,7 +17,7 @@ When you notice you're writing a rule for the second time:
 
 1. Ask whether it could be a lint rule, a type that won't compile, a hook, a runtime check, or a script.
 2. If yes, build that and delete the text.
-3. If no, because it genuinely needs judgment, make the text more visible and add an example of what going wrong looks like.
+3. If no, because it needs judgment, make the text more visible and add an example of what going wrong looks like.
 
 ## Pick the strongest option available
 
@@ -38,7 +38,7 @@ If the fix is structural, only do the structural fix. The instruction was the sy
 - **A recurring correction.** Becomes a skill, a lint rule, or a hook.
 - **A pattern across projects.** Becomes a principle in the stack.
 
-Two copies of the same rule drift. If a rule has to appear in two places, generate one from the other. The one-line index of principles in the mode, for example, is built from each skill's description line by a script. Nobody types it twice.
+Two copies of the same rule drift. If a rule has to appear in two places, generate one from the other. The one-line index of principles in the mode is built from each skill's description line by a script. Nobody types it twice.
 
 ## Close the loop
 

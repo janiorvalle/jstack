@@ -4,7 +4,7 @@ Screen every candidate before picking. A red flag is a reason to revise or rejec
 
 ## Shallow module
 
-A big interface hiding little. Judge depth by how much capability sits behind the public surface relative to its size. Prefer a simple interface backed by substantial behavior.
+A big interface hiding little. Judge depth by how much capability sits behind the public interface relative to its size. Prefer a simple interface backed by substantial behavior.
 
 Not the same as a deep call chain. A deep chain scatters understanding across layers. A deep module concentrates it behind one interface.
 
@@ -18,7 +18,7 @@ Re-exporting transport or wire types is leakage. Parse external data into domain
 
 ## Organized by execution order
 
-Modules split by when things run, load then validate then transform then save, instead of by what they know. The same representation and its invariants get repeated across every stage boundary.
+Modules split by when things run, load then validate then transform then save, instead of by what they know. The same representation and its invariants get repeated at every stage boundary.
 
 Group by knowledge and ownership. Methods that run at different times still belong together when they protect the same decisions.
 

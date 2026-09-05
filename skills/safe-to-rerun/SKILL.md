@@ -9,17 +9,17 @@ kind: principle
 
 Anything that can be triggered twice will be. Webhooks redeliver. Jobs restart. Users double-click. Networks retry. Agents get interrupted and pick up again. Design every state-changing operation so running it again is safe.
 
-Every operation that changes state has to answer two questions. What happens if this runs twice? What happens if the last run crashed halfway through? If the answer to either is "it depends on what got left behind", the operation isn't done.
+Every operation that changes state answers two questions. What happens if this runs twice? What happens if the last run crashed halfway through? If the answer to either is "it depends on what got left behind", the operation isn't done.
 
 ## If it can't be made safe, dedupe it
 
-Some operations can't be replayed, like charging a card or sending an email. Those need a dedupe key. An idempotency key on the request, a unique constraint on the record, a "already processed" check keyed on the event id. The second run sees the key and does nothing.
+Some operations can't be replayed, like charging a card or sending an email. Those need a dedupe key. An idempotency key on the request, a unique constraint on the record, an "already processed" check keyed on the event id. The second run sees the key and does nothing.
 
 ## Patterns
 
 - **Converge on startup.** Scan for existing state, clean up stale artifacts, adopt anything still live. Don't assume you're starting from nothing.
 - **Compare by content, not by order.** When cleaning up, decide what's stale by what it contains, not by when it was created.
-- **Locks that heal themselves.** A lock file should record who holds it and whether that process is still alive. A dead holder means a stale lock, and the next run takes it.
+- **Locks that heal themselves.** A lock file records who holds it and whether that process is still alive. A dead holder means a stale lock, and the next run takes it.
 - **Failed work respawns clean.** A job that dies gets rescheduled from fresh input, not from whatever half-state it left.
 - **Reconcile when you have to.** If an operation can't be made naturally convergent, add a step at the start that looks at what's there and brings it to a known state before doing anything.
 

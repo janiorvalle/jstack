@@ -9,16 +9,16 @@ Answer "how does X work?" by reading the code and explaining it at the level of 
 
 ## Step 1. Pin the question and size it
 
-Work out what's being asked. A subsystem ("how does the rate limiter work"), a feature flow ("how do we bill on-demand usage"), an overview ("how is the auth service structured"), or a runtime trace ("what happens when a user submits the form").
+Work out what's being asked: a subsystem ("how does the rate limiter work"), a feature flow ("how do we bill on-demand usage"), an overview ("how is the auth service structured"), or a runtime trace ("what happens when a user submits the form").
 
-If the scope is unclear, state your best reading and go. Don't ask. The human can redirect if you're off.
+If the scope is unclear, state your best reading and go. Don't ask. The human can redirect.
 
 Then size it.
 
 - **Simple.** One module, a small utility, a narrow question about one function. Explore and explain yourself in one pass. Go to step 2b.
-- **Complex.** Spans several files or services, a cross-cutting feature, a full overview. Fan out explorers first. Go to step 2a.
+- **Complex.** Several files or services, a cross-cutting feature, a full overview. Fan out explorers first. Go to step 2a.
 
-When in doubt, call it simple. You can always fan out if you hit a wall.
+When in doubt, call it simple. You can fan out later if you hit a wall.
 
 ## Step 2a. Explore (complex only)
 
@@ -30,7 +30,7 @@ Split the question into two to four angles, each a distinct slice so explorers d
 
 Narrow question, two explorers. Broad subsystem, up to four.
 
-Spawn them all at once as read-only subagents. Each gets the base prompt from `references/explorer-prompt.md` plus its angle. Each one:
+Spawn them all at once as read-only subagents, each with the base prompt from `references/explorer-prompt.md` plus its angle. Each one:
 
 - Starts broad. Lists the relevant directories, searches for the key types and names.
 - Follows the thread from an entry point through callers, callees, and data.
@@ -38,23 +38,23 @@ Spawn them all at once as read-only subagents. Each gets the base prompt from `r
 - Stops when it can describe the full path from input to output without hand-waving a step.
 - Notes anything surprising or that a newcomer would get wrong.
 
-They return structured findings, components, flow, files read, boundaries, the non-obvious, open questions. Overlap is fine. The explainer reconciles.
+They return structured findings: components, flow, files read, boundaries, the non-obvious, open questions. Overlap is fine. The explainer reconciles.
 
 The main thread gets their summaries, not their raw reads. That's the point of sending them out.
 
 ## Step 2b. Explain directly (simple only)
 
-Search and read the code yourself, then write the explanation in the format below. Same structure, no explorer findings to merge. Skip to step 4.
+Search and read the code yourself, then write the explanation in the format below. Skip to step 4.
 
 ## Step 3. Synthesize (complex only)
 
-Spawn one read-only subagent with the prompt from `references/explainer-prompt.md`, all the explorer findings, and read-only access to check anything. It merges overlapping findings, resolves contradictions by reading the code, and writes one explanation.
+Spawn one read-only subagent with the prompt from `references/explainer-prompt.md`, all the explorer findings, and read-only access to check anything. It merges overlapping findings, settles contradictions by reading the code, and writes one explanation.
 
 ## Step 4. Present
 
 Show the explanation. Light edits for clarity or context from the conversation are fine. Don't rewrite it. The explanation is the product.
 
-Every sentence in it follows the writing rules. Short, one idea each, plain words, no em dashes, file paths where the reader needs to go look.
+Every sentence follows the writing rules. Short, one idea each, plain words, no em dashes, file paths where the reader needs to go look.
 
 ## Output format
 

@@ -7,18 +7,18 @@ kind: principle
 
 # Easy to read
 
-Code gets read far more than it gets written. Line counts, complexity scores, and "clean architecture" are stand-ins. What actually matters is how much work a reader has to do to understand the code. Track two things:
+Code gets read far more than it gets written. Line counts, complexity scores, and "clean architecture" are stand-ins. What matters is how much work a reader has to do to understand the code. Track two things:
 
 1. **Layers to trace.** How many hops sit between a question and its answer.
 2. **State to hold.** How much hidden or changing context the reader has to keep in their head.
 
-These are independent. A flat file with fifty globals is as hard to follow as a six-layer adapter stack. Watch both.
+They're independent. A flat file with fifty globals is as hard to follow as a six-layer adapter stack. Watch both.
 
 ## Cut layers
 
 - **Collapse layers that don't earn their keep.** Wrappers with one caller. Adapters with no second implementation. Indirection added for a future that never came. Inline them.
 - **Each layer should change the abstraction.** A layer that repeats the same methods and arguments as the one below it adds reading without adding meaning. Collapse pass-throughs.
-- **Boundaries should hide real decisions.** A broad interface that hides little means the reader has to learn both the surface and the implementation. Prefer a narrow boundary that hides something meaningful.
+- **Boundaries should hide real decisions.** A broad interface that hides little makes the reader learn both the interface and the implementation. Prefer a narrow boundary that hides something meaningful.
 - **Before adding a layer, ask what it saves.** It has to reduce reading somewhere else by at least as much as it adds.
 
 ## Cut state

@@ -1,10 +1,10 @@
 # Team sections
 
-These rules apply to team grids, team member cards, staff listings, about-us sections, and people galleries with photos, names, roles, and bios.
+Rules for team grids, team member cards, staff listings, about-us sections, and people galleries with photos, names, roles, and bios.
 
 ## Design rules
 
-- Don't use landscape aspect ratios for team member photos.
+- No landscape aspect ratios for team member photos.
 - Use a muted color for the role or job title text.
 
 ## Coding rules

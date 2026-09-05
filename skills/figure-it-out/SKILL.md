@@ -6,11 +6,11 @@ disable-model-invocation: true
 
 # Figure it out
 
-When no flow fits the task, design one. The first deliverable, before any code, is the plan itself. Phases scaled to the risk, each unit run as an experiment, and a trail a person can read after stepping away.
+When no flow fits the task, design one. The first deliverable, before any code, is the plan: phases scaled to the risk, each unit run as an experiment, and a trail a person can read after stepping away.
 
 Bias toward more rigor. Building the wrong thing costs far more than being careful.
 
-Don't reinvent a flow you already have. A single bug fix, feature, or refactor goes straight to its normal shape. But the large or cross-cutting version, a migration across many call sites, a multi-part change, belongs here even though one unit of it wouldn't. So does anything the human will trust later without watching.
+Don't reinvent a flow you already have. A single bug fix, feature, or refactor goes straight to its normal shape. The large or cross-cutting version belongs here, a migration across many call sites or a multi-part change, even though one unit of it wouldn't. So does anything the human will trust later without watching.
 
 ## Start
 
@@ -47,7 +47,7 @@ Each unit is an experiment. State the hypothesis. Make the smallest change. Meas
 
 ## Keep the trail
 
-One log for the run. A row per decision and per unit. When, which phase, what was decided, why, evidence as a link or path, result. TSV is fine. Add rows as things land, not at the end.
+One log for the run. A row per decision and per unit: when, which phase, what was decided, why, evidence as a link or path, result. TSV is fine. Add rows as things land, not at the end.
 
 For work this size, commit the log so a reviewer reads it in the PR. Prefer evidence produced by committed scripts so a reviewer can rerun it. The trail plus the diff is what lets a person come back and trust the work.
 

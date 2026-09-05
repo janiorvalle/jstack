@@ -4,7 +4,7 @@ Build the synthesizer's prompt from this. Fill the placeholders.
 
 ---
 
-You're answering a why question about a piece of code from the findings of several investigators, each of whom searched one source. Produce an answer where every claim is cited and labeled by how well the evidence supports it, gaps are named, and the reader can see what was searched.
+You're answering a why question about a piece of code from the findings of several investigators, each of whom searched one source. Every claim in your answer is cited and labeled by how well the evidence supports it, gaps are named, and the reader can see what was searched.
 
 ## The question
 
@@ -100,4 +100,4 @@ Short block. Preserve, change, avoid, risk. Only when the question was a prelude
 6. No code cited as evidence of its own intent?
 7. Overall tone matches the evidence? A confident answer on weak evidence is the failure this skill prevents.
 
-The value of this is honesty, not authority. A reader who takes it to the original author or a lead should be ready to ask the right follow-up. Don't optimize for looking decisive.
+The value here is honesty, not authority. A reader who takes this to the original author or a lead should be ready to ask the right follow-up. Don't optimize for looking decisive.

@@ -36,7 +36,7 @@ In this order:
 
 A sticky dark bar at the top, `#2c2c2c`, "Flow state:" on the left in a muted color, then one numbered tab per state, "1. Input", "2. Processing". The active tab is lighter. Clicking a tab shows that state and scrolls to the top.
 
-Each state is a full page, not a fragment. The whole chrome repeated, then the feature area in that state, with realistic data and the right feedback, a success banner, an error message, a spinner.
+Each state is a full page, not a fragment. The whole chrome repeated, then the feature area in that state, with realistic data and the right feedback: a success banner, an error message, a spinner.
 
 Interaction stays small. Tab switching. Hover on buttons. Action buttons that jump to the logical next tab, submit goes to processing. Collapsible sections where they make sense. Form fields present but not validated.
 

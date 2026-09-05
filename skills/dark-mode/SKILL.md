@@ -5,7 +5,7 @@ description: "Use to add dark mode to an existing page, section, component, or s
 
 # Dark mode
 
-Dark mode keeps the same contrast relationships as light mode. It's not an inversion. It doesn't have to preserve every detail of the light design either. It has to look good.
+Dark mode keeps the same contrast relationships as light mode. It's not an inversion, and it doesn't have to preserve every detail of the light design. It has to look good.
 
 ## Steps
 

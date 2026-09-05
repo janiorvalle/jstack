@@ -11,7 +11,7 @@ The product is what it's like to use it. Every technical decision makes that bet
 
 ## Who the user is
 
-Whoever ends up with the work. For a UI, the person clicking. For a library or an API, the colleague who imports it. For an MCP or CLI, the agent calling it. And the next engineer who has to maintain the code is a user too. Weigh all of them, and when you explain a change, explain it from their seat.
+Whoever ends up with the work. For a UI, the person clicking. For a library or an API, the colleague who imports it. For an MCP or CLI, the agent calling it. The next engineer who maintains the code is a user too. Weigh all of them, and when you explain a change, explain it from their seat.
 
 ## Say no
 

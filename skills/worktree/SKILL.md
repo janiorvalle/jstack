@@ -5,19 +5,17 @@ description: "Use before starting work that touches files: creating a worktree, 
 
 # Worktree
 
-Every task gets its own worktree, and every worktree has exactly one owner. This skill is the whole flow: check the registry, claim, create from a clean base, copy local config, pick ports that don't collide, run the baseline, report, and release when done.
-
-A lock is coordination data, not a substitute for looking. Always check git status before touching files.
+Every task gets its own worktree, and every worktree has exactly one owner. A lock is coordination data, not a substitute for looking. Always check git status before touching files.
 
 ## The registry
 
-A JSON file listing who owns what. One entry per worktree.
+A JSON file listing who owns what, one entry per worktree.
 
 - Default path: `~/.config/jstack/worktree-locks.json`
 - Override: `JSTACK_WORKTREE_REGISTRY=/path/to/file.json`
-- Remote hosts keep their own registry at the same default path. When you operate on a remote worktree from a local session, record it in the local registry with the host name and the remote path.
+- Remote hosts keep their own registry at the same default path. A remote worktree operated from a local session also goes in the local registry, with the host name and the remote path.
 
-Use `scripts/worktree_lock.py` from this skill to read and write it. The script takes a file lock so two agents can't clobber the file. If the script isn't available, edit the JSON by hand with the same shape and don't drop anyone else's entries.
+Read and write it with `scripts/worktree_lock.py` from this skill. It takes a file lock so two agents can't clobber the file. Without the script, edit the JSON by hand in the same shape and keep everyone else's entries.
 
 ```bash
 python3 scripts/worktree_lock.py list --status active
@@ -46,19 +44,17 @@ Each entry:
 }
 ```
 
-Statuses: `active` (in use), `handoff` (left alive on purpose for the next agent), `released` (done), `stale` (looks abandoned, don't reuse until someone inspects it).
-
-Never put a secret in any field.
+Statuses: `active` (in use), `handoff` (left alive on purpose for the next agent), `released` (done), `stale` (looks abandoned, don't reuse until someone inspects it). Never put a secret in any field.
 
 ## The flow
 
 ### 1. Look before you touch
 
-- Name the repo, the base branch, and where the worktree will go. Put it under a `worktrees/` directory near the repo, named for the task, never `tmp`.
+- Name the repo, the base branch, and the worktree's path: under a `worktrees/` directory near the repo, named for the task, never `tmp`.
 - `git fetch origin <base> --prune`.
 - Check the existing checkout without changing it. `git status --short --branch`, `git worktree list`, `git log --oneline -10 origin/<base>`.
 - Dirty files in the existing checkout belong to someone else. Leave them alone.
-- List active locks for the repo. If the path or branch you want has an active lock owned by another agent, stop. Take it over only if the human says so.
+- List active locks for the repo. Another agent's active lock on the path or branch you want means stop. Take it over only if the human says so.
 
 ### 2. Claim
 
@@ -75,7 +71,7 @@ Detached is fine for a throwaway check. If the new worktree isn't clean the mome
 
 ### 4. Copy local config
 
-Copy the ignored, local-only files the app needs to run. `.env`, `.env.local`, app-specific config. Confirm they're ignored before relying on them:
+Copy the ignored, local-only files the app needs: `.env`, `.env.local`, app-specific config. Confirm they're ignored first:
 
 ```bash
 git -C <path> check-ignore -v .env .env.local
@@ -85,7 +81,7 @@ If those files hold absolute paths, ports, container names, or URLs pointing at 
 
 ### 5. Find the commands
 
-Read the repo's own entry points instead of guessing. Makefile, package.json, the lockfile to pick the package manager, compose files, the README. Use the repo's commands. If there's a Makefile for the backend, use it.
+Read the repo's own entry points instead of guessing: Makefile, package.json, the lockfile to pick the package manager, compose files, the README. Use the repo's commands; a backend Makefile is one of them.
 
 ### 6. Pick ports that don't collide
 
@@ -100,13 +96,11 @@ Give every service the worktree runs a port nothing else is using. For compose, 
 
 ### 7. Run the baseline
 
-Install dependencies with the repo's conventions, only if needed. Start the services on your ports. Run migrations and seeds through the repo's wrapper. Then check enough to know it's usable: the API answers, the frontend loads on your port, you can log in with whatever local test account the seed or env provides, and the frontend is talking to your backend, not the other checkout's.
-
-Don't run the full test suite here. This is about a working environment, not a green build.
+Install dependencies with the repo's conventions, only if needed. Start the services on your ports. Run migrations and seeds through the repo's wrapper. Then check it's usable: the API answers, the frontend loads on your port, the local test account from the seed or env logs in, and the frontend talks to your backend, not the other checkout's. Don't run the full test suite here. This is a working environment, not a green build.
 
 ### 8. Report
 
-Before starting the task, tell the human: path and branch, which local files were copied (names, not contents), URLs and ports, compose project name if any, seed and login status, any local-only edits, anything you skipped.
+Before starting the task, tell the human: path and branch, local files copied (names, not contents), URLs and ports, compose project name if any, seed and login status, local-only edits, anything skipped.
 
 ### 9. During the work
 
@@ -114,7 +108,7 @@ Heartbeat the lock on long tasks. Update it when you start or stop a service.
 
 ### 10. Release
 
-When the worktree is deleted or the human says it's done, release the lock. If the workspace should stay alive for someone else, mark it handoff instead, with a note on where things stand.
+When the worktree is deleted or the human says it's done, release the lock. If it should stay alive for someone else, mark it handoff instead, with a note on where things stand.
 
 ## Never
 

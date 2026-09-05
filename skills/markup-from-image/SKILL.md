@@ -27,13 +27,13 @@ Look at the image, write the semantic structure, no styling. One block of markup
 - Completely unstyled. No `class`, `className`, `style`, Tailwind utilities, styling props, layout or decorative wrappers, inline dimensions except on placeholder icon `<svg>`, or presentational attributes.
 - One block. No new components, helpers, data arrays, maps, slots, or partials.
 - Repeated UI becomes lists, description lists, table rows, fieldsets, or repeated inline markup. Not an abstraction.
-- Keep the visible copy. Concise placeholder copy only where text is unreadable.
+- Keep the visible copy. Short placeholder copy only where text is unreadable.
 - Normal written casing. Never preserve all caps, small caps, or all lowercase from the image. That's CSS. Keep real acronyms and brand capitalization.
 - `<a href="#">` for navigation, destinations, page or route changes, downloads, external links, and button-looking CTAs like "Get started", "Learn more", "View details", "Pricing", "Sign in", "Sign up", unless they visibly submit a form.
 - `<button type="button">` only for same-page actions that mutate, toggle, open, close, dismiss, or control visible state. `<button type="submit">` only for a visible form submit.
 - Form controls get visible `label` elements when the image shows labels, `aria-label` when there's none, `fieldset` and `legend` for groups.
 - Icons are a 20px by 20px `<svg>` with `role="img"` and a comment naming what the icon seems to mean. Never `<img>` for an icon placeholder.
-- App screenshots, mockups, interface previews, dashboards, charts, maps, code editors, device screens, browser windows, product shots inside the image are media. A placeholder image, not recreated markup.
+- App screenshots, mockups, interface previews, dashboards, charts, maps, code editors, device screens, browser windows, and product shots inside the image are media. A placeholder image, not recreated markup.
 - Meaningful images, logos, avatars, screenshots, and thumbnails get placeholder media elements. Empty `alt` only for decorative or unidentified imagery.
 - No ARIA roles where native HTML already carries the meaning.
 - A requested existing component can replace a raw element, but no styling props or classes unless the human asked for that component's API.
@@ -48,4 +48,12 @@ Look at the image, write the semantic structure, no styling. One block of markup
 
 ## Check
 
-No new `class`, `className`, `style`, utilities, or styling props unless explicitly requested through existing components. Lists, tables, forms, nav, buttons, links, headings, landmarks, and media all use native semantics, with accessible names on form controls. Every `<section>` has its `id`. Scope matches the prompt, filename, insertion target, and what's visible, and an isolated section isn't wrapped in `<main>`. Casing is written casing. Every `<a>` has an `href`, `#` when unknown, and no `<button>` exists only because a link was styled like one. Icon placeholders are 20px `<svg>` with only a comment, no `<title>`, no `<img>`. Embedded app screenshots are placeholder media. One contiguous block, no abstractions. Inserted where asked. Project checks run.
+- No new `class`, `className`, `style`, utilities, or styling props unless explicitly requested through existing components.
+- Lists, tables, forms, nav, buttons, links, headings, landmarks, and media all use native semantics, with accessible names on form controls.
+- Every `<section>` has its `id`.
+- Scope matches the prompt, filename, insertion target, and what's visible. An isolated section isn't wrapped in `<main>`.
+- Casing is written casing.
+- Every `<a>` has an `href`, `#` when unknown. No `<button>` exists only because a link was styled like one.
+- Icon placeholders are 20px `<svg>` with only a comment, no `<title>`, no `<img>`.
+- Embedded app screenshots are placeholder media.
+- One contiguous block, no abstractions. Inserted where asked. Project checks run.

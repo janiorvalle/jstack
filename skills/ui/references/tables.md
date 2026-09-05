@@ -1,18 +1,18 @@
 # Tables
 
-These rules apply to data tables, comparison tables, table headings, row dividers, tables that scroll sideways, and table containers.
+Rules for data tables, comparison tables, table headings, row dividers, tables that scroll sideways, and table containers.
 
 ## Design rules
 
-- Don't use uppercase text in table headings. Use normal sentence case.
-- Don't let table headings wrap. Put `whitespace-nowrap` on `<th>` elements.
+- No uppercase text in table headings. Use sentence case.
+- Table headings don't wrap. Put `whitespace-nowrap` on `<th>` elements.
 - Don't put tables inside containers or cards. Put them straight on the background.
-- Only use horizontal lines to divide rows. No vertical lines, no outer borders.
+- Only horizontal lines divide rows. No vertical lines, no outer borders.
 - Always use `w-full` so the table fills its container.
-- Hide the headings with `sr-only` when the columns explain themselves. That's usually a table with 2 to 3 columns where headings add nothing.
-- If all the columns won't fit on a small screen, make the table responsive with a two-div wrapper around it:
+- Hide the headings with `sr-only` when the columns explain themselves, usually a table with 2 to 3 columns where headings add nothing.
+- If all the columns won't fit on a small screen, make the table responsive with a two-div wrapper:
   - Outer div: `overflow-x-auto whitespace-nowrap` with negative horizontal and vertical margins. The horizontal margins cancel the page container's padding (e.g. `-mx-4 sm:-mx-6 lg:-mx-8`). The vertical margin is always `-my-2`.
-  - Inner div: `inline-block min-w-full align-middle` with horizontal padding that matches the container's padding (e.g. `px-4 sm:px-6 lg:px-8`) and `py-2`.
+  - Inner div: `inline-block min-w-full align-middle` with horizontal padding matching the container's padding (e.g. `px-4 sm:px-6 lg:px-8`) and `py-2`.
   - The negative horizontal margins and the horizontal padding always match the real container padding used in the page layout.
   - Example:
   ```html

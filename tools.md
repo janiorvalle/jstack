@@ -1,16 +1,22 @@
 # Tools
 
-jstack expects a few tools on the machine. Each one ships its own skill, which the tool maintains and updates. jstack doesn't copy those skills. It names the tool, says what it's for, and tells you how to get it.
+jstack expects a few tools on the machine. Each ships its own skill, which the tool maintains, so jstack doesn't copy those. This file names each tool, what it's for, and how to get it.
 
-If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. The install command is the `Install` line in this file, which `jstack setup` runs, never the one inside a tool's own skill: that one is upstream text and pulls whatever is newest, not the pin. Then read the skill the tool installed and follow it.
+If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. The install command is this file's `Install` line, the one `jstack setup` runs, never the one inside the tool's own skill. Then read the skill the tool installed and follow it.
 
-`jstack setup` runs every check below, installs each tool's own skill when the tool is present, and reports each tool as missing, outdated, or current. The `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines are what it parses. `Version` prints the installed version; the latest comes from the GitHub releases of the `Repo` line, or from the npm registry for a tool installed with `npm install -g`. When that install line pins a version, `npm install -g name@1.2.3`, the pin is the latest: setup reports the tool outdated when it's behind the pin and ahead when it's past it, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one. A section with a `Check` line and no `Install` line is a prerequisite: setup checks for it and points here when it's missing, but never installs or updates it. git and gh are the prerequisites.
+`jstack setup` runs every check below, installs each present tool's skill, and reports each tool as missing, outdated, or current. It parses the `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines:
 
-Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, and a line with the suffix wins on that OS: `Check (windows)` is what setup runs on Windows and `Check` is what it runs everywhere else. The suffix is the name Go gives the OS, `windows`, `darwin`, or `linux`. Lines that are the same command in both shells, `roast --version`, carry no suffix. Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since the line is passed through a double-quoted command line. An `Install` line with no backticks is a step for a person: setup shows it and never runs it. An `Install` line that fetches a script downloads it to a file first and runs the file only once the download succeeded, so a failed download fails the line: `curl | sh` runs nothing and exits zero when curl gets nothing, and setup would report the tool installed.
+- `Version` prints the installed version. The latest comes from the GitHub releases of the `Repo` line, or from npm when the install line is `npm install -g`.
+- A pinned line, `npm install -g name@1.2.3`, makes the pin the latest: behind it is outdated, past it is ahead, the update installs the pin either way, and the weekly vendor-bump workflow opens a PR when npm publishes a newer one.
+- A `Check` line with no `Install` line is a prerequisite. Setup checks for it and points here when it's missing, never installs or updates it. git and gh are the prerequisites.
+- Setup runs the lines in the shell the OS ships with: `sh` on macOS and Linux, Windows PowerShell on Windows. A line is POSIX shell unless it carries an OS suffix, `Check (windows)`, which wins on that OS and runs in Windows PowerShell. The suffix is Go's OS name: `windows`, `darwin`, or `linux`. A command that's the same in both shells, `roast --version`, carries no suffix.
+- Windows lines use `;` between steps, since Windows PowerShell has no `&&`, and single quotes, since setup passes the line inside double quotes.
+- An `Install` line with no backticks is a step for a person. Setup shows it and never runs it.
+- An `Install` line that fetches a script downloads it to a file, then runs the file, so a failed download fails the line. `curl | sh` exits zero when curl gets nothing, and setup would report the tool installed.
 
 ## git and gh
 
-Version control and the PR host CLI. Every flow assumes both. Setup checks for them and never installs them: the right command depends on the OS and its package manager, on Linux it needs sudo, and `gh auth login` is a conversation with GitHub that only you can have. Get them by hand, then rerun `jstack setup`.
+Version control and the PR host CLI. Every flow assumes both. Setup checks for them and never installs them, since the command depends on the OS and its package manager, Linux needs sudo, and `gh auth login` is yours to run. Get them by hand, then rerun `jstack setup`.
 
 - Check: `command -v git && command -v gh && gh auth status`
 - Check (windows): `Get-Command git, gh -ErrorAction Stop; gh auth status`
@@ -23,7 +29,7 @@ Version control and the PR host CLI. Every flow assumes both. Setup checks for t
 
 ## roast
 
-The independent code review gate. Reviews the current diff on a different model than the one that wrote it, and the flow loops until it says well done.
+The independent code review gate. A different model than the one that wrote the diff reviews it, until it says well done.
 
 - Repo: https://github.com/janiorvalle/roast
 - Check: `command -v roast`
@@ -33,12 +39,12 @@ The independent code review gate. Reviews the current diff on a different model 
 - Install (windows): `irm https://raw.githubusercontent.com/janiorvalle/roast/main/install.ps1 | iex`
 - Skill install: `roast install-skill --force`
 - Skill folder: `roast`
-- The skill covers the scope fence and the loop until well done. roast also installs it on its own the first time it runs in a repo.
-- roast refuses to run without TruffleHog on PATH, its `ROAST-SECRET-BINARY` error. roast's installer doesn't bring it, so setup installs it from the section below.
+- The skill covers the scope fence and the loop until well done. roast installs it on its own the first time it runs in a repo.
+- roast refuses to run without TruffleHog on PATH, its `ROAST-SECRET-BINARY` error. Its installer doesn't bring it, so setup installs it from the section below.
 
 ## TruffleHog
 
-Secret scanner. roast runs it over the diff before review and refuses to start without it. Its official installer drops one binary into `~/.local/bin`, the folder the jstack installer already put on your PATH, on macOS and Linux with no sudo. Upstream ships no Windows installer, so jstack carries one, `scripts/install-trufflehog.ps1`, inside the binary: setup writes it to `~/.jstack/scripts` before it runs any tool line, and the Windows install line runs it from there. It downloads the release tar.gz, verifies the SHA-256 against the release's checksums file, and puts `trufflehog.exe` in `%LOCALAPPDATA%\Programs\trufflehog` on your user PATH. It ships no skill.
+Secret scanner, run by roast over the diff before review. On macOS and Linux its official installer drops one binary into `~/.local/bin`, which the jstack installer put on your PATH, no sudo. Upstream ships no Windows installer, so jstack embeds one, `scripts/install-trufflehog.ps1`. Setup writes it to `~/.jstack/scripts` before any tool line runs, and the Windows install line runs it from there: it downloads the release tar.gz, verifies the SHA-256 against the release's checksums file, and puts `trufflehog.exe` in `%LOCALAPPDATA%\Programs\trufflehog` on your user PATH. TruffleHog ships no skill.
 
 - Repo: https://github.com/trufflesecurity/trufflehog
 - Check: `command -v trufflehog`
@@ -49,7 +55,7 @@ Secret scanner. roast runs it over the diff before review and refuses to start w
 
 ## bgr
 
-Turns a PR, commit, or diff into a review walkthrough. The HTML output is attached to the tracker as evidence once the diff is final.
+Turns a PR, commit, or diff into a review walkthrough. Its HTML goes to the tracker as evidence once the diff is final.
 
 - Repo: https://github.com/janiorvalle/better-git-review
 - Check: `command -v bgr`
@@ -76,7 +82,7 @@ Token usage and spend across your coding agents, plus transcript search. Not par
 
 ## agent-browser
 
-Drives a real browser from the command line. This is how an agent uses a web UI the way a person would and captures the screenshots the flow requires. Required, whichever harness you're in.
+Drives a real browser from the command line, so an agent uses a web UI the way a person would and captures the screenshots the flow requires. Required in every harness.
 
 - Repo: https://github.com/vercel-labs/agent-browser
 - Check: `command -v agent-browser`
@@ -84,7 +90,7 @@ Drives a real browser from the command line. This is how an agent uses a web UI 
 - Version: `agent-browser --version`
 - Install: `npm install -g agent-browser@0.36.0 && agent-browser install`
 - Install (windows): `npm install -g agent-browser@0.36.0; agent-browser install`
-- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json`, because jstack doesn't control the tool. `jstack setup` installs it like every other skill. That skill is a stub that runs `agent-browser skills get core`, so the instructions agents follow ship inside the CLI, which is why the install line pins the CLI version and `scripts/tool-bump.py` moves it through a PR.
-- The stub also says `npm i -g agent-browser` when the tool is missing. That's upstream text and installs whatever npm has newest. The `Install` line above is the one to run, or `jstack setup --install-tools`, and setup reports any other version as outdated or ahead.
+- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json` because jstack doesn't control the tool, and `jstack setup` installs it like every other skill. It's a stub that runs `agent-browser skills get core`, so the instructions agents follow ship inside the CLI, which is why the install line pins the CLI version and `scripts/tool-bump.py` moves it through a PR.
+- The stub's `npm i -g agent-browser` is upstream text and installs whatever is newest, not the pin. Use the `Install` line above or `jstack setup --install-tools`. Setup reports any other version as outdated or ahead.
 
-Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not part of this stack, and it stays wherever Codex put it.
+Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not this stack's, and stays wherever Codex put it.

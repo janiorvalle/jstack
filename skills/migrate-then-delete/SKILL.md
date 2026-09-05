@@ -7,9 +7,9 @@ kind: principle
 
 # Migrate, then delete
 
-Once we've decided a new API is the right design, move the callers over and delete the old one in the same change. Don't leave the old path alive because some internal callers haven't moved yet. Move them.
+Once a new API is the right design, move the callers over and delete the old one in the same change. Don't leave the old path alive because some internal callers haven't moved yet. Move them.
 
-Keeping both paths means two ways to do everything, cleanup that never happens, and a codebase that only ever grows.
+Keeping both paths means two ways to do everything, cleanup that never happens, and a codebase that only grows.
 
 ## How
 
@@ -23,6 +23,6 @@ Keeping both paths means two ways to do everything, cleanup that never happens, 
 Only when nothing outside your deploy depends on the old shape.
 
 - Internal APIs and internal call sites. Yes.
-- Anything a version you didn't deploy can read, a public API, a stored format, a queue message, a config file an agent mid-task is holding. No. That's data, and data changes go add first, migrate, then remove, with both versions working in between.
+- Anything a version you didn't deploy can read: a public API, a stored format, a queue message, a config file an agent mid-task is holding. No. That's data. Data changes go add first, migrate, then remove, with both versions working in between.
 
-The test for which one you're looking at: can a process you don't control call it or read it? If yes, it's not internal, and this rule doesn't apply.
+The test: can a process you don't control call it or read it? If yes, it's not internal, and this rule doesn't apply.

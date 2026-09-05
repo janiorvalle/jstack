@@ -7,17 +7,17 @@ kind: principle
 
 # Fix the cause
 
-Don't patch symptoms. Find what's actually wrong and fix that.
+Don't patch symptoms. Find what's wrong and fix that.
 
 Symptom fixes pile up. Each one makes the system harder to reason about and leaves the real bug in place. Fixing the cause is slower the first time and faster every time after.
 
 ## Reproduce first, always
 
-Before touching any code, see the bug. Capture the broken state. A screenshot for UI. A query result or an error payload for backend. That capture is half your evidence, and it's the only way to know your fix did anything.
+Before touching any code, see the bug and capture the broken state. A screenshot for UI. A query result or an error payload for backend. That capture is half your evidence, and the only way to know your fix did anything.
 
 If you can't reproduce it, stop and say so. Don't fix what you can't see.
 
-When the bug has a testable shape, the reproduction is a failing test. Write the smallest test that shows the bug, run it, and confirm it fails for the right reason, not because of a typo or a missing import. Then fix, rerun, and watch it go green. Commit the test first, then the fix, so a reviewer sees red then green. Skip the test only when it would need a heavy harness or brittle mocks, and say why.
+When the bug has a testable shape, the reproduction is a failing test. Write the smallest test that shows the bug, run it, and confirm it fails for the right reason, not a typo or a missing import. Then fix, rerun, and watch it go green. Commit the test first, then the fix, so a reviewer sees red then green. Skip the test only when it would need a heavy harness or brittle mocks, and say why.
 
 ## Then find the cause
 
