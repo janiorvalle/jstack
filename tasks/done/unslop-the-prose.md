@@ -1,6 +1,7 @@
 ---
-status: doing
+status: done
 owner: agent:jstack-f1-lead
+pr: https://github.com/janiorvalle/jstack/pull/40
 files: [every *.md outside skills/agent-browser, skills/typescript-best-practices, and tasks/]
 ---
 Problem: The skills and docs grew under review pressure and read like machine text: long sentences, hedges, repeated clauses, stories about how a rule came to be. The rules are harder to find than they were.
