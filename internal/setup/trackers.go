@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -606,7 +607,7 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 	state := repoState{}
 	state.clean = opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git status --porcelain"), &status) == nil && strings.TrimSpace(status.String()) == ""
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git remote get-url --push origin"), &origin) == nil {
-		state.origin = strings.TrimSpace(origin.String())
+		state.origin = withoutCredentials(strings.TrimSpace(origin.String()))
 	}
 	if opts.Shell(ctx, inRepo(runtime.GOOS, dir, "git rev-parse --abbrev-ref HEAD"), &branch) == nil {
 		state.branch = strings.TrimSpace(branch.String())
@@ -623,6 +624,25 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 		state.published = len(lines) == 2 && lines[0] == lines[1]
 	}
 	return state
+}
+
+// withoutCredentials is the URL with any password before the host dropped.
+// A push URL can carry a token, https://me:ghp_x@github.com/me/app, and
+// the URL names the origin in the config and in the gh calls, where only
+// the repo matters and a token must never land. The user name stays, since
+// ssh://git@github.com/me/app is a different login without it, and an
+// scp-style URL, git@github.com:me/app.git, has no scheme, so it parses as
+// nothing and stays as it is.
+func withoutCredentials(pushURL string) string {
+	parsed, err := url.Parse(pushURL)
+	if err != nil || parsed.User == nil {
+		return pushURL
+	}
+	if _, hasPassword := parsed.User.Password(); !hasPassword {
+		return pushURL
+	}
+	parsed.User = url.User(parsed.User.Username())
+	return parsed.String()
 }
 
 // trackerPRBody is the ticket shape the tracker skill asks for.

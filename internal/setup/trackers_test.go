@@ -323,6 +323,15 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 		in(home, "bravo", "git checkout "+quote(runtime.GOOS, "main")),
 	)
 	expected = append(expected, reads("charlie")...)
+	// The scan reads both repos at once, so its ten commands come in
+	// whatever order they finished; the apply after them is one repo at a
+	// time.
+	scanned := len(reads("bravo")) + len(reads("charlie"))
+	if len(got) < scanned {
+		t.Fatalf("commands:\n%s", strings.Join(got, "\n"))
+	}
+	sort.Strings(got[:scanned])
+	sort.Strings(expected[:scanned])
 	if strings.Join(got, "\n") != strings.Join(expected, "\n") {
 		t.Fatalf("commands:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(expected, "\n"))
 	}
@@ -1000,5 +1009,27 @@ func TestFlagPathKeepsTheOriginsUnlessAskedToForgetThem(t *testing.T) {
 	}
 	if config := read(t, filepath.Join(home, ".squirrel", "config.json")); strings.Contains(config, "origins") {
 		t.Fatalf("--ask-trackers-again --yes kept the origins: %s", config)
+	}
+}
+
+func TestATokenInThePushURLNeverReachesTheConfigOrGh(t *testing.T) {
+	home, shell := homeWithManyRepos(t, 1)
+	shell.versions[in(home, "repo-00", "git remote get-url --push origin")] = "https://me:ghp_secret@github.com/me/app.git"
+	opts, _ := options(t, home, shell, "")
+	if got := offers(scanAndApply(t, opts)); got != "repo-00:yes" {
+		t.Fatalf("offers = %q", got)
+	}
+	commands := strings.Join(shell.commands, "\n")
+	if strings.Contains(commands, "ghp_secret") || !strings.Contains(commands, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, "https://me@github.com/me/app.git")) {
+		t.Fatalf("commands:\n%s", commands)
+	}
+	config := read(t, filepath.Join(home, ".squirrel", "config.json"))
+	if strings.Contains(config, "ghp_secret") || !strings.Contains(config, "\"https://me@github.com/me/app.git\": {") {
+		t.Fatalf("config = %s", config)
+	}
+	for _, raw := range []string{"git@github.com:me/app.git", "ssh://git@github.com/me/app.git", "/srv/git/app.git"} {
+		if got := withoutCredentials(raw); got != raw {
+			t.Fatalf("withoutCredentials(%q) = %q", raw, got)
+		}
 	}
 }
