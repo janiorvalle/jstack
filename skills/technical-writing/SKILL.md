@@ -6,26 +6,24 @@ disable-model-invocation: true
 
 # Technical writing
 
-The goal is a doc a tired engineer understands on the first read. Four questions get you there. What kind of doc is this. How do sentences address the reader. How much does each sentence carry. Can any sentence be read two ways.
+The goal is a doc a tired engineer understands on the first read. Four questions get you there: what kind of doc it is, how sentences address the reader, how much each sentence carries, and whether any sentence reads two ways.
 
 Three rules sit above everything:
 
 - **Cut every word that does no work.** If the sentence survives without it, it goes.
-- **Use the everyday word.** Use, not utilize. Help, not facilitate. A long word has to buy its length with precision.
-- **When a rule makes a sentence worse, fix it another way.** The rules serve the reader. A sentence that follows every rule and sounds like a machine has failed.
+- **Use the everyday word.** Use, not utilize. Help, not facilitate. A long word buys its length with precision.
+- **When a rule makes a sentence worse, fix it another way.** A sentence that follows every rule and sounds like a machine has failed the reader.
 
-The codebase is the word list. Write the real symbol, file, flag, or command, not a synonym. Don't invent jargon. Say move, delete, a budget that only decreases, not evacuate, ratchet, endgame.
-
-`voice` applies on top and owns the machine-tell catalog.
+The codebase is the word list. Write the real symbol, file, flag, or command, not a synonym. Don't invent jargon: move, delete, a budget that only decreases, not evacuate, ratchet, endgame. `voice` applies on top and owns the machine-tell catalog.
 
 ## Pick the kind first
 
-One doc, one kind. Two questions pick it. Does it inform action or understanding? Does it serve learning or work?
+One doc, one kind. Two questions pick it: does it inform action or understanding, and does it serve learning or work?
 
-- **Tutorial.** Action plus learning. You're the teacher and their success is your job. Open with what they'll build. Every step produces something they can see, and you tell them what they should see. Explanation is one clause and a link. Write as we, in commands.
+- **Tutorial.** Action plus learning. You're the teacher; their success is your job. Open with what they'll build. Every step produces something they can see, and you say what they should see. Explanation is one clause and a link. Write as we, in commands.
 - **How-to.** Action plus work. Solve a problem a person has. Assume competence, skip teaching, no background. Allow forks: "if you want X, do Y". Name it by the task, "how to calibrate the array", not "array calibration".
 - **Reference.** Understanding plus work. Describe and only describe. Dry, complete, sure. Mirror the structure of the thing. Generate from code where possible so it stays true.
-- **Explanation.** Understanding plus learning. One bounded topic, readable away from the product. Anchor on a real why. Context, decisions, history, alternatives. Opinion is allowed here and nowhere else.
+- **Explanation.** Understanding plus learning. One bounded topic, readable away from the product, anchored on a real why. Context, decisions, history, alternatives. Opinion is allowed here and nowhere else.
 
 Don't mix. No reference tables in a tutorial, no hand-holding in reference, no arguing in a how-to. Split and link.
 
@@ -36,10 +34,10 @@ Don't mix. No reference tables in a tutorial, no hand-holding in reference, no a
 - Instructions as commands. "Click Submit." Never "should be done".
 - Condition before instruction. "To delete the doc, click Delete." The reader skips what doesn't apply.
 - Common case first, exceptions after.
-- Sound like a knowledgeable friend. No buzzwords, no figurative language, no please in instructions, and never simply, easy, or quickly in a procedure. If it were simple they wouldn't be reading.
+- Sound like a knowledgeable friend. No buzzwords, no figurative language, no please in instructions, never simply, easy, or quickly in a procedure. If it were simple they wouldn't be reading.
 - Link text says where it goes. Never click here.
-- Headings carry the point. "Pick the kind first", not "Kinds". Sentence case. Task headings are verb phrases. Concept headings are noun phrases.
-- Numbered lists for sequences, bullets for everything else. Introduce a list with a full sentence. Keep items parallel.
+- Headings carry the point. "Pick the kind first", not "Kinds". Sentence case. Task headings are verb phrases, concept headings noun phrases.
+- Numbered lists for sequences, bullets otherwise. Introduce a list with a full sentence. Keep items parallel.
 - Code in code font. UI elements in bold. Serial commas. No etc, say the list is partial.
 
 ## One thing per sentence
@@ -47,7 +45,7 @@ Don't mix. No reference tables in a tutorial, no hand-holding in reference, no a
 - One instruction per sentence. One thought per sentence everywhere else.
 - Split instructions past about 20 words and other sentences past about 25.
 - Warning or condition before the step it guards.
-- Keep the and a. "Remove backup file" reads two ways. "Remove the backup file" reads one.
+- Keep the and a. "Remove backup file" reads two ways, "Remove the backup file" one.
 - One word, one meaning, one job. If check means inspect, don't also use it for restrain.
 - One word per action. Start, not start here and initiate there.
 - Procedures as direct commands, never narration, never passive.
@@ -78,7 +76,7 @@ After:
 
 > `budget.mjs` reads the committed budget from `budget.json` and counts the files that import protos. If the count exceeds the budget, CI fails. Run `budget.mjs --write` only to lower the budget.
 
-Someone does something now. Ratchet is gone and the real filename does the naming. The five-noun string is plain clauses. The hedge is deleted. The failure condition comes before the step it explains. Only sits next to its verb. If exceeded gets a subject.
+Someone does something now. Ratchet is gone; the real filename does the naming. The five-noun string is plain clauses. The hedge is deleted. The failure condition comes before the step it explains. Only sits next to its verb. If exceeded gets a subject.
 
 ## Checklist
 
