@@ -227,3 +227,13 @@ With a hundred checkouts under `~/code` the tracker step was a hundred screens, 
 - The PR question is one confirm after the plan, "open N pull requests", since the plan is where each repo's reason lives: the line and a PR, or the line only because the tree is dirty, there is no origin, no `origin/HEAD`, a feature branch, local commits ahead, or gh can't see the origin. Repos that can't take a PR still get the line. The apply reads git again before each write, as before.
 - The flag path is untouched: no git or gh runs there, nothing is written, and the skip list is kept as it was except that `--ask-trackers-again --yes` clears it.
 - A skipped repo is a hold, the same structure as a repo waiting on its `tracker-line` branch, so the plan lists it with its reason and the flag path's count leaves it out.
+
+## The Linear and Jira lists ask a key per team
+
+Written 2026-09-05, for issue 51.
+
+The one list per backend from issue 47 asked one Linear team key for every repo checked. A person whose repos sit in several teams got the wrong key on most of them, and the only way out was one run per team with `--ask-trackers-again`. Now Linear and Jira ask in rounds: the key first, "Linear team key, Enter for none", then the checkbox list of the repos in that team over the repos no earlier screen took, then the key again, empty, until Enter leaves it empty or the last repo is taken. Esc walks the rounds back with the keys and checks kept. Each repo gets the key of the list it was checked on, which the setup package's per-repo answer already carried, so nothing changed there. The backend leaves one line when it ends, "linear SR  5 repos, linear KC  3 repos", the same key twice counted as one.
+
+- The key comes before the list because the list's title names the team, "Which repos track their work in Linear team SR?". Picking the repos of a named team reads better than picking repos and being asked which team afterwards.
+- A single-team person sees the same screens plus one Enter, on the empty key, and not even that when the team took every repo.
+- GitHub Issues takes no key and markdown tasks has a default folder, so both stay one list. The rule is the backend's shape: an argument with no default is asked per round.
