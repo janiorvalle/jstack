@@ -630,30 +630,29 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 	return state
 }
 
-// withoutCredentials is the URL with whatever stands before the host
-// dropped. A push URL over http can carry a token, as the password in
-// https://me:ghp_x@github.com/me/app or as the user in
-// https://ghp_x@github.com/me/app, and the URL names the origin in the
-// config and in the gh calls, where only the repo matters and a token must
-// never land. Over ssh the user is the login, git in
-// ssh://git@github.com/me/app, so only a password goes. An scp-style URL,
-// git@github.com:me/app.git, has no scheme, so it parses as nothing and
-// stays as it is.
+// withoutCredentials is the URL with nothing but the repo in it. A push
+// URL over http can carry a token, as the password in
+// https://me:ghp_x@github.com/me/app, as the user in
+// https://ghp_x@github.com/me/app, or after the path in
+// https://github.com/me/app?token=ghp_x, and the URL names the origin in
+// the config and in the gh calls, where only the repo matters and a token
+// must never land, so over http only the scheme, host, and path stay.
+// Over ssh the user is the login, git in ssh://git@github.com/me/app, so
+// only a password goes. An scp-style URL, git@github.com:me/app.git, has
+// no scheme, so it parses as nothing and stays as it is.
 func withoutCredentials(pushURL string) string {
 	parsed, err := url.Parse(pushURL)
-	if err != nil || parsed.User == nil {
+	if err != nil {
 		return pushURL
 	}
-	_, hasPassword := parsed.User.Password()
-	switch {
-	case parsed.Scheme == "http" || parsed.Scheme == "https":
-		parsed.User = nil
-	case hasPassword:
+	if parsed.Scheme == "http" || parsed.Scheme == "https" {
+		return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: parsed.Path}).String()
+	}
+	if _, hasPassword := parsed.User.Password(); hasPassword {
 		parsed.User = url.User(parsed.User.Username())
-	default:
-		return pushURL
+		return parsed.String()
 	}
-	return parsed.String()
+	return pushURL
 }
 
 // trackerPRBody is the ticket shape the tracker skill asks for.

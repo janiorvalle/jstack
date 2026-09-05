@@ -1040,13 +1040,15 @@ func TestATokenInThePushURLNeverReachesTheConfigOrGh(t *testing.T) {
 		t.Fatalf("config = %s", config)
 	}
 	for raw, want := range map[string]string{
-		"https://ghp_secret@github.com/me/app.git": "https://github.com/me/app.git",
-		"HTTPS://ghp_secret@github.com/me/app.git": "https://github.com/me/app.git",
-		"http://me:pw@git.local/app.git":           "http://git.local/app.git",
-		"ssh://git:pw@github.com/me/app.git":       "ssh://git@github.com/me/app.git",
-		"ssh://git@github.com/me/app.git":          "ssh://git@github.com/me/app.git",
-		"git@github.com:me/app.git":                "git@github.com:me/app.git",
-		"/srv/git/app.git":                         "/srv/git/app.git",
+		"https://ghp_secret@github.com/me/app.git":    "https://github.com/me/app.git",
+		"HTTPS://ghp_secret@github.com/me/app.git":    "https://github.com/me/app.git",
+		"https://github.com/me/app.git?token=ghp_s#x": "https://github.com/me/app.git",
+		"https://github.com/me/app.git":               "https://github.com/me/app.git",
+		"http://me:pw@git.local/app.git":              "http://git.local/app.git",
+		"ssh://git:pw@github.com/me/app.git":          "ssh://git@github.com/me/app.git",
+		"ssh://git@github.com/me/app.git":             "ssh://git@github.com/me/app.git",
+		"git@github.com:me/app.git":                   "git@github.com:me/app.git",
+		"/srv/git/app.git":                            "/srv/git/app.git",
 	} {
 		if got := withoutCredentials(raw); got != want {
 			t.Fatalf("withoutCredentials(%q) = %q, want %q", raw, got, want)
