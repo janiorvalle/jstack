@@ -4,8 +4,8 @@ Use these when someone asks for help picking a font or wants to try different fo
 
 ## General guidelines
 
-- Default to Inter for body/UI text unless the user is exploring other options
-- Recommend sans-serif fonts unless the user asks for serif, uses words like "sophisticated" or "editorial", or the project clearly calls for it (e.g. luxury brand, literary magazine, fashion editorial)
+- Default to Inter for body/UI text unless the user is specifically exploring other options
+- Always recommend sans-serif fonts unless the user explicitly asks for serif, uses words like "sophisticated" or "editorial", or the project clearly calls for it (e.g. luxury brand, literary magazine, fashion editorial)
 
 ## By purpose
 

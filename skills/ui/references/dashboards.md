@@ -9,4 +9,4 @@ Rules for dashboard layouts, stat grids, KPI cards, metric cards, admin panels, 
 
 ## Coding rules
 
-- Responsive dashboard widgets use container queries, never media queries
+- Responsive dashboard widgets always use container queries, not media queries
