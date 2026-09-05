@@ -37,7 +37,7 @@ const usage = `jstack puts the skills, the letter, and the tools into the coding
 
 With a terminal, setup is a guided flow: one screen per question, arrow keys and space to
 pick, Enter to continue, Esc to go back. Saved answers come preselected, so a rerun with
-nothing changed is one Enter. The plan comes last with a confirm; nothing is written before it.
+nothing changed is one Enter. The plan comes last with a confirm; no harness or repo changes before it.
 Without a terminal it prints the plan and changes nothing unless --yes is passed. Picks are
 saved in ~/.jstack/config.json. Each tool is missing, outdated, or current; the latest versions
 come from GitHub and npm, and an update runs through whoever installed the binary: brew for a

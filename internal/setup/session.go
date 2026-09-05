@@ -172,12 +172,15 @@ func ParseReposDirs(answer, home string) ([]string, error) {
 	return parseReposDirs(answer, home)
 }
 
-// TrackerQuestion is one repo the tracker question is for this run. File
-// is where the line would be written, shown the way the report shows
-// paths. PROffer is true when the repo could take the PR: a clean tree on
-// its default branch at the remote's commit, with an origin gh can push
-// to, read before any write so the line itself never counts as pending.
+// TrackerQuestion is one repo the tracker question is for this run. Dir
+// is the checkout, what an answer names, since two repos folders can each
+// hold a repo called app. Repo is its name, for the screen. File is where
+// the line would be written, shown the way the report shows paths.
+// PROffer is true when the repo could take the PR: a clean tree on its
+// default branch at the remote's commit, with an origin gh can push to,
+// read before any write so the line itself never counts as pending.
 type TrackerQuestion struct {
+	Dir     string
 	Repo    string
 	File    string
 	PROffer bool
@@ -194,7 +197,7 @@ func (s *Session) Trackers(ctx context.Context, reposDirs []string) []TrackerQue
 	s.scanned = nil
 	for _, repo := range planRepos(s.opts.Home, reposDirs).undeclared() {
 		state := readRepoState(ctx, s.opts, repo.dir)
-		s.scanned = append(s.scanned, TrackerQuestion{Repo: repo.name, File: display(s.opts.Home, repo.file), PROffer: state.prPossible()})
+		s.scanned = append(s.scanned, TrackerQuestion{Dir: repo.dir, Repo: repo.name, File: display(s.opts.Home, repo.file), PROffer: state.prPossible()})
 	}
 	return s.scanned
 }
@@ -224,10 +227,11 @@ func TrackerLine(chosen Backend, argument string) string {
 	return trackerLine(backend{key: chosen.Key}, argument)
 }
 
-// TrackerAnswer is what to do about one undeclared repo: write Line, or
-// skip it this run, and open the PR for the line when the repo can take
-// one.
+// TrackerAnswer is what to do about the undeclared repo at Dir: write
+// Line, or skip it this run, and open the PR for the line when the repo
+// can take one. Repo is its name, for the plan.
 type TrackerAnswer struct {
+	Dir    string
 	Repo   string
 	Line   string
 	Skip   bool
@@ -287,6 +291,7 @@ type Answers struct {
 type Plan struct {
 	picked   []harness.Harness
 	current  plan
+	trackers []TrackerAnswer
 	embedded assets
 	noted    bool
 }
@@ -308,7 +313,7 @@ func (s *Session) Plan(ctx context.Context, answers Answers) (*Plan, error) {
 		status.install = status.actionable() && answers.Tools[status.tool.Title]
 	}
 	markSkillPresence(s.opts, picked, current.tools)
-	return &Plan{picked: picked, current: current, embedded: s.embedded}, nil
+	return &Plan{picked: picked, current: current, trackers: answers.Trackers, embedded: s.embedded}, nil
 }
 
 // Print shows the plan the way the report shows the outcome: each harness,
@@ -332,6 +337,11 @@ func (p *Plan) Pending() bool {
 	}
 	for _, status := range p.current.tools {
 		if status.install || status.present && status.tool.SkillInstall != "" && !status.skillPresent {
+			return true
+		}
+	}
+	for _, answer := range p.trackers {
+		if !answer.Skip {
 			return true
 		}
 	}

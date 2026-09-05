@@ -52,10 +52,22 @@ func answering(line string, prFor ...string) func([]TrackerQuestion) []TrackerAn
 			for _, name := range prFor {
 				openPR = openPR || name == question.Repo
 			}
-			answers = append(answers, TrackerAnswer{Repo: question.Repo, Line: line, OpenPR: openPR && question.PROffer})
+			answers = append(answers, TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: line, OpenPR: openPR && question.PROffer})
 		}
 		return answers
 	}
+}
+
+// answerEach is one answer per repo by name, with the Dir the question
+// carries.
+func answerEach(questions []TrackerQuestion, byName map[string]TrackerAnswer) []TrackerAnswer {
+	var answers []TrackerAnswer
+	for _, question := range questions {
+		answer := byName[question.Repo]
+		answer.Dir, answer.Repo = question.Dir, question.Repo
+		answers = append(answers, answer)
+	}
+	return answers
 }
 
 // offers is which repos the questions offer the PR for, as "bravo:yes charlie:no".
@@ -241,10 +253,10 @@ func TestTrackerAnswersWriteTheLineAndOpenThePRThroughGh(t *testing.T) {
 			t.Fatalf("files = %+v", questions)
 		}
 		linear, markdown := Backends()[2], Backends()[0]
-		return []TrackerAnswer{
-			{Repo: "bravo", Line: TrackerLine(linear, "SR"), OpenPR: true},
-			{Repo: "charlie", Line: TrackerLine(markdown, markdown.Default)},
-		}
+		return answerEach(questions, map[string]TrackerAnswer{
+			"bravo":   {Line: TrackerLine(linear, "SR"), OpenPR: true},
+			"charlie": {Line: TrackerLine(markdown, markdown.Default)},
+		})
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -304,8 +316,8 @@ func TestSkipLeavesTheRepoAsItIsForThisRun(t *testing.T) {
 	savedRepos(t, home)
 	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
-	err := guided(t, opts, script{trackers: func([]TrackerQuestion) []TrackerAnswer {
-		return []TrackerAnswer{{Repo: "bravo", Skip: true}, {Repo: "charlie", Line: TrackerLine(Backends()[3], "SR")}}
+	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}, "charlie": {Line: TrackerLine(Backends()[3], "SR")}})
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -389,7 +401,7 @@ func TestRepoWhosePRIsStillOpenIsReportedAndNotAskedAgain(t *testing.T) {
 		if got := offers(questions); got != "charlie:yes" {
 			t.Fatalf("asked about a repo whose PR is open: %q", got)
 		}
-		return []TrackerAnswer{{Repo: "charlie", Skip: true}}
+		return answerEach(questions, map[string]TrackerAnswer{"charlie": {Skip: true}})
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -434,8 +446,8 @@ func TestLinkedAgentsMdIsWrittenThroughAndItsTargetStaged(t *testing.T) {
 	shell := withRoast("1.1.0")
 	shell.versions[in(home, "bravo", "git rev-parse --abbrev-ref HEAD")] = "main"
 	opts, out := options(t, home, shell, "")
-	err := guided(t, opts, script{trackers: func([]TrackerQuestion) []TrackerAnswer {
-		return []TrackerAnswer{{Repo: "bravo", Line: "Tracker: github-issues", OpenPR: true}, {Repo: "charlie", Skip: true}}
+	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Line: "Tracker: github-issues", OpenPR: true}, "charlie": {Skip: true}})
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -467,7 +479,7 @@ func TestAgentsMdLinkedToOutsideTheRepoIsLeftAlone(t *testing.T) {
 		if got := offers(questions); got != "bravo:yes" {
 			t.Fatalf("asked about a repo whose file links outside it: %q", got)
 		}
-		return []TrackerAnswer{{Repo: "bravo", Skip: true}}
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}})
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -597,4 +609,66 @@ func TestOriginGhDoesNotKnowGetsNoBranchAndNoPush(t *testing.T) {
 		t.Fatalf("commands:\n%s", commands)
 	}
 	expectAll(t, out.String(), "bravo  FAILED: `gh repo view --json name ")
+}
+
+func TestTwoReposFoldersWithTheSameRepoNameEachGetTheirOwnAnswer(t *testing.T) {
+	home := homeWithRepos(t)
+	work := filepath.Join(home, "work")
+	if err := os.MkdirAll(filepath.Join(work, "bravo", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"skill_repos_asked":true,"repos_dirs":["`+strings.ReplaceAll(filepath.Join(home, "code"), `\`, `\\`)+`","`+strings.ReplaceAll(work, `\`, `\\`)+`"],"repos_dirs_asked":true}`)
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		var answers []TrackerAnswer
+		for _, question := range questions {
+			answer := TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Skip: true}
+			if question.Dir == filepath.Join(work, "bravo") {
+				answer = TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Line: "Tracker: jira SR"}
+			}
+			answers = append(answers, answer)
+		}
+		return answers
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  wrote "Tracker: jira SR" to ~/work/bravo/AGENTS.md`)
+	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" {
+		t.Fatal("the answer for ~/work/bravo landed in ~/code/bravo")
+	}
+	if got := read(t, filepath.Join(work, "bravo", "AGENTS.md")); got != "Tracker: jira SR\n" {
+		t.Fatalf("~/work/bravo AGENTS.md = %q", got)
+	}
+}
+
+func TestATrackerAnswerAloneIsPending(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	opts, _ := options(t, home, withRoast("1.1.0"), "")
+	if err := guided(t, opts, script{}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := Start(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	if _, err := session.Gather(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	dirs, _ := session.ReposDirs()
+	questions := session.Trackers(context.Background(), dirs)
+	answers := Answers{Harnesses: []string{"claude"}, ReposDirs: dirs, Tools: map[string]bool{}}
+	for _, question := range questions {
+		answers.Trackers = append(answers.Trackers, TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Skip: true})
+	}
+	plan, err := session.Plan(context.Background(), answers)
+	if err != nil || plan.Pending() {
+		t.Fatalf("every repo skipped is pending: err = %v", err)
+	}
+	answers.Trackers[0].Skip, answers.Trackers[0].Line = false, "Tracker: github-issues"
+	if plan, err = session.Plan(context.Background(), answers); err != nil || !plan.Pending() {
+		t.Fatalf("a line to write is not pending: err = %v", err)
+	}
 }

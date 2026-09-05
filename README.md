@@ -16,7 +16,7 @@ The opinions are the point. A human stays in the merge seat. Every claim ships w
 curl -fsSL https://raw.githubusercontent.com/janiorvalle/jstack/main/install.sh | sh
 ```
 
-That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, found ones checked; a skills repo of your own; where your repos live; the tracker of each repo that names none; which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back a screen. The last screen is the plan with a confirm, and nothing is written before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.jstack/backup/`.
+That puts the `jstack` binary in `~/.local/bin`, checksum verified, and runs `jstack setup`. Setup is a guided flow in the terminal, one screen per question: which coding agents to install into, found ones checked; a skills repo of your own; where your repos live; the tracker of each repo that names none; which tools to install or update. Arrow keys and space pick, Enter continues, Esc goes back a screen. The last screen is the plan with a confirm, and nothing in a harness or a repo of yours is written before it. Then it copies the skills, puts the letter in each harness's instructions file, and installs the tools you checked. It never touches a skill it doesn't own, and it backs up everything it overwrites under `~/.jstack/backup/`.
 
 On Windows, in PowerShell:
 

@@ -21,7 +21,9 @@ import (
 var ErrQuit = errors.New("quit")
 
 // Run asks each question in turn, prints the plan, and applies it after
-// the confirm. Nothing in a harness changes before that.
+// the confirm. Nothing in a harness or a repo of the person's changes
+// before that; the skills repo clone under ~/.jstack/repos is synced as
+// soon as it's named, since its collisions are the next question.
 func Run(ctx context.Context, opts setup.Options) error {
 	session, err := setup.Start(opts)
 	if err != nil {
@@ -545,7 +547,7 @@ func (f *flow) trackerAnswers() []setup.TrackerAnswer {
 		if carried != nil {
 			source = carried
 		}
-		answer := setup.TrackerAnswer{Repo: current.question.Repo, Skip: source.backend == skip || source.backend == ""}
+		answer := setup.TrackerAnswer{Dir: current.question.Dir, Repo: current.question.Repo, Skip: source.backend == skip || source.backend == ""}
 		if !answer.Skip {
 			for _, entry := range setup.Backends() {
 				if entry.Key == source.backend {

@@ -274,7 +274,7 @@ func guided(t *testing.T, opts Options, given script) error {
 		answers.Trackers = given.trackers(questions)
 	} else {
 		for _, question := range questions {
-			answers.Trackers = append(answers.Trackers, TrackerAnswer{Repo: question.Repo, Skip: true})
+			answers.Trackers = append(answers.Trackers, TrackerAnswer{Dir: question.Dir, Repo: question.Repo, Skip: true})
 		}
 	}
 	tools := session.Tools(ctx)

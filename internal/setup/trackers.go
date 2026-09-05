@@ -411,13 +411,13 @@ func applyTrackers(ctx context.Context, opts Options, report reposReport, answer
 		fmt.Fprintf(out, "  %d not declared: %s; rerun with a terminal to name the tracker of each one\n", len(undeclared), repoNames(undeclared))
 		return nil
 	}
-	byName := map[string]trackerRepo{}
+	byDir := map[string]trackerRepo{}
 	for _, repo := range undeclared {
-		byName[repo.name] = repo
+		byDir[repo.dir] = repo
 	}
 	var failures []error
 	for _, answer := range answers {
-		repo, ok := byName[answer.Repo]
+		repo, ok := byDir[answer.Dir]
 		if !ok {
 			continue
 		}
