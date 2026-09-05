@@ -8,5 +8,5 @@ Fix: Rewrite every markdown file except the two vendored skills with the voice s
 Done when:
 - make verify passes and the letter's workflow table is regenerated.
 - A reviewer diffing each file finds no rule, command, path, or number lost.
-- decisions.md drops by a quarter or more, and the setup skill, the tracker skill, the mode, the why skill, and the letter's prose each drop by at least a tenth. Every other file changes only where a voice tell remained.
+- decisions.md drops a quarter or more; the setup, tracker, mode, and why skills and the letter's prose each drop a tenth or more. Other files change only where a tell remained.
 Out of scope: the vendored skills, code, and anything under tasks/.
