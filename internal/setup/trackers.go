@@ -163,10 +163,10 @@ func parseReposDirs(answer, home string) ([]string, error) {
 		}
 		absolute, err := filepath.Abs(path)
 		if err != nil {
-			return nil, fmt.Errorf("[JSTACK-REPOS-DIR] cannot resolve %q: %v; type a full path such as %s", path, err, filepath.Join(home, "code"))
+			return nil, fmt.Errorf("[SQUIRREL-REPOS-DIR] cannot resolve %q: %v; type a full path such as %s", path, err, filepath.Join(home, "code"))
 		}
 		if !isDir(absolute) {
-			return nil, fmt.Errorf("[JSTACK-REPOS-DIR] %q is not a folder; type the path of a folder that exists, such as %s", path, filepath.Join(home, "code"))
+			return nil, fmt.Errorf("[SQUIRREL-REPOS-DIR] %q is not a folder; type the path of a folder that exists, such as %s", path, filepath.Join(home, "code"))
 		}
 		dirs = append(dirs, absolute)
 	}
@@ -437,7 +437,7 @@ func applyTrackers(ctx context.Context, opts Options, report reposReport, answer
 	if len(failures) == 0 {
 		return nil
 	}
-	return fmt.Errorf("[JSTACK-TRACKERS] the harnesses are done, but %d repo step(s) failed:\n%w", len(failures), errors.Join(failures...))
+	return fmt.Errorf("[SQUIRREL-TRACKERS] the harnesses are done, but %d repo step(s) failed:\n%w", len(failures), errors.Join(failures...))
 }
 
 // declareTracker writes the line into the repo, then opens the PR the
@@ -542,7 +542,7 @@ Fix: One Tracker line in the instructions file, the line the tracker skill reads
 Done when:
 - grep -h ^Tracker: AGENTS.md CLAUDE.md prints the line.
 
-Opened by jstack setup.`
+Opened by squirrel setup.`
 
 // openTrackerPR checks that gh knows the origin, by its URL so it is the
 // remote the push goes to and not one gh prefers, commits the line on its

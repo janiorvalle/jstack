@@ -55,7 +55,7 @@ func TestVariablesMoveTheirRowsAndNothingElse(t *testing.T) {
 		"claude":   {claudeHome, filepath.Join(claudeHome, "skills"), filepath.Join(claudeHome, "CLAUDE.md")},
 		"codex":    {codexHome, filepath.Join(codexHome, "skills"), filepath.Join(codexHome, "AGENTS.md")},
 		"opencode": {filepath.Join(home, ".config", "opencode"), filepath.Join(home, ".config", "opencode", "skills"), filepath.Join(home, ".config", "opencode", "AGENTS.md")},
-		"cursor":   {filepath.Join(home, ".cursor"), filepath.Join(home, ".cursor", "skills"), filepath.Join(home, ".cursor", "rules", "jstack.mdc")},
+		"cursor":   {filepath.Join(home, ".cursor"), filepath.Join(home, ".cursor", "skills"), filepath.Join(home, ".cursor", "rules", "squirrel.mdc")},
 		"pi":       {filepath.Join(home, ".pi", "agent"), filepath.Join(home, ".pi", "agent", "skills"), filepath.Join(home, ".pi", "agent", "AGENTS.md")},
 	}
 	for _, entry := range rows {
@@ -107,7 +107,7 @@ func TestCursorRuleCarriesAlwaysApplyFrontmatter(t *testing.T) {
 		t.Fatal(err)
 	}
 	cursor := picked[0]
-	if !strings.HasSuffix(filepath.ToSlash(cursor.InstructionsPath()), ".cursor/rules/jstack.mdc") {
+	if !strings.HasSuffix(filepath.ToSlash(cursor.InstructionsPath()), ".cursor/rules/squirrel.mdc") {
 		t.Fatalf("instructions = %q", cursor.InstructionsPath())
 	}
 	if !strings.HasPrefix(cursor.Lead, "---\n") || !strings.Contains(cursor.Lead, "alwaysApply: true") {
@@ -130,10 +130,10 @@ func TestParseFlagValues(t *testing.T) {
 	if err != nil || strings.Join(Keys(some), ",") != "claude,codex" {
 		t.Fatalf("list = %v, %v", Keys(some), err)
 	}
-	if _, err := rows.Parse("claude,emacs"); err == nil || !strings.Contains(err.Error(), "JSTACK-HARNESS-UNKNOWN") || !strings.Contains(err.Error(), "emacs") {
+	if _, err := rows.Parse("claude,emacs"); err == nil || !strings.Contains(err.Error(), "SQUIRREL-HARNESS-UNKNOWN") || !strings.Contains(err.Error(), "emacs") {
 		t.Fatalf("unknown err = %v", err)
 	}
-	if _, err := rows.Parse(" , "); err == nil || !strings.Contains(err.Error(), "JSTACK-HARNESS-EMPTY") {
+	if _, err := rows.Parse(" , "); err == nil || !strings.Contains(err.Error(), "SQUIRREL-HARNESS-EMPTY") {
 		t.Fatalf("empty err = %v", err)
 	}
 }

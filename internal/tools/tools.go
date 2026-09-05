@@ -12,7 +12,7 @@ import (
 
 // Doc is where tools.md is read by a human; a tool with no install line
 // points at its own section there.
-const Doc = "https://github.com/janiorvalle/jstack/blob/main/tools.md"
+const Doc = "https://github.com/janiorvalle/squirrel/blob/main/tools.md"
 
 // Tool is one section of tools.md that carries a Check line. Version is the
 // command that prints the installed version and Repo is the tool's GitHub

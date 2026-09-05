@@ -30,7 +30,7 @@ var (
 )
 
 func replaceFileAtomically(replacement, destination string) error {
-	backup := destination + ".jstack-previous-" + strconv.Itoa(os.Getpid())
+	backup := destination + ".squirrel-previous-" + strconv.Itoa(os.Getpid())
 	if err := os.Remove(backup); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}

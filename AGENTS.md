@@ -11,7 +11,7 @@ Who's who in this document:
 - **users**, the people who use the project you're building
 - **agents**, the agents those users run day to day. Not you. The agents that will use what you make.
 
-Every rule below has a skill with the detail, the examples, and the test. The letter is the rule, the skill is the how. On any multi-step task, read `jstack-mode` first for the flow from claiming a task to turning it in.
+Every rule below has a skill with the detail, the examples, and the test. The letter is the rule, the skill is the how. On any multi-step task, read `squirrel` first for the flow from claiming a task to turning it in.
 
 A few run on almost every task. `tracker` first: claim there before touching a file, turn in there with the evidence, and when the repo has no `Tracker:` line, ask which tracker, never guess. `how` and `why` before changing code you don't know: what it does, and why it's shaped that way. `architect` before any code that crosses a module boundary. `worktree` for every task. `technical-writing` for anything longer than a message.
 
@@ -83,7 +83,7 @@ Context is finite. Send bulk to subagents: long output, big files, wide searches
 
 ## Use what your harness gives you
 
-Nothing in this stack names a harness. Spawn subagents, search the code, and drive the browser with whatever yours provides. `tools.md` names the tools the flow expects and how to get them. Install them the way it says, `jstack setup` for every tool setup can install, never with the install line inside a tool's own skill, which is upstream text and pulls the newest version, not the pin. If one is missing, say so and point at it. Don't route around a gate.
+Nothing in this stack names a harness. Spawn subagents, search the code, and drive the browser with whatever yours provides. `tools.md` names the tools the flow expects and how to get them. Install them the way it says, `squirrel setup` for every tool setup can install, never with the install line inside a tool's own skill, which is upstream text and pulls the newest version, not the pin. If one is missing, say so and point at it. Don't route around a gate.
 
 ## Some general rules
 
@@ -136,7 +136,7 @@ One line per skill, generated from each skill's own description. When a task mat
 - **reflect**. Use for "reflect", after a complex task lands cleanly, after the human corrected your approach mid-task, or when a workflow emerged that isn't written down anywhere. Reviews the session from three angles, sorts what it finds into accepted, rejected, and backlog, and routes each accepted lesson to a concrete edit on an existing skill. Waits for approval before editing any skill.
 - **responsive**. Use to make an existing desktop-oriented UI work on mobile and tablet, or to fix overflow, wrapping, clipping, or cramped layouts at narrow widths. Not for new UI, use ui for that.
 - **review-prs**. Use for "check open PRs", "review PRs across my repos", "merge the dependabot PRs", "clean up PRs". Scans every git repo under a directory, lists open PRs grouped into action bumps, dependency bumps, and everything else, and merges the groups you approve. Never merges a feature PR without a per-PR yes.
-- **setup-jstack**. Use to put jstack on a machine or bring it up to date. Runs the jstack binary's setup: it finds the coding agents on the machine, shows the plan, asks which harnesses to install into, copies the skills, jstack's and the ones from a skills repo of your own, puts the letter in each instructions file, and offers the tools the flow needs. Reports what's still missing.
+- **squirrel-setup**. Use to put squirrel on a machine or bring it up to date. Runs the squirrel binary's setup: it finds the coding agents on the machine, shows the plan, asks which harnesses to install into, copies the skills, squirrel's and the ones from a skills repo of your own, puts the letter in each instructions file, and offers the tools the flow needs. Reports what's still missing.
 - **swarm**. Use for "swarm this", parallel coverage, a race on the same brief, or a batch of independent tasks. Fans out N workers, drains them, returns one report. Manual mode writes the briefs for a human to dispatch instead of spawning.
 - **technical-writing**. Use when writing or reviewing docs, readmes, RFCs, runbooks, or anything longer than a message. Pick one kind of document, write to the reader as you, one instruction per sentence, and leave no sentence open to two readings. Voice applies on top.
 - **tidy-tailwind**. Use to clean up Tailwind class lists: sort them, collapse shorthands, resolve conflicting utilities, turn arbitrary values into named ones. Class strings only. No visual changes.

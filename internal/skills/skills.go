@@ -14,9 +14,9 @@ import (
 	"strings"
 )
 
-// Source is one folder of skills: jstack's embedded folder, or the skills/
+// Source is one folder of skills: squirrel's embedded folder, or the skills/
 // folder of a repo the human named. Name is what the report calls it,
-// "jstack" or "owner/name". Files holds one folder per skill at its root.
+// "squirrel" or "owner/name". Files holds one folder per skill at its root.
 type Source struct {
 	Name  string
 	Files fs.FS
@@ -53,7 +53,7 @@ func (p Plan) Pending() bool {
 func Names(source Source) ([]string, error) {
 	entries, err := fs.ReadDir(source.Files, ".")
 	if err != nil {
-		return nil, fmt.Errorf("[JSTACK-SKILLS-SOURCE] cannot list the skills in %s: %w; %s", source.Name, err, sourceFix(source))
+		return nil, fmt.Errorf("[SQUIRREL-SKILLS-SOURCE] cannot list the skills in %s: %w; %s", source.Name, err, sourceFix(source))
 	}
 	var names []string
 	for _, entry := range entries {
@@ -69,12 +69,12 @@ func Names(source Source) ([]string, error) {
 }
 
 // sourceFix is the next step when a source can't be read: the embedded
-// folder means a broken binary, a repo means its clone under ~/.jstack.
+// folder means a broken binary, a repo means its clone under ~/.squirrel.
 func sourceFix(source Source) string {
-	if source.Name == "jstack" {
+	if source.Name == "squirrel" {
 		return "this binary was built without its skills folder, reinstall it"
 	}
-	return "its clone under ~/.jstack/repos is unreadable, or a file in the repo is a symlink pointing outside it; fix the repo or delete the clone and rerun"
+	return "its clone under ~/.squirrel/repos is unreadable, or a file in the repo is a symlink pointing outside it; fix the repo or delete the clone and rerun"
 }
 
 // Collisions finds the names held by more than one source, sorted by name.
@@ -145,7 +145,7 @@ func PlanFor(sources []Source, picks map[string]string, dest string) (Plan, erro
 	}
 	entries, err := os.ReadDir(dest)
 	if err != nil && !os.IsNotExist(err) {
-		return Plan{}, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot read the skills folder %q: %w; make it readable and rerun", dest, err)
+		return Plan{}, fmt.Errorf("[SQUIRREL-SKILLS-DEST] cannot read the skills folder %q: %w; make it readable and rerun", dest, err)
 	}
 	installed := map[string]bool{}
 	for _, entry := range entries {
@@ -164,7 +164,7 @@ func PlanFor(sources []Source, picks map[string]string, dest string) (Plan, erro
 			// The folder is there under another casing, so this disk
 			// folds case and the two names are one folder. Installing
 			// would overwrite a skill no source owns.
-			return Plan{}, fmt.Errorf("[JSTACK-SKILLS-CASE] skill %q from %s and the local skill %q in %s are one folder on this disk, which ignores case; rename the local one and rerun", skill.Name, skill.Source.Name, caseTwin(entries, skill.Name), dest)
+			return Plan{}, fmt.Errorf("[SQUIRREL-SKILLS-CASE] skill %q from %s and the local skill %q in %s are one folder on this disk, which ignores case; rename the local one and rerun", skill.Name, skill.Source.Name, caseTwin(entries, skill.Name), dest)
 		default:
 			same, err := dirSame(skill, target)
 			if err != nil {
@@ -200,7 +200,7 @@ func caseTwin(entries []os.DirEntry, name string) string {
 // A changed skill is copied to backupDir before the swap.
 func Apply(dest string, plan Plan, backupDir string) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
+		return fmt.Errorf("[SQUIRREL-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
 	}
 	for _, skill := range plan.New {
 		if err := swapIn(skill, dest, false, backupDir); err != nil {
@@ -231,7 +231,7 @@ func Sync(skill Skill, dest, backupDir string) (bool, error) {
 		replace = true
 	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return false, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
+		return false, fmt.Errorf("[SQUIRREL-SKILLS-DEST] cannot create the skills folder %q: %w; make its parent writable and rerun", dest, err)
 	}
 	return true, swapIn(skill, dest, replace, backupDir)
 }
@@ -245,37 +245,37 @@ var rename = os.Rename
 // removed once the swap has succeeded.
 func swapIn(skill Skill, dest string, replace bool, backupDir string) error {
 	name := skill.Name
-	staged, err := os.MkdirTemp(dest, ".jstack-staging-"+name+"-")
+	staged, err := os.MkdirTemp(dest, ".squirrel-staging-"+name+"-")
 	if err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot stage skill %q in %q: %w; make the folder writable and rerun", name, dest, err)
+		return fmt.Errorf("[SQUIRREL-SKILLS-COPY] cannot stage skill %q in %q: %w; make the folder writable and rerun", name, dest, err)
 	}
 	defer os.RemoveAll(staged)
 	final := filepath.Join(dest, name)
 	if err := copyDir(skill, staged); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot write skill %q into %q: %w; the installed copy is untouched, fix the permissions or free space and rerun", name, dest, err)
+		return fmt.Errorf("[SQUIRREL-SKILLS-COPY] cannot write skill %q into %q: %w; the installed copy is untouched, fix the permissions or free space and rerun", name, dest, err)
 	}
 	if !replace {
 		if err := rename(staged, final); err != nil {
-			return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w; fix the permissions and rerun", name, final, err)
+			return fmt.Errorf("[SQUIRREL-SKILLS-COPY] cannot put skill %q in place at %q: %w; fix the permissions and rerun", name, final, err)
 		}
 		return nil
 	}
-	retired := filepath.Join(dest, ".jstack-retired-"+name+"-"+strconv.Itoa(os.Getpid()))
+	retired := filepath.Join(dest, ".squirrel-retired-"+name+"-"+strconv.Itoa(os.Getpid()))
 	if err := rename(final, retired); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-COPY] cannot move skill %q aside to %q: %w; the installed copy is untouched, fix the permissions and rerun", name, retired, err)
+		return fmt.Errorf("[SQUIRREL-SKILLS-COPY] cannot move skill %q aside to %q: %w; the installed copy is untouched, fix the permissions and rerun", name, retired, err)
 	}
 	backup := filepath.Join(backupDir, name)
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot create the backup folder %q: %w", backupDir, err))
+		return restore(retired, final, fmt.Errorf("[SQUIRREL-SKILLS-BACKUP] cannot create the backup folder %q: %w", backupDir, err))
 	}
 	if err := copyTree(retired, backup); err != nil {
-		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-BACKUP] cannot copy skill %q into %q: %w", name, backup, err))
+		return restore(retired, final, fmt.Errorf("[SQUIRREL-SKILLS-BACKUP] cannot copy skill %q into %q: %w", name, backup, err))
 	}
 	if err := rename(staged, final); err != nil {
-		return restore(retired, final, fmt.Errorf("[JSTACK-SKILLS-COPY] cannot put skill %q in place at %q: %w", name, final, err))
+		return restore(retired, final, fmt.Errorf("[SQUIRREL-SKILLS-COPY] cannot put skill %q in place at %q: %w", name, final, err))
 	}
 	if err := os.RemoveAll(retired); err != nil {
-		return fmt.Errorf("[JSTACK-SKILLS-CLEANUP] cannot remove the retired copy of skill %q at %q: %w; the new skill is in place and the old one is backed up in %q, delete that folder by hand", name, retired, err, backup)
+		return fmt.Errorf("[SQUIRREL-SKILLS-CLEANUP] cannot remove the retired copy of skill %q at %q: %w; the new skill is in place and the old one is backed up in %q, delete that folder by hand", name, retired, err, backup)
 	}
 	return nil
 }
@@ -343,7 +343,7 @@ func dirSame(skill Skill, target string) (bool, error) {
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("[JSTACK-SKILLS-SOURCE] cannot read skill %q from %s: %w; %s", name, skill.Source.Name, err, sourceFix(skill.Source))
+		return false, fmt.Errorf("[SQUIRREL-SKILLS-SOURCE] cannot read skill %q from %s: %w; %s", name, skill.Source.Name, err, sourceFix(skill.Source))
 	}
 	seen := 0
 	same := true
@@ -373,7 +373,7 @@ func dirSame(skill Skill, target string) (bool, error) {
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("[JSTACK-SKILLS-DEST] cannot read the installed skill %q: %w; make it readable and rerun", target, err)
+		return false, fmt.Errorf("[SQUIRREL-SKILLS-DEST] cannot read the installed skill %q: %w; make it readable and rerun", target, err)
 	}
 	return same && seen == len(wanted), nil
 }

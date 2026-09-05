@@ -22,7 +22,7 @@ Markdown takes the folder. GitHub Issues takes nothing, gh reads the repo from g
 
 No line means nobody chose yet. Check for an open PR from a branch named `tracker-line`, `gh pr list --head tracker-line --state open`; if one carries a line, ask the human to confirm it. Otherwise ask in the Decide shape, one option per backend, each naming what it needs. Never pick a default silently.
 
-Write the answer into that file on its own line under the title, or into a new `AGENTS.md` if the repo has neither file, in its own worktree on the branch `tracker-line`, and offer the one-line PR through gh. A push refused because the branch appeared meanwhile means another agent asked first, so confirm its PR. The line comes before the claim, which needs it, and its own branch keeps it out of the task's diff. When the file is a letter setup installs into harnesses, like jstack's `AGENTS.md`, setup leaves the `Tracker:` line out of the installed block.
+Write the answer into that file on its own line under the title, or into a new `AGENTS.md` if the repo has neither file, in its own worktree on the branch `tracker-line`, and offer the one-line PR through gh. A push refused because the branch appeared meanwhile means another agent asked first, so confirm its PR. The line comes before the claim, which needs it, and its own branch keeps it out of the task's diff. When the file is a letter setup installs into harnesses, like squirrel's `AGENTS.md`, setup leaves the `Tracker:` line out of the installed block.
 
 ## The five verbs
 

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/janiorvalle/jstack/internal/setup"
-	"github.com/janiorvalle/jstack/internal/tui"
+	"github.com/janiorvalle/squirrel/internal/setup"
+	"github.com/janiorvalle/squirrel/internal/tui"
 )
 
 // fakeDependencies captures the options either setup path gets and records
@@ -64,15 +64,15 @@ func TestSkillRepoFlagsReachTheRunAndRepeat(t *testing.T) {
 	var captured setup.Options
 	upgraded := false
 	var stdout, stderr bytes.Buffer
-	code := runWith([]string{"setup", "--skill-repo", "me/work-skills", "--skill-repo", "me/more", "--forget-skill-repo", "me/old", "--no-skill-repo", "--override", "voice=me/work-skills", "--override", "how=jstack", "--repos-dir", "/home/test/code", "--repos-dir", "/home/test/src"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
+	code := runWith([]string{"setup", "--skill-repo", "me/work-skills", "--skill-repo", "me/more", "--forget-skill-repo", "me/old", "--no-skill-repo", "--override", "voice=me/work-skills", "--override", "how=squirrel", "--repos-dir", "/home/test/code", "--repos-dir", "/home/test/src"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
-	if strings.Join(captured.SkillRepos, ",") != "me/work-skills,me/more" || strings.Join(captured.ForgetSkillRepos, ",") != "me/old" || !captured.NoSkillRepo || captured.Overrides["voice"] != "me/work-skills" || captured.Overrides["how"] != "jstack" || strings.Join(captured.ReposDirs, ",") != "/home/test/code,/home/test/src" {
+	if strings.Join(captured.SkillRepos, ",") != "me/work-skills,me/more" || strings.Join(captured.ForgetSkillRepos, ",") != "me/old" || !captured.NoSkillRepo || captured.Overrides["voice"] != "me/work-skills" || captured.Overrides["how"] != "squirrel" || strings.Join(captured.ReposDirs, ",") != "/home/test/code,/home/test/src" {
 		t.Fatalf("options = %+v", captured)
 	}
 	code = runWith([]string{"setup", "--override", "voice"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(&captured, &upgraded, nil))
-	if code != 2 || !strings.Contains(stderr.String(), "[JSTACK-CLI-OVERRIDE] --override needs skill=source, got \"voice\"; example: --override land-pr=janiorvalle/work-skills") {
+	if code != 2 || !strings.Contains(stderr.String(), "[SQUIRREL-CLI-OVERRIDE] --override needs skill=source, got \"voice\"; example: --override land-pr=janiorvalle/work-skills") {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
 }
@@ -111,8 +111,8 @@ func TestSetupQuitIsNotAnError(t *testing.T) {
 func TestSetupErrorGoesToStderrWithCodeOne(t *testing.T) {
 	upgraded := false
 	var stdout, stderr bytes.Buffer
-	code := runWith([]string{"setup"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(nil, &upgraded, errors.New("[JSTACK-X] boom")))
-	if code != 1 || !strings.Contains(stderr.String(), "jstack: [JSTACK-X] boom") {
+	code := runWith([]string{"setup"}, strings.NewReader(""), &stdout, &stderr, fakeDependencies(nil, &upgraded, errors.New("[SQUIRREL-X] boom")))
+	if code != 1 || !strings.Contains(stderr.String(), "squirrel: [SQUIRREL-X] boom") {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
 }
@@ -123,12 +123,12 @@ func TestUsageErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		{nil, "jstack setup"},
-		{[]string{"frobnicate"}, "JSTACK-CLI-COMMAND"},
-		{[]string{"setup", "extra"}, "JSTACK-CLI-ARGS"},
+		{nil, "squirrel setup"},
+		{[]string{"frobnicate"}, "SQUIRREL-CLI-COMMAND"},
+		{[]string{"setup", "extra"}, "SQUIRREL-CLI-ARGS"},
 		{[]string{"setup", "--bogus"}, "flag provided but not defined"},
-		{[]string{"upgrade", "now"}, "JSTACK-UPGRADE-ARGS"},
-		{[]string{"__upgrade-cleanup", "x"}, "JSTACK-UPGRADE-CLEANUP"},
+		{[]string{"upgrade", "now"}, "SQUIRREL-UPGRADE-ARGS"},
+		{[]string{"__upgrade-cleanup", "x"}, "SQUIRREL-UPGRADE-CLEANUP"},
 	}
 	for _, tc := range cases {
 		var stdout, stderr bytes.Buffer
@@ -151,7 +151,7 @@ func TestVersionAndHelpAndUpgrade(t *testing.T) {
 		}
 	}
 	var stdout bytes.Buffer
-	if code := runWith([]string{"--help"}, strings.NewReader(""), &stdout, io.Discard, fakeDependencies(nil, &upgraded, nil)); code != 0 || !strings.Contains(stdout.String(), "jstack upgrade") {
+	if code := runWith([]string{"--help"}, strings.NewReader(""), &stdout, io.Discard, fakeDependencies(nil, &upgraded, nil)); code != 0 || !strings.Contains(stdout.String(), "squirrel upgrade") {
 		t.Fatalf("help: code = %d, stdout = %q", code, stdout.String())
 	}
 	if code := runWith([]string{"upgrade"}, strings.NewReader(""), io.Discard, io.Discard, fakeDependencies(nil, &upgraded, nil)); code != 0 || !upgraded {

@@ -4,11 +4,11 @@
 #
 #   scan.sh [--dir DIR] [--org ORG] [--exclude PATTERN ...]
 #
-# Defaults come from ~/.config/jstack/review-prs.json when present, else
+# Defaults come from ~/.config/squirrel/review-prs.json when present, else
 # dir=~/code, no org filter, no excludes. Flags override the file.
 set -eu
 
-CONFIG="$HOME/.config/jstack/review-prs.json"
+CONFIG="$HOME/.config/squirrel/review-prs.json"
 DIR=""; ORG=""; EXCLUDES=""
 if [ -f "$CONFIG" ]; then
   DIR=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('dir',''))" "$CONFIG")

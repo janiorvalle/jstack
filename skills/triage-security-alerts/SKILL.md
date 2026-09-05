@@ -11,7 +11,7 @@ Turn a stale queue of Dependabot alerts into a short list of decisions. Group fi
 
 One file per project, not per repo: a project's repos share a tracker, an assignee, and conventions.
 
-`~/.config/jstack/security-triage.<project>.json`:
+`~/.config/squirrel/security-triage.<project>.json`:
 
 ```json
 {

@@ -18,11 +18,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/janiorvalle/jstack/internal/setup"
-	"github.com/janiorvalle/jstack/internal/tools"
+	"github.com/janiorvalle/squirrel/internal/setup"
+	"github.com/janiorvalle/squirrel/internal/tools"
 )
 
-// fixture is a small jstack: one skill, the letter, roast with a fixture
+// fixture is a small squirrel: one skill, the letter, roast with a fixture
 // check line and TruffleHog with a real one, so the tools screen can show
 // both the install line and the update line by owner.
 func fixture() fstest.MapFS {
@@ -184,7 +184,7 @@ func settled(t *testing.T, home string, shell *fakeShell) {
 	if err := setup.Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude"],"skill_repos_asked":true,"repos_dirs_asked":true}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude"],"skill_repos_asked":true,"repos_dirs_asked":true}`)
 }
 
 func write(t *testing.T, path, content string) {
@@ -334,7 +334,7 @@ func TestRerunWithNothingChangedIsOneEnter(t *testing.T) {
 	if !strings.Contains(harnesses, "✓ Claude Code") || !strings.Contains(harnesses, "• Codex") || !strings.Contains(harnesses, "esc back") {
 		t.Fatalf("harness screen:\n%s", harnesses)
 	}
-	expectAll(t, out.String(), "skills   up to date in ~/.claude/skills", "Everything is in place. Nothing to apply.", "harness picks saved to ~/.jstack/config.json")
+	expectAll(t, out.String(), "skills   up to date in ~/.claude/skills", "Everything is in place. Nothing to apply.", "harness picks saved to ~/.squirrel/config.json")
 }
 
 func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
@@ -354,7 +354,7 @@ func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
 		t.Fatalf("harness screen:\n%s", harnesses)
 	}
 	expectAll(t, out.String(), "harnesses  Claude Code, Codex", "Codex  ~/.codex/skills\n  new      voice", "apply  yes", "skills   1 installed, 0 updated in ~/.codex/skills")
-	if !strings.Contains(read(t, filepath.Join(home, ".jstack", "config.json")), `"codex"`) {
+	if !strings.Contains(read(t, filepath.Join(home, ".squirrel", "config.json")), `"codex"`) {
 		t.Fatal("the new harness was not saved")
 	}
 }
@@ -407,7 +407,7 @@ func TestEscGoesBackAScreenAndTheAnswerStays(t *testing.T) {
 		t.Fatalf("Esc did not show the harness screen again:\n%s", strings.Join(script.frames, "\n----\n"))
 	}
 	expectAll(t, out.String(), "harnesses  Claude Code", "skills repo  none", "repos  none", "tools  none", "apply  yes", "skills   1 installed, 0 updated in ~/.claude/skills")
-	if !strings.Contains(read(t, filepath.Join(home, ".jstack", "config.json")), `"skill_repos_asked": true`) {
+	if !strings.Contains(read(t, filepath.Join(home, ".squirrel", "config.json")), `"skill_repos_asked": true`) {
 		t.Fatal("the skipped repo question was not remembered")
 	}
 }
@@ -434,7 +434,7 @@ func TestSkillRepoIsValidatedAndItsCollisionAsked(t *testing.T) {
 	script, err := guided(t, opts,
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", typed("not a repo"), enter, ctrlU, typed("me/work-skills"), enter),
-		on(`Skill "voice" is in jstack and me/work-skills`, down, enter),
+		on(`Skill "voice" is in squirrel and me/work-skills`, down, enter),
 		on("Where do your repos live?", enter),
 		on("Which tools?", enter),
 		on("Apply?", enter),
@@ -446,10 +446,10 @@ func TestSkillRepoIsValidatedAndItsCollisionAsked(t *testing.T) {
 		t.Fatal("the bad name was not refused on the screen")
 	}
 	collision := script.frame("Which one goes into the harnesses?")
-	if !strings.Contains(collision, "keep jstack's") || !strings.Contains(collision, "use me/work-skills's") || !strings.Contains(collision, "rename it yourself") {
+	if !strings.Contains(collision, "keep squirrel's") || !strings.Contains(collision, "use me/work-skills's") || !strings.Contains(collision, "rename it yourself") {
 		t.Fatalf("collision screen:\n%s", collision)
 	}
-	expectAll(t, out.String(), "skills repo  me/work-skills", "me/work-skills  ~/.jstack/repos/me/work-skills, cloned, 1 skills", "voice  use me/work-skills's", "voice  overridden by me/work-skills, not installed from jstack")
+	expectAll(t, out.String(), "skills repo  me/work-skills", "me/work-skills  ~/.squirrel/repos/me/work-skills, cloned, 1 skills", "voice  use me/work-skills's", "voice  overridden by me/work-skills, not installed from squirrel")
 	if got := read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")); got != "voice, my way\n" {
 		t.Fatalf("voice = %q", got)
 	}
@@ -463,7 +463,7 @@ func TestRenameChoiceStopsBeforeAnyHarnessChanges(t *testing.T) {
 	_, err := guided(t, opts,
 		on("Install into which harnesses?", enter),
 		on("skills repo of your own", typed("me/work-skills"), enter),
-		on(`Skill "voice" is in jstack and me/work-skills`, down, down, enter),
+		on(`Skill "voice" is in squirrel and me/work-skills`, down, down, enter),
 	)
 	if err == nil || !strings.Contains(err.Error(), `rename the "voice" folder in me/work-skills`) {
 		t.Fatalf("err = %v", err)
@@ -535,7 +535,7 @@ func TestReposFolderIsPickedAndEachUndeclaredRepoAsked(t *testing.T) {
 	if !strings.Contains(strings.Join(shell.commands, "\n"), "gh pr create") {
 		t.Fatalf("no PR was opened:\n%s", strings.Join(shell.commands, "\n"))
 	}
-	if !strings.Contains(read(t, filepath.Join(home, ".jstack", "config.json")), `"repos_dirs_asked": true`) {
+	if !strings.Contains(read(t, filepath.Join(home, ".squirrel", "config.json")), `"repos_dirs_asked": true`) {
 		t.Fatal("the repos folder was not remembered")
 	}
 }

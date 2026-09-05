@@ -13,11 +13,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/janiorvalle/jstack/internal/skills"
+	"github.com/janiorvalle/squirrel/internal/skills"
 )
 
 // skillRepo is one skills repo the human named, as found on this run. Its
-// clone lives under ~/.jstack/repos/owner/name. verb says what happened to
+// clone lives under ~/.squirrel/repos/owner/name. verb says what happened to
 // the clone; failure says why it can't be installed from this run, and a
 // usable repo has none and carries its source. toolSkills are the folders
 // in it that a tool installs itself and oddNames the folders that aren't
@@ -38,7 +38,7 @@ func (r skillRepo) usable() bool {
 	return r.failure == ""
 }
 
-// catalog is every place skills come from this run, jstack's embedded folder
+// catalog is every place skills come from this run, squirrel's embedded folder
 // first and then each usable repo, and which source each name more than one
 // of them holds is taken from. collisions is every such name; open is the
 // ones the flags and the saved picks didn't settle, still to be asked.
@@ -70,7 +70,7 @@ func repoName(spec string) (string, error) {
 	name = strings.Trim(name, "/")
 	owner, repo, ok := strings.Cut(name, "/")
 	if !ok || !plainName(owner) || !plainName(repo) {
-		return "", fmt.Errorf("[JSTACK-SKILL-REPO] %q is not owner/name; expected a GitHub repo such as janiorvalle/work-skills, with a skills/ folder holding one folder per skill", spec)
+		return "", fmt.Errorf("[SQUIRREL-SKILL-REPO] %q is not owner/name; expected a GitHub repo such as janiorvalle/work-skills, with a skills/ folder holding one folder per skill", spec)
 	}
 	return owner + "/" + repo, nil
 }
@@ -130,7 +130,7 @@ func syncRepos(ctx context.Context, opts Options, names []string) []skillRepo {
 }
 
 func syncRepo(ctx context.Context, opts Options, name string) skillRepo {
-	repo := skillRepo{name: name, dir: filepath.Join(opts.Home, ".jstack", "repos", filepath.FromSlash(name))}
+	repo := skillRepo{name: name, dir: filepath.Join(opts.Home, ".squirrel", "repos", filepath.FromSlash(name))}
 	command, verb := "gh repo clone "+name+" "+quote(runtime.GOOS, repo.dir), "cloned"
 	if isDir(filepath.Join(repo.dir, ".git")) {
 		command, verb = pullLine(runtime.GOOS, name, repo.dir), "pulled"
@@ -207,7 +207,7 @@ func quote(operatingSystem, path string) string {
 	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 }
 
-// buildCatalog lines the sources up, jstack first. Two kinds of folder are
+// buildCatalog lines the sources up, squirrel first. Two kinds of folder are
 // left out of every repo. One a tool installs itself, roast or bgr say: a
 // repo built from a whole skills folder carries those along, and the tool's
 // own install keeps them matched to its binary. And one whose name isn't
@@ -220,7 +220,7 @@ func buildCatalog(embedded assets, repos []skillRepo) catalog {
 			toolFolders[tool.SkillFolder] = true
 		}
 	}
-	sources := []skills.Source{{Name: "jstack", Files: embedded.skills}}
+	sources := []skills.Source{{Name: "squirrel", Files: embedded.skills}}
 	for index := range repos {
 		repo := &repos[index]
 		if !repo.usable() {
@@ -305,7 +305,7 @@ func printRepos(out io.Writer, home string, repos []skillRepo) {
 // holdBack keeps a skill as installed when the saved pick for it names a
 // repo setup has no copy of this run: hidden from every source, the name is
 // local for the run, so a lost clone plus a dead network never hands the
-// skill back to jstack. The pick survives in the config the same way.
+// skill back to squirrel. The pick survives in the config the same way.
 func holdBack(skillSources catalog, saved map[string]string) catalog {
 	unreachable := map[string]bool{}
 	for _, repo := range skillSources.unreachable() {
@@ -369,7 +369,7 @@ func printOverrides(out io.Writer, collisions []skills.Collision, picks map[stri
 	for _, collision := range collisions {
 		pick := picks[collision.Name]
 		verb := "overridden by"
-		if pick == "jstack" {
+		if pick == "squirrel" {
 			verb = "kept from"
 		}
 		fmt.Fprintf(out, "  %s  %s %s, not installed from %s\n", collision.Name, verb, pick, strings.Join(without(collision.Sources, pick), ", "))
@@ -389,10 +389,10 @@ func settleCollisions(collisions []skills.Collision, saved, flags map[string]str
 	for name, source := range flags {
 		collision, ok := byName[name]
 		if !ok {
-			return nil, nil, fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in more than one source, so there is nothing to override; %s", name, collisionList(collisions))
+			return nil, nil, fmt.Errorf("[SQUIRREL-OVERRIDE] skill %q is not in more than one source, so there is nothing to override; %s", name, collisionList(collisions))
 		}
 		if !holds(collision, source) {
-			return nil, nil, fmt.Errorf("[JSTACK-OVERRIDE] skill %q is not in %s; it is in %s; example: --override %s=%s", name, source, strings.Join(collision.Sources, " and "), name, collision.Sources[1])
+			return nil, nil, fmt.Errorf("[SQUIRREL-OVERRIDE] skill %q is not in %s; it is in %s; example: --override %s=%s", name, source, strings.Join(collision.Sources, " and "), name, collision.Sources[1])
 		}
 		picks[name] = source
 	}
@@ -425,24 +425,24 @@ func refusal(collision skills.Collision) error {
 	for _, source := range collision.Sources {
 		flags = append(flags, fmt.Sprintf("--override %s=%s to %s", collision.Name, source, useWording(source)))
 	}
-	return fmt.Errorf("[JSTACK-SKILL-COLLISION] skill %q is in %s, and there is no terminal to ask which one goes into the harnesses; rerun with %s, or rename the folder in %s", collision.Name, strings.Join(collision.Sources, " and "), strings.Join(flags, ", "), strings.Join(without(collision.Sources, "jstack"), " or "))
+	return fmt.Errorf("[SQUIRREL-SKILL-COLLISION] skill %q is in %s, and there is no terminal to ask which one goes into the harnesses; rerun with %s, or rename the folder in %s", collision.Name, strings.Join(collision.Sources, " and "), strings.Join(flags, ", "), strings.Join(without(collision.Sources, "squirrel"), " or "))
 }
 
 // renameStop is the error for the pick that leaves the collision to the
 // person: setup stops before touching a harness.
 func renameStop(collision skills.Collision) error {
-	return fmt.Errorf("[JSTACK-SKILL-COLLISION] setup stopped so you can rename the %q folder in %s; push, then rerun jstack setup. The harnesses are unchanged", collision.Name, strings.Join(without(collision.Sources, "jstack"), " or "))
+	return fmt.Errorf("[SQUIRREL-SKILL-COLLISION] setup stopped so you can rename the %q folder in %s; push, then rerun squirrel setup. The harnesses are unchanged", collision.Name, strings.Join(without(collision.Sources, "squirrel"), " or "))
 }
 
-// UseWording is how the collision screen names each choice: keep jstack's,
+// UseWording is how the collision screen names each choice: keep squirrel's,
 // or use the repo's.
 func UseWording(source string) string {
 	return useWording(source)
 }
 
 func useWording(source string) string {
-	if source == "jstack" {
-		return "keep jstack's"
+	if source == "squirrel" {
+		return "keep squirrel's"
 	}
 	return "use " + source + "'s"
 }

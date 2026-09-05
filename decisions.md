@@ -27,7 +27,7 @@ The letter is in context on every turn in every harness, so it holds the index t
 
 Written 2026-09-03, while vendoring agent-browser and typescript-best-practices.
 
-A skill lives here when jstack doesn't control the tool that owns it; fetching at setup time landed unread changes on every machine. Our own tools (quest, roast, bgr, tokenomnom) ship their skill with the binary; we review those repos already.
+A skill lives here when squirrel doesn't control the tool that owns it; fetching at setup time landed unread changes on every machine. Our own tools (quest, roast, bgr, tokenomnom) ship their skill with the binary; we review those repos already.
 
 - `vendor.json` is the pin record.
 - The copy is verbatim, license alongside, never edited: the weekly vendor-bump workflow recopies from upstream and opens a PR when it differs, so a hand edit gets a PR putting it back.
@@ -42,25 +42,25 @@ Written 2026-09-03, while deciding whether to vendor the two skills typescript-b
 
 `typescript-best-practices` says "apply the type-system-discipline principle skill first" and later points at boundary-discipline. Upstream in `cursor/plugins` those are `pstack/skills/principle-type-system-discipline` and `pstack/skills/principle-boundary-discipline`. Neither is vendored here or will be.
 
-jstack has both: `strict-types` is type-system-discipline in our voice plus never-any and no-null from the letter, `validate-at-the-edges` is boundary-discipline plus the error contract. Vendoring the originals would put two copies of every rule in every harness, drifting on the first edit, and type-system-discipline points at encode-lessons-in-structure (ours is `dont-say-it-twice`), so each brings the next dangling name.
+squirrel has both: `strict-types` is type-system-discipline in our voice plus never-any and no-null from the letter, `validate-at-the-edges` is boundary-discipline plus the error contract. Vendoring the originals would put two copies of every rule in every harness, drifting on the first edit, and type-system-discipline points at encode-lessons-in-structure (ours is `dont-say-it-twice`), so each brings the next dangling name.
 
-The rule: the jstack skill carries the upstream name in its description line, which every harness lists, plus a body note for an agent arriving by search. The reference stays as upstream wrote it, so the weekly bump keeps working. `strict-types` answers to type-system-discipline, `validate-at-the-edges` to boundary-discipline. A shim folder named after the upstream skill was rejected as clutter in every list.
+The rule: the squirrel skill carries the upstream name in its description line, which every harness lists, plus a body note for an agent arriving by search. The reference stays as upstream wrote it, so the weekly bump keeps working. `strict-types` answers to type-system-discipline, `validate-at-the-edges` to boundary-discipline. A shim folder named after the upstream skill was rejected as clutter in every list.
 
-Vendor an upstream principle only when jstack has no skill for it and doesn't want to write one.
+Vendor an upstream principle only when squirrel has no skill for it and doesn't want to write one.
 
 ## Setup is a binary with the skills inside
 
 Written 2026-09-03, while replacing setup.py.
 
-setup.py needed a clone and a python path, and `/setup-jstack` was a silent no-op once installed, looking for the checkout relative to itself and finding `~/.claude`. `jstack` is a Go binary shaped like roast: one curl line, checksum verified, self-upgrade from GitHub releases. The skills, the letter, `tools.md`, and `vendor.json` are embedded at build time, so setup runs from anywhere, and `go run ./cmd/jstack setup` from a checkout installs that checkout's files. No repo lookup, no environment variable.
+setup.py needed a clone and a python path, and `/squirrel-setup` was a silent no-op once installed, looking for the checkout relative to itself and finding `~/.claude`. `squirrel` is a Go binary shaped like roast: one curl line, checksum verified, self-upgrade from GitHub releases. The skills, the letter, `tools.md`, and `vendor.json` are embedded at build time, so setup runs from anywhere, and `go run ./cmd/squirrel setup` from a checkout installs that checkout's files. No repo lookup, no environment variable.
 
 - Harnesses are detected by folder. Claude Code and Codex first check `CLAUDE_CONFIG_DIR` and `CODEX_HOME`; set and non-empty, everything goes under that folder and the plan prints it with the variable beside it. setup.py honored `CLAUDE_HOME`, which Claude Code's docs never mention. OpenCode, Cursor, and Pi get no variable until their docs name one.
-- A numbered pick, found harnesses preselected, saved in `~/.jstack/config.json` so reruns and `jstack upgrade` don't ask again.
-- Backups of overwritten skills and replaced instructions files go to `~/.jstack/backup/<stamp>/<harness>/`, not `.jstack-backup` folders and `.bak` files in place. Copies, not renames: `CODEX_HOME` or `CLAUDE_CONFIG_DIR` on another mount fails a rename with EXDEV. A changed skill is retired inside its own folder until the new one is in place.
+- A numbered pick, found harnesses preselected, saved in `~/.squirrel/config.json` so reruns and `squirrel upgrade` don't ask again.
+- Backups of overwritten skills and replaced instructions files go to `~/.squirrel/backup/<stamp>/<harness>/`, not `.squirrel-backup` folders and `.bak` files in place. Copies, not renames: `CODEX_HOME` or `CLAUDE_CONFIG_DIR` on another mount fails a rename with EXDEV. A changed skill is retired inside its own folder until the new one is in place.
 - The git hooks step is gone; `make install-hooks` in the checkout does that.
 - Releases were macOS and Linux at first; the installer and every `tools.md` line were POSIX shell. Windows is below.
 
-Five harness rows. Claude Code and Codex were verified on a real install. OpenCode's `~/.config/opencode/skills/` is per its docs, plural, correcting the second-hand `skill`. Pi's `~/.pi/agent/skills/` and `~/.pi/agent/AGENTS.md` match its docs. Cursor's `~/.cursor/skills` matches its docs, but `~/.cursor/rules/jstack.mdc` carries over from setup.py and Cursor documents only project-level `.cursor/rules`, so that row is unverified. OpenCode, Cursor, and Pi also read `~/.claude/skills` or `~/.agents/skills`; OpenCode 1.18 lists a skill in both once, by name. Nothing to handle until a harness shows one twice.
+Five harness rows. Claude Code and Codex were verified on a real install. OpenCode's `~/.config/opencode/skills/` is per its docs, plural, correcting the second-hand `skill`. Pi's `~/.pi/agent/skills/` and `~/.pi/agent/AGENTS.md` match its docs. Cursor's `~/.cursor/skills` matches its docs, but `~/.cursor/rules/squirrel.mdc` carries over from setup.py and Cursor documents only project-level `.cursor/rules`, so that row is unverified. OpenCode, Cursor, and Pi also read `~/.claude/skills` or `~/.agents/skills`; OpenCode 1.18 lists a skill in both once, by name. Nothing to handle until a harness shows one twice.
 
 ## Setup knows outdated, not only missing
 
@@ -70,7 +70,7 @@ A tool is missing, outdated, or current. The outdated offer has the missing one'
 
 `tools.md` carries a `Version` line per tool, the command printing the installed version, parsed like `Check`. The latest comes from the GitHub releases API through the section's `Repo` line, or npm when the install line is `npm install -g`, today only agent-browser. Five requests per run, inside GitHub's sixty an hour without a token, concurrent with a five-second timeout, so a dead network costs one wait. A failed lookup shows "latest unknown" and setup carries on; the network never blocks skills. git and gh have no `Version` line; the system package manager updates them.
 
-Comparison is `golang.org/x/mod/semver`, already a dependency of `jstack upgrade`, after adding the leading v the tools leave off.
+Comparison is `golang.org/x/mod/semver`, already a dependency of `squirrel upgrade`, after adding the leading v the tools leave off.
 
 ## git and gh are prerequisites, checked but never installed
 
@@ -92,7 +92,7 @@ The pin lives in the install line, not `vendor.json`, since that's what setup ru
 
 Written 2026-09-03, for quest 414.
 
-The release builds for Windows, zipped like roast's, with `install.ps1` copied from quest's: download the zip, verify the SHA-256 against `checksums.txt`, smoke the binary, put `jstack.exe` in `%LOCALAPPDATA%\Programs\jstack`, add that folder to the user PATH, run `jstack setup`. Self-upgrade already had roast's Windows dance: backup beside the binary, hidden cleanup command waiting for the old process to exit.
+The release builds for Windows, zipped like roast's, with `install.ps1` copied from quest's: download the zip, verify the SHA-256 against `checksums.txt`, smoke the binary, put `squirrel.exe` in `%LOCALAPPDATA%\Programs\squirrel`, add that folder to the user PATH, run `squirrel setup`. Self-upgrade already had roast's Windows dance: backup beside the binary, hidden cleanup command waiting for the old process to exit.
 
 Each `tools.md` line runs in the OS's shell, `sh -c` or `powershell -NoProfile -Command`, picked by `runtime.GOOS` in one function. A plain line is the default; one suffixed with Go's OS name, `- Check (windows): \`Get-Command quest\``, overrides it there. The parser resolves the suffix, so `Tool` and setup see one line. Only `Check` and `Install` need a variant; `Version` and the skill lines carry no suffix. One line for both shells was rejected as unreadable.
 
@@ -116,9 +116,9 @@ The person's terminal still can't see the folder, so every run where `~/.local/b
 
 Written 2026-09-03, for quest 417.
 
-roast, better-git-review, and tokenomnom each carry an `install.ps1` in their repo, jstack's with names swapped: download the release zip for the CPU, verify the SHA-256 against `checksums.txt`, run `--version` and require the release's, put the executables in `%LOCALAPPDATA%\Programs\<tool>`, add that folder to the user PATH. bgr and tokenomnom install both executables. Each repo's Windows CI builds and zips them, runs the installer twice, refuses a bad checksum. Their `Install (windows)` lines are `irm ... | iex`, like quest's, so setup runs them.
+roast, better-git-review, and tokenomnom each carry an `install.ps1` in their repo, squirrel's with names swapped: download the release zip for the CPU, verify the SHA-256 against `checksums.txt`, run `--version` and require the release's, put the executables in `%LOCALAPPDATA%\Programs\<tool>`, add that folder to the user PATH. bgr and tokenomnom install both executables. Each repo's Windows CI builds and zips them, runs the installer twice, refuses a bad checksum. Their `Install (windows)` lines are `irm ... | iex`, like quest's, so setup runs them.
 
-TruffleHog ships no Windows installer; its asset is a tar.gz beside a versioned checksums file. winget was rejected: `microsoft/winget-pkgs` has no TruffleHog manifest, only Trufflesuite under `manifests/t`. scoop was rejected as a second package manager on a bucket jstack doesn't control. So `scripts/install-trufflehog.ps1` is the same installer with tar.gz for zip, `tar -xzf` for `Expand-Archive` (Windows 10 ships bsdtar), and `trufflehog_<version>_checksums.txt` for `checksums.txt`. It's embedded in the binary; setup writes it to `~/.jstack/scripts` before any tool line, and the Windows line reads it into `iex`. Its raw URL on main was rejected: it exists only after the merge, so no branch could pass CI, and a released binary would run whatever main had that day; embedding needs no network. Checksum verification is in all five lines.
+TruffleHog ships no Windows installer; its asset is a tar.gz beside a versioned checksums file. winget was rejected: `microsoft/winget-pkgs` has no TruffleHog manifest, only Trufflesuite under `manifests/t`. scoop was rejected as a second package manager on a bucket squirrel doesn't control. So `scripts/install-trufflehog.ps1` is the same installer with tar.gz for zip, `tar -xzf` for `Expand-Archive` (Windows 10 ships bsdtar), and `trufflehog_<version>_checksums.txt` for `checksums.txt`. It's embedded in the binary; setup writes it to `~/.squirrel/scripts` before any tool line, and the Windows line reads it into `iex`. Its raw URL on main was rejected: it exists only after the merge, so no branch could pass CI, and a released binary would run whatever main had that day; embedding needs no network. Checksum verification is in all five lines.
 
 Every installer sends a GitHub token on the latest-release lookup when `<TOOL>_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` is set, in that order, quest's; GitHub allows sixty requests an hour per address, CI runners share one, and the 403 read as no release found. The message carries the HTTP status and, on 403 or 429, names the variables and the version override that skips the lookup.
 
@@ -130,20 +130,20 @@ With the PATH fix from quest 416, `setup --install-tools` on a fresh Windows box
 
 Written 2026-09-04, for quest 418.
 
-Setup asks once for a GitHub repo, `owner/name`, clones it into `~/.jstack/repos/<owner>/<name>`, fast-forwards it every run, and installs its `skills/` through the same plan as jstack's own. Clone and sync are `gh repo clone` and `gh repo sync --source owner/name`, in the shell the `tools.md` lines use, so gh's login reaches GitHub and the binary never sees a token; plain git has no credentials for a private clone until `gh auth setup-git`, and `--source` keeps a fork syncing from itself. Only `skills/` is read; a second letter is the drift setup exists to prevent.
+Setup asks once for a GitHub repo, `owner/name`, clones it into `~/.squirrel/repos/<owner>/<name>`, fast-forwards it every run, and installs its `skills/` through the same plan as squirrel's own. Clone and sync are `gh repo clone` and `gh repo sync --source owner/name`, in the shell the `tools.md` lines use, so gh's login reaches GitHub and the binary never sees a token; plain git has no credentials for a private clone until `gh auth setup-git`, and `--source` keeps a fork syncing from itself. Only `skills/` is read; a second letter is the drift setup exists to prevent.
 
-One list of sources, jstack's embedded folder then each repo, so a cloned `skills/` is a filesystem the same code plans and applies. Every planned skill carries its source, which names the repo in the report and keeps "local, untouched" true for anything no source owns. One plan per source, merged, was rejected: each would list the others' skills as local.
+One list of sources, squirrel's embedded folder then each repo, so a cloned `skills/` is a filesystem the same code plans and applies. Every planned skill carries its source, which names the repo in the report and keeps "local, untouched" true for anything no source owns. One plan per source, merged, was rejected: each would list the others' skills as local.
 
-The same name in two sources is a collision, and setup stops. A terminal asks: keep jstack's, use the repo's, or rename. Without one it refuses and prints the `--override name=source` line that answers. The pick is saved per skill in `~/.jstack/config.json`, printed every later run, and dropped only when a run reached every repo and found no collision. The repo question is asked once and remembered even when skipped, as an explicit `skill_repos_asked`.
+The same name in two sources is a collision, and setup stops. A terminal asks: keep squirrel's, use the repo's, or rename. Without one it refuses and prints the `--override name=source` line that answers. The pick is saved per skill in `~/.squirrel/config.json`, printed every later run, and dropped only when a run reached every repo and found no collision. The repo question is asked once and remembered even when skipped, as an explicit `skill_repos_asked`.
 
 Rules that keep a repo from doing harm:
 
-- A failed sync keeps last run's copy. An unreachable repo never hands its skills back to jstack.
+- A failed sync keeps last run's copy. An unreachable repo never hands its skills back to squirrel.
 - The clone is read through `os.OpenRoot`; a symlink pointing outside it, `skills/` itself included, is refused.
 - A folder a tool installs itself (`quest`, `roast`, `bgr`, `tokenomnom`) is left out; the tool keeps it matched to its binary.
 - A folder that isn't a lowercase name is left out, and a local skill differing only in case stops the plan: `Voice` and `voice` are one folder on the disks macOS and Windows ship with.
 - A file the harness copy has and the source lacks is drift, hidden or not, except the few files the desktop drops into folders it browses; a file a repo deletes leaves the harness next run.
-- Forgetting a repo leaves its clone and installed skills alone, except a skill that shadowed a jstack skill, which goes back to jstack's copy with a backup.
+- Forgetting a repo leaves its clone and installed skills alone, except a skill that shadowed a squirrel skill, which goes back to squirrel's copy with a backup.
 
 ## An install line downloads first, so a failed download fails the line
 
@@ -167,7 +167,7 @@ quest, roast, bgr, and tokenomnom install their skill into Claude Code's and Cod
 
 Written 2026-09-04, for quest 419.
 
-Quest was the tracker, named in the letter, the mode, land-pr, prove-it, tools.md, and setup. The human stopped using it, and agents' tickets ran to ten paragraphs for a button move. Quest leaves every file and the tool list, so setup stops installing it. A repo names its tracker on one line of its instructions file: `Tracker: linear SR`, `Tracker: markdown tasks/`, `Tracker: github-issues`, `Tracker: jira SR`. One word for the backend, one for what it needs, greppable, read by setup and the mode alike. jstack's own is markdown tasks under `tasks/`. This repo's `AGENTS.md` is also the letter, so the installer leaves any `Tracker:` line out of the block it writes.
+Quest was the tracker, named in the letter, the mode, land-pr, prove-it, tools.md, and setup. The human stopped using it, and agents' tickets ran to ten paragraphs for a button move. Quest leaves every file and the tool list, so setup stops installing it. A repo names its tracker on one line of its instructions file: `Tracker: linear SR`, `Tracker: markdown tasks/`, `Tracker: github-issues`, `Tracker: jira SR`. One word for the backend, one for what it needs, greppable, read by setup and the mode alike. squirrel's own is markdown tasks under `tasks/`. This repo's `AGENTS.md` is also the letter, so the installer leaves any `Tracker:` line out of the block it writes.
 
 One skill, `tracker`, not one per backend. The contract is the same everywhere: claim before touching files, record the files, turn in with the PR and the evidence, a human completes after the merge, evidence on the ticket. Those five verbs and the ticket shape are the whole skill; a backend is fifteen lines at the bottom mapping verbs to commands. Four skills would have drifted four ways and loaded the wrong one.
 
@@ -181,7 +181,7 @@ Added 2026-09-04, for quest 420: a repo with no `Tracker:` line no longer stops 
 
 Written 2026-09-04, for quest 421.
 
-Setup asks once where the repos live, guessing folders under home with git checkouts one level down (`code`, `github`, `src`, `projects`, `dev`), saved as `repos_dirs` and `repos_dirs_asked` in `~/.jstack/config.json`; `--repos-dir <folder>` answers without a terminal. The plan lists every checkout with its `Tracker:` line or `not declared`, from `AGENTS.md` then `CLAUDE.md`, one listing per folder and two reads per checkout, no git, no network.
+Setup asks once where the repos live, guessing folders under home with git checkouts one level down (`code`, `github`, `src`, `projects`, `dev`), saved as `repos_dirs` and `repos_dirs_asked` in `~/.squirrel/config.json`; `--repos-dir <folder>` answers without a terminal. The plan lists every checkout with its `Tracker:` line or `not declared`, from `AGENTS.md` then `CLAUDE.md`, one listing per folder and two reads per checkout, no git, no network.
 
 The tracker question repeats every run per undeclared repo, skip per run, since the answer lives in the repo. A terminal gets a numbered pick of the four backends plus skip, then what the backend needs, then whether the same answer covers the rest. The line goes after the opening heading, or first, into `AGENTS.md`, or `CLAUDE.md` when that's the only file, or a new `AGENTS.md`. Without a terminal setup writes nothing; someone's repo is their code.
 
@@ -201,10 +201,18 @@ Questions and writes run after the tools, so an early stop touches no repo. A fa
 
 Written 2026-09-05, for issue 42.
 
-The line prompts confused: arrow keys spilled escape codes, saved picks hid a harness added later, and a Homebrew TruffleHog got an install line that put a second copy in `~/.local/bin` behind brew's on PATH. With a terminal, setup is now one screen per question on charm's huh over bubbletea, which tokenomnom already ships. Harnesses every run, saved picks and any harness found since the last run checked, one left unchecked on purpose staying so, which takes `harnesses_found` in the config, what the screen offered last time. The skills repo and the repos folder once. Per undeclared repo, the backend, what it needs, the PR, and same for the rest. The tools as a checkbox list. Esc goes back, Ctrl-C quits with nothing changed, the plan prints last with a confirm, and nothing in a harness or a repo of yours is written before it. The skills repo clone under `~/.jstack/repos` is still synced when named, as before, because the collisions it can raise are the next question. Nothing to apply means no confirm, so a rerun with nothing changed is one Enter.
+The line prompts confused: arrow keys spilled escape codes, saved picks hid a harness added later, and a Homebrew TruffleHog got an install line that put a second copy in `~/.local/bin` behind brew's on PATH. With a terminal, setup is now one screen per question on charm's huh over bubbletea, which tokenomnom already ships. Harnesses every run, saved picks and any harness found since the last run checked, one left unchecked on purpose staying so, which takes `harnesses_found` in the config, what the screen offered last time. The skills repo and the repos folder once. Per undeclared repo, the backend, what it needs, the PR, and same for the rest. The tools as a checkbox list. Esc goes back, Ctrl-C quits with nothing changed, the plan prints last with a confirm, and nothing in a harness or a repo of yours is written before it. The skills repo clone under `~/.squirrel/repos` is still synced when named, as before, because the collisions it can raise are the next question. Nothing to apply means no confirm, so a rerun with nothing changed is one Enter.
 
 - One screen is one huh field in its own bubbletea program, and an answered screen collapses to one line. A single program with a state machine was rejected: shell lines run between screens on the terminal's stdin, and a program holding the tty while `gh repo clone` runs is a fight over keystrokes.
-- The screens only collect answers and render. `internal/setup` gained a `Session` with the facts each screen shows, cached so Esc is free, and `Plan` and `Apply` for the answers. The flag path goes through the same session, so every rule lives once and its tests pass as they were. `cmd/jstack` picks the path: a terminal without `--yes` gets the screens. `internal/prompt` is gone.
+- The screens only collect answers and render. `internal/setup` gained a `Session` with the facts each screen shows, cached so Esc is free, and `Plan` and `Apply` for the answers. The flag path goes through the same session, so every rule lives once and its tests pass as they were. `cmd/squirrel` picks the path: a terminal without `--yes` gets the screens. `internal/prompt` is gone.
 - The PR question moved before the write, since nothing asks during the apply. The repo's state is read through git before the question and again before the write.
 - An update line is decided by who owns the binary: `command -v` in setup's shell, links followed. Under node's global `node_modules`, from `npm prefix -g`, it's npm's. A link into `$(brew --prefix)/Cellar/<formula>/` is Homebrew's, and the formula is read off that path, so `tools.md` needs no formula line. A file in `~/.local/bin` is the installer's. Anything else is shown with its path and gets no offer. A file in Homebrew's bin that isn't brew's link is nobody's: this Mac had one, a stray TruffleHog 3.97.0 over an unlinked 3.96.0, which `brew upgrade` would have left standing. The flag path uses the same rule. A `Check` line that names no single binary keeps the install line. A `brew upgrade` that leaves the version behind the release means Homebrew is behind, not PATH.
 - Windows: bubbletea runs in Windows Terminal and PowerShell, but the CI smoke uses the flag path, so the screens aren't exercised there. The owner rule reads `(Get-Command <binary> -ErrorAction SilentlyContinue).Source`, treats `%LOCALAPPDATA%\Programs` as the installer's folder and the npm prefix as npm's, where the .cmd shims sit; untested on Windows.
+
+## The project is called squirrel
+
+Written 2026-09-05.
+
+The binary was called jstack, and so is the JDK's thread-dump tool. Every machine with Java has that one first on PATH, and macOS ships a `/usr/bin/jstack` stub even without Java, so typing the name ran the wrong program and answered "could not find any processes matching: upgrade". A tool that silently runs something else when you type its name is the opposite of easy, so the name changed rather than the PATH advice.
+
+squirrel, because the stack is an attention aid for agents: one task, no skipped steps, prove it before saying done. The squirrel is the distractible animal and this one stays on task; the stash in the hero image is the stack. The repo, module, binary, installers, config folder (`~/.squirrel`), letter markers, and the two skills (`squirrel` for the mode, `squirrel-setup` for setup) all renamed in one pass. No migration code: nobody outside the author had installed it, so the old state on each machine is deleted by hand and the new one installed fresh.

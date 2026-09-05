@@ -4,16 +4,16 @@
 $ErrorActionPreference = "Stop"
 
 function Fail([string]$Message) {
-  throw "jstack installer: $Message"
+  throw "squirrel installer: $Message"
 }
 
 function Publish-EnvironmentChange {
-  if (-not ([System.Management.Automation.PSTypeName]"Jstack.EnvironmentChange").Type) {
+  if (-not ([System.Management.Automation.PSTypeName]"Squirrel.EnvironmentChange").Type) {
     Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 
-namespace Jstack {
+namespace Squirrel {
   public static class EnvironmentChange {
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr SendMessageTimeout(
@@ -31,7 +31,7 @@ namespace Jstack {
   }
 
   $result = [UIntPtr]::Zero
-  [void][Jstack.EnvironmentChange]::SendMessageTimeout(
+  [void][Squirrel.EnvironmentChange]::SendMessageTimeout(
     [IntPtr]0xffff,
     [uint32]0x001A,
     [UIntPtr]::Zero,
@@ -42,25 +42,25 @@ namespace Jstack {
   )
 }
 
-$repo = if ($env:JSTACK_INSTALL_REPO) { $env:JSTACK_INSTALL_REPO } else { "janiorvalle/jstack" }
+$repo = if ($env:SQUIRREL_INSTALL_REPO) { $env:SQUIRREL_INSTALL_REPO } else { "janiorvalle/squirrel" }
 # The folder goes into the user PATH, so a relative override is made absolute
 # against the current location first.
-$installDir = if ($env:JSTACK_INSTALL_DIR) {
-  $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($env:JSTACK_INSTALL_DIR)
+$installDir = if ($env:SQUIRREL_INSTALL_DIR) {
+  $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($env:SQUIRREL_INSTALL_DIR)
 } else {
-  Join-Path $env:LOCALAPPDATA "Programs\jstack"
+  Join-Path $env:LOCALAPPDATA "Programs\squirrel"
 }
-$version = $env:JSTACK_INSTALL_VERSION
+$version = $env:SQUIRREL_INSTALL_VERSION
 $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
   "AMD64" { "amd64" }
   "ARM64" { "arm64" }
-  default { Fail "unsupported architecture: $env:PROCESSOR_ARCHITECTURE; jstack ships for amd64 and arm64" }
+  default { Fail "unsupported architecture: $env:PROCESSOR_ARCHITECTURE; squirrel ships for amd64 and arm64" }
 }
 
 # A token lifts the GitHub API's limit of sixty unauthenticated requests an
 # hour per address, which shared machines such as CI runners hit.
-$githubToken = if ($env:JSTACK_GITHUB_TOKEN) {
-  $env:JSTACK_GITHUB_TOKEN
+$githubToken = if ($env:SQUIRREL_GITHUB_TOKEN) {
+  $env:SQUIRREL_GITHUB_TOKEN
 } elseif ($env:GH_TOKEN) {
   $env:GH_TOKEN
 } else {
@@ -68,7 +68,7 @@ $githubToken = if ($env:JSTACK_GITHUB_TOKEN) {
 }
 $apiHeaders = @{
   Accept = "application/vnd.github+json"
-  "User-Agent" = "jstack-installer"
+  "User-Agent" = "squirrel-installer"
 }
 if ($githubToken) {
   $apiHeaders.Authorization = "Bearer $githubToken"
@@ -80,24 +80,24 @@ if (-not $version) {
   } catch {
     $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
     if ($status -eq 403 -or $status -eq 429) {
-      Fail "GitHub answered HTTP $status to the latest-release lookup for $repo, its rate limit for requests without a token. Set GH_TOKEN or JSTACK_GITHUB_TOKEN to a GitHub token, or set JSTACK_INSTALL_VERSION to skip the lookup, then retry."
+      Fail "GitHub answered HTTP $status to the latest-release lookup for $repo, its rate limit for requests without a token. Set GH_TOKEN or SQUIRREL_GITHUB_TOKEN to a GitHub token, or set SQUIRREL_INSTALL_VERSION to skip the lookup, then retry."
     }
     if ($status -eq 0) {
-      Fail "could not reach api.github.com for the latest release of $repo. Check the network, or set JSTACK_INSTALL_VERSION to skip the lookup, then retry."
+      Fail "could not reach api.github.com for the latest release of $repo. Check the network, or set SQUIRREL_INSTALL_VERSION to skip the lookup, then retry."
     }
     Fail "GitHub answered HTTP $status to the latest-release lookup for $repo; see https://github.com/$repo/releases"
   }
   $version = [string]$release.tag_name
 }
 $version = $version.TrimStart("v")
-$archiveName = "jstack_${version}_windows_${arch}.zip"
-$baseUrl = if ($env:JSTACK_INSTALL_BASE_URL) {
-  $env:JSTACK_INSTALL_BASE_URL.TrimEnd("/")
+$archiveName = "squirrel_${version}_windows_${arch}.zip"
+$baseUrl = if ($env:SQUIRREL_INSTALL_BASE_URL) {
+  $env:SQUIRREL_INSTALL_BASE_URL.TrimEnd("/")
 } else {
   "https://github.com/$repo/releases/download/v$version"
 }
 
-$temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "jstack-install-$PID"
+$temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "squirrel-install-$PID"
 New-Item -ItemType Directory -Force $temporaryDirectory | Out-Null
 $archive = Join-Path $temporaryDirectory $archiveName
 $checksums = Join-Path $temporaryDirectory "checksums.txt"
@@ -111,25 +111,25 @@ function Download([string]$Url, [string]$Destination) {
   }
 }
 
-function Assert-JstackVersion([string]$Executable, [string]$Stage) {
+function Assert-SquirrelVersion([string]$Executable, [string]$Stage) {
   $reported = (& $Executable --version | Out-String).Trim()
   if ($LASTEXITCODE -ne 0) {
-    Fail "$Stage jstack failed its version smoke test (exit $LASTEXITCODE): $reported. Confirm Windows security tools allow the release executable, then retry the installer."
+    Fail "$Stage squirrel failed its version smoke test (exit $LASTEXITCODE): $reported. Confirm Windows security tools allow the release executable, then retry the installer."
   }
   if ($reported -ne $version) {
-    Fail "$Stage jstack reported '$reported' instead of '$version'. Retry the installer; if it still fails, report both versions."
+    Fail "$Stage squirrel reported '$reported' instead of '$version'. Retry the installer; if it still fails, report both versions."
   }
 }
 
 try {
-  if ($env:JSTACK_INSTALL_ARCHIVE -or $env:JSTACK_INSTALL_CHECKSUMS) {
-    if (-not $env:JSTACK_INSTALL_ARCHIVE -or -not $env:JSTACK_INSTALL_CHECKSUMS) {
-      Fail "JSTACK_INSTALL_ARCHIVE and JSTACK_INSTALL_CHECKSUMS must be set together"
+  if ($env:SQUIRREL_INSTALL_ARCHIVE -or $env:SQUIRREL_INSTALL_CHECKSUMS) {
+    if (-not $env:SQUIRREL_INSTALL_ARCHIVE -or -not $env:SQUIRREL_INSTALL_CHECKSUMS) {
+      Fail "SQUIRREL_INSTALL_ARCHIVE and SQUIRREL_INSTALL_CHECKSUMS must be set together"
     }
-    Copy-Item $env:JSTACK_INSTALL_ARCHIVE $archive
-    Copy-Item $env:JSTACK_INSTALL_CHECKSUMS $checksums
+    Copy-Item $env:SQUIRREL_INSTALL_ARCHIVE $archive
+    Copy-Item $env:SQUIRREL_INSTALL_CHECKSUMS $checksums
   } else {
-    Write-Output "Downloading jstack $version for windows/$arch..."
+    Write-Output "Downloading squirrel $version for windows/$arch..."
     Download "$baseUrl/$archiveName" $archive
     Download "$baseUrl/checksums.txt" $checksums
   }
@@ -148,16 +148,16 @@ try {
   }
 
   Expand-Archive -LiteralPath $archive -DestinationPath $extracted -Force
-  $downloaded = Get-ChildItem -LiteralPath $extracted -Recurse -Filter "jstack.exe" | Select-Object -First 1
+  $downloaded = Get-ChildItem -LiteralPath $extracted -Recurse -Filter "squirrel.exe" | Select-Object -First 1
   if (-not $downloaded) {
-    Fail "archive did not contain jstack.exe"
+    Fail "archive did not contain squirrel.exe"
   }
-  Assert-JstackVersion $downloaded.FullName "downloaded"
+  Assert-SquirrelVersion $downloaded.FullName "downloaded"
 
   New-Item -ItemType Directory -Force $installDir | Out-Null
-  $destination = Join-Path $installDir "jstack.exe"
-  $stage = Join-Path $installDir ".jstack.new.$PID.exe"
-  $previous = Join-Path $temporaryDirectory ".jstack.previous.exe"
+  $destination = Join-Path $installDir "squirrel.exe"
+  $stage = Join-Path $installDir ".squirrel.new.$PID.exe"
+  $previous = Join-Path $temporaryDirectory ".squirrel.previous.exe"
   $hadPrevious = Test-Path -LiteralPath $destination
   Copy-Item $downloaded.FullName $stage
   if ($hadPrevious) {
@@ -166,7 +166,7 @@ try {
   }
   try {
     Move-Item -Force $stage $destination
-    Assert-JstackVersion $destination "installed"
+    Assert-SquirrelVersion $destination "installed"
   } catch {
     # Whatever failed, the folder ends up as it was: the staged and the
     # unusable new file go, the previous binary comes back.
@@ -177,8 +177,8 @@ try {
     throw
   }
 
-  Write-Output "Installed jstack $version to $destination"
-  if (-not $env:JSTACK_INSTALL_SKIP_PATH) {
+  Write-Output "Installed squirrel $version to $destination"
+  if (-not $env:SQUIRREL_INSTALL_SKIP_PATH) {
     $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
     if (-not $environmentKey) {
       Fail "could not open the user environment registry key"
@@ -206,7 +206,7 @@ try {
         }
         $environmentKey.SetValue("Path", $updatedPath, $pathKind)
         Publish-EnvironmentChange
-        Write-Output "Added $installDir to your user PATH. Open a new terminal before running jstack."
+        Write-Output "Added $installDir to your user PATH. Open a new terminal before running squirrel."
       }
     } finally {
       $environmentKey.Dispose()
@@ -217,7 +217,7 @@ try {
   # questions; without one it prints the plan and the flags and changes nothing.
   & $destination setup
   if ($LASTEXITCODE -ne 0) {
-    Fail "jstack setup exited with $LASTEXITCODE; the binary is installed, rerun jstack setup"
+    Fail "squirrel setup exited with $LASTEXITCODE; the binary is installed, rerun squirrel setup"
   }
 } finally {
   Remove-Item -Recurse -Force $temporaryDirectory -ErrorAction SilentlyContinue

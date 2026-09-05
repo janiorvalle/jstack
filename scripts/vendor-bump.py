@@ -21,7 +21,7 @@ VENDOR = os.path.join(ROOT, "vendor.json")
 SKILLS = os.path.join(ROOT, "skills")
 
 def github(url):
-    headers = {"User-Agent": "jstack-vendor-bump"}
+    headers = {"User-Agent": "squirrel-vendor-bump"}
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"

@@ -14,10 +14,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/janiorvalle/jstack/internal/harness"
-	"github.com/janiorvalle/jstack/internal/letter"
-	"github.com/janiorvalle/jstack/internal/skills"
-	"github.com/janiorvalle/jstack/internal/tools"
+	"github.com/janiorvalle/squirrel/internal/harness"
+	"github.com/janiorvalle/squirrel/internal/letter"
+	"github.com/janiorvalle/squirrel/internal/skills"
+	"github.com/janiorvalle/squirrel/internal/tools"
 )
 
 const toolsFixture = "# Tools\n\n" +
@@ -138,7 +138,7 @@ func (f *fakeShell) installRoastSkill() error {
 // gitHub stands in for gh: a clone writes the repo's files under the folder
 // named, a sync writes them again, and a repo that isn't in repos is one gh
 // can't reach. The repo name is read back from the clone folder,
-// ~/.jstack/repos/owner/name, so a sync finds the same files.
+// ~/.squirrel/repos/owner/name, so a sync finds the same files.
 func (f *fakeShell) gitHub(command string, out io.Writer) error {
 	dir := strings.Split(command, "'")[1]
 	name := filepath.ToSlash(filepath.Join(filepath.Base(filepath.Dir(dir)), filepath.Base(dir)))
@@ -339,7 +339,7 @@ func TestNoTerminalPrintsPlanAndRerunFlagsAndChangesNothing(t *testing.T) {
 		"vendored how",
 		"ok git",
 		"missing roast. install: curl roast | sh",
-		"jstack setup --harness claude --yes",
+		"squirrel setup --harness claude --yes",
 		"add --install-tools to also install the missing tools",
 		"add --keep-instructions to append the letter to ~/.claude/CLAUDE.md instead of replacing it",
 	} {
@@ -353,8 +353,8 @@ func TestNoTerminalPrintsPlanAndRerunFlagsAndChangesNothing(t *testing.T) {
 	if read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")) != "voice v1\n" {
 		t.Fatal("skill changed")
 	}
-	if exists(filepath.Join(home, ".jstack")) {
-		t.Fatal("~/.jstack was created")
+	if exists(filepath.Join(home, ".squirrel")) {
+		t.Fatal("~/.squirrel was created")
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast" {
 		t.Fatalf("commands = %v", shell.commands)
@@ -369,7 +369,7 @@ func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	backup := filepath.Join(home, ".jstack", "backup", "20260903-100405", "claude")
+	backup := filepath.Join(home, ".squirrel", "backup", "20260903-100405", "claude")
 	if got := read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")); got != "voice v2\n" {
 		t.Fatalf("voice = %q", got)
 	}
@@ -388,7 +388,7 @@ func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 	if got := read(t, filepath.Join(backup, "CLAUDE.md")); got != "# my own notes\n" {
 		t.Fatalf("CLAUDE.md backup = %q", got)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ],\n  \"harnesses_found\": [\n    \"claude\"\n  ]\n}\n" {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ],\n  \"harnesses_found\": [\n    \"claude\"\n  ]\n}\n" {
 		t.Fatalf("config = %q", got)
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast;version-roast;roast install-skill" {
@@ -396,8 +396,8 @@ func TestYesAppliesBacksUpAndSavesPicks(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"skills   1 installed, 1 updated in ~/.claude/skills",
-		"backup   ~/.jstack/backup/20260903-100405/claude/skills",
-		"letter   replaced ~/.claude/CLAUDE.md, old file backed up to ~/.jstack/backup/20260903-100405/claude/CLAUDE.md",
+		"backup   ~/.squirrel/backup/20260903-100405/claude/skills",
+		"letter   replaced ~/.claude/CLAUDE.md, old file backed up to ~/.squirrel/backup/20260903-100405/claude/CLAUDE.md",
 		"ok roast 1.1.0, skill installed via roast install-skill",
 		"restart the harness so the skills load",
 	} {
@@ -444,7 +444,7 @@ func TestVariableMovesTheRowThroughPlanAndApply(t *testing.T) {
 	if exists(filepath.Join(home, ".codex")) {
 		t.Fatal("~/.codex was created although CODEX_HOME points elsewhere")
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\",\n    \"codex\"\n  ],\n  \"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]\n}\n" {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\",\n    \"codex\"\n  ],\n  \"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]\n}\n" {
 		t.Fatalf("config = %q", got)
 	}
 }
@@ -486,7 +486,7 @@ func TestSecondRunUsesSavedPicksAndReportsUpToDate(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectAll(t, out.String(), "skills   up to date in ~/.claude/skills", "letter   up to date in ~/.claude/CLAUDE.md", "ok roast 1.1.0, skill present")
-	if exists(filepath.Join(home, ".jstack", "backup", "20260903-110000")) {
+	if exists(filepath.Join(home, ".squirrel", "backup", "20260903-110000")) {
 		t.Fatal("a backup was made with nothing changed")
 	}
 }
@@ -524,7 +524,7 @@ func TestTerminalAsksHarnessesThenToolsThenApplies(t *testing.T) {
 	if !exists(filepath.Join(home, ".config", "opencode", "skills", "voice", "SKILL.md")) || !exists(filepath.Join(home, ".config", "opencode", "AGENTS.md")) {
 		t.Fatal("OpenCode did not get the skills and the letter")
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, `"claude",`) || !strings.Contains(got, `"opencode"`) {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, `"claude",`) || !strings.Contains(got, `"opencode"`) {
 		t.Fatalf("config = %q", got)
 	}
 	if strings.Join(shell.commands, ";") != "check-git;check-roast;curl roast | sh;check-roast;version-roast;roast install-skill" {
@@ -559,7 +559,7 @@ func TestHarnessFoundSinceTheLastRunIsOfferedChecked(t *testing.T) {
 	if got := strings.Join(checked(t, opts), ","); got != "claude,cursor" {
 		t.Fatalf("checked = %q, want only the newly found Cursor added", got)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
 		t.Fatalf("config = %q", got)
 	}
 	opts.Harness = "pi"
@@ -573,7 +573,7 @@ func TestAConfigFromBeforeTheFoundSetKeepsAnExcludedHarnessOut(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"]}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["claude"]}`)
 	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
 	if got := strings.Join(checked(t, opts), ","); got != "claude" {
 		t.Fatalf("checked = %q, want a harness the old config left out to stay out", got)
@@ -581,7 +581,7 @@ func TestAConfigFromBeforeTheFoundSetKeepsAnExcludedHarnessOut(t *testing.T) {
 	if err := guided(t, opts, script{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
 		t.Fatalf("config = %q, want the found set saved from this run on", got)
 	}
 	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
@@ -594,12 +594,12 @@ func TestAConfigFromBeforeTheFoundSetKeepsAnExcludedHarnessOut(t *testing.T) {
 
 func TestAHarnessGoneForOneRunKeepsItsExclusion(t *testing.T) {
 	home := homeWithClaude(t)
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude","codex"]}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["claude"],"harnesses_found":["claude","codex"]}`)
 	opts, _ := options(t, home, &fakeShell{present: map[string]bool{"check-git": true}}, "")
 	if err := guided(t, opts, script{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "\"harnesses_found\": [\n    \"claude\",\n    \"codex\"\n  ]") {
 		t.Fatalf("config = %q, want Codex still known while its folder is gone", got)
 	}
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
@@ -801,7 +801,7 @@ func TestLatestLookupFailureReportsUnknownAndStillApplies(t *testing.T) {
 	if strings.Contains(out.String(), "outdated") || strings.Contains(out.String(), "updating") {
 		t.Fatalf("offered an update with latest unknown:\n%s", out.String())
 	}
-	if !exists(filepath.Join(home, ".jstack", "config.json")) {
+	if !exists(filepath.Join(home, ".squirrel", "config.json")) {
 		t.Fatal("setup did not complete")
 	}
 }
@@ -827,10 +827,10 @@ func TestFailedUpdateIsAnErrorAfterTheRestLanded(t *testing.T) {
 	opts.Yes = true
 	opts.UpdateTools = true
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-TOOLS") || !strings.Contains(err.Error(), "roast: `curl roast | sh` failed") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-TOOLS") || !strings.Contains(err.Error(), "roast: `curl roast | sh` failed") {
 		t.Fatalf("err = %v", err)
 	}
-	if !strings.Contains(out.String(), "FAILED roast") || !exists(filepath.Join(home, ".jstack", "config.json")) {
+	if !strings.Contains(out.String(), "FAILED roast") || !exists(filepath.Join(home, ".squirrel", "config.json")) {
 		t.Fatalf("output:\n%s", out.String())
 	}
 }
@@ -871,7 +871,7 @@ func TestTerminalNoToToolKeepsItMissing(t *testing.T) {
 
 func TestHarnessFlagOverridesSavedPicks(t *testing.T) {
 	home := homeWithClaude(t)
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["claude"]}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["claude"]}`)
 	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	opts.Yes = true
@@ -886,7 +886,7 @@ func TestHarnessFlagOverridesSavedPicks(t *testing.T) {
 	if read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")) != "voice v1\n" {
 		t.Fatal("claude was touched")
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); !strings.Contains(got, "\"harnesses\": [\n    \"pi\"\n  ]") {
+	if got := read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(got, "\"harnesses\": [\n    \"pi\"\n  ]") {
 		t.Fatalf("config = %q", got)
 	}
 }
@@ -964,7 +964,7 @@ func TestUpdatedToolSkillReplacesTheCopiesAndBacksThemUp(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "roast 1.1.0\n" {
 		t.Fatalf("pi roast = %q", got)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "backup", "20260903-110000", "pi", "skills", "roast", "SKILL.md")); got != "roast 1.0.0\n" {
+	if got := read(t, filepath.Join(home, ".squirrel", "backup", "20260903-110000", "pi", "skills", "roast", "SKILL.md")); got != "roast 1.0.0\n" {
 		t.Fatalf("pi roast backup = %q", got)
 	}
 	if !strings.Contains(out.String(), "ok roast 1.1.0, skill installed via roast install-skill, copied to OpenCode, Pi") {
@@ -985,7 +985,7 @@ func TestToolSkillCopyComesFromTheFolderTheToolWroteLast(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copied, err := carrySkill(opts, pi, filepath.Join(home, ".jstack", "backup", "run"), "roast")
+	copied, err := carrySkill(opts, pi, filepath.Join(home, ".squirrel", "backup", "run"), "roast")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1022,7 +1022,7 @@ func TestStaleToolSkillCopyCountsAsMissingAndIsReplaced(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".pi", "agent", "skills", "roast", "SKILL.md")); got != "roast 1.1.0\n" {
 		t.Fatalf("pi roast = %q", got)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "backup", "20260903-110000", "pi", "skills", "roast", "SKILL.md")); got != "roast 1.0.0\n" {
+	if got := read(t, filepath.Join(home, ".squirrel", "backup", "20260903-110000", "pi", "skills", "roast", "SKILL.md")); got != "roast 1.0.0\n" {
 		t.Fatalf("pi roast backup = %q", got)
 	}
 	expectAll(t, out.String(), "skill missing, would run: roast install-skill", "ok roast 1.1.0, skill installed via roast install-skill, copied to Pi")
@@ -1081,7 +1081,7 @@ func TestToolSkillWrittenNowhereKnownIsNotCopied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copied, err := carrySkill(opts, pi, filepath.Join(home, ".jstack", "backup", "run"), "roast")
+	copied, err := carrySkill(opts, pi, filepath.Join(home, ".squirrel", "backup", "run"), "roast")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1111,7 +1111,7 @@ func TestApplyWritesTheEmbeddedScriptsUnderHome(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join(home, ".jstack", "scripts", "install-tool.ps1"))
+	content, err := os.ReadFile(filepath.Join(home, ".squirrel", "scripts", "install-tool.ps1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1126,7 +1126,7 @@ func TestPlanOnlyWritesNoScripts(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".jstack", "scripts")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".squirrel", "scripts")); !os.IsNotExist(err) {
 		t.Fatalf("plan-only run wrote scripts: %v", err)
 	}
 }
@@ -1222,7 +1222,7 @@ func TestKeepInstructionsAppendsTheLetter(t *testing.T) {
 	if !strings.Contains(out.String(), "letter   appended to ~/.claude/CLAUDE.md") {
 		t.Fatalf("output:\n%s", out.String())
 	}
-	if exists(filepath.Join(home, ".jstack", "backup", "20260903-100405", "claude", "CLAUDE.md")) {
+	if exists(filepath.Join(home, ".squirrel", "backup", "20260903-100405", "claude", "CLAUDE.md")) {
 		t.Fatal("append made a backup")
 	}
 }
@@ -1236,18 +1236,18 @@ func TestCursorRuleGetsTheFrontmatter(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	got := read(t, filepath.Join(home, ".cursor", "rules", "jstack.mdc"))
-	if !strings.HasPrefix(got, "---\ndescription: jstack") || !strings.Contains(got, "alwaysApply: true\n---\n\n"+letter.Start) {
-		t.Fatalf("jstack.mdc = %q", got)
+	got := read(t, filepath.Join(home, ".cursor", "rules", "squirrel.mdc"))
+	if !strings.HasPrefix(got, "---\ndescription: squirrel") || !strings.Contains(got, "alwaysApply: true\n---\n\n"+letter.Start) {
+		t.Fatalf("squirrel.mdc = %q", got)
 	}
 }
 
 func TestStaleSavedPickNamesTheFix(t *testing.T) {
 	home := homeWithClaude(t)
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["emacs"]}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["emacs"]}`)
 	opts, _ := options(t, home, &fakeShell{}, "")
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-HARNESS-UNKNOWN") || !strings.Contains(err.Error(), "--harness") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-HARNESS-UNKNOWN") || !strings.Contains(err.Error(), "--harness") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -1259,7 +1259,7 @@ func TestNothingFoundWithYesChangesNothing(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "No harness picked. Nothing changed in the harnesses.") || exists(filepath.Join(home, ".jstack")) {
+	if !strings.Contains(out.String(), "No harness picked. Nothing changed in the harnesses.") || exists(filepath.Join(home, ".squirrel")) {
 		t.Fatalf("output:\n%s", out.String())
 	}
 }
@@ -1271,10 +1271,10 @@ func TestFailedToolInstallIsAnErrorAfterTheRestLanded(t *testing.T) {
 	opts.Yes = true
 	opts.InstallTools = true
 	err := Run(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "JSTACK-TOOLS") || !strings.Contains(err.Error(), "roast: `curl roast | sh` failed") {
+	if err == nil || !strings.Contains(err.Error(), "SQUIRREL-TOOLS") || !strings.Contains(err.Error(), "roast: `curl roast | sh` failed") {
 		t.Fatalf("err = %v", err)
 	}
-	if !exists(filepath.Join(home, ".claude", "skills", "how", "SKILL.md")) || !exists(filepath.Join(home, ".jstack", "config.json")) {
+	if !exists(filepath.Join(home, ".claude", "skills", "how", "SKILL.md")) || !exists(filepath.Join(home, ".squirrel", "config.json")) {
 		t.Fatal("skills or config missing after a tool failure")
 	}
 	if !strings.Contains(out.String(), "FAILED roast") || !strings.Contains(out.String(), "restart the harness") {
@@ -1301,7 +1301,7 @@ func TestInstallThatLeavesTheCheckFailingIsAnError(t *testing.T) {
 	}
 }
 
-const missingGit = "missing git, which setup doesn't install. get it by hand, see https://github.com/janiorvalle/jstack/blob/main/tools.md#git"
+const missingGit = "missing git, which setup doesn't install. get it by hand, see https://github.com/janiorvalle/squirrel/blob/main/tools.md#git"
 
 func TestMissingPrerequisiteIsReportedWithoutAnInstallOffer(t *testing.T) {
 	home := homeWithClaude(t)
@@ -1347,11 +1347,11 @@ func TestHasSavedPicks(t *testing.T) {
 	if HasSavedPicks(home) {
 		t.Fatal("picks reported before any run")
 	}
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":[]}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":[]}`)
 	if HasSavedPicks(home) {
 		t.Fatal("empty picks reported as saved")
 	}
-	write(t, filepath.Join(home, ".jstack", "config.json"), `{"harnesses":["codex"]}`)
+	write(t, filepath.Join(home, ".squirrel", "config.json"), `{"harnesses":["codex"]}`)
 	if !HasSavedPicks(home) {
 		t.Fatal("saved picks not reported")
 	}
@@ -1366,7 +1366,7 @@ func TestNoTerminalRerunLineCarriesTheFlagsGiven(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "jstack setup --harness claude --yes --install-tools --keep-instructions") {
+	if !strings.Contains(out.String(), "squirrel setup --harness claude --yes --install-tools --keep-instructions") {
 		t.Fatalf("output:\n%s", out.String())
 	}
 	if strings.Contains(out.String(), "add --install-tools") || strings.Contains(out.String(), "add --keep-instructions") {
@@ -1445,7 +1445,7 @@ func TestLetterApplyReplansAFileChangedAfterThePlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, path, "# added while setup was asking\n"+letter.Block("old letter"))
-	if err := applyLetter(opts, embedded, plans[0], filepath.Join(home, ".jstack", "backup", "x", "codex")); err != nil {
+	if err := applyLetter(opts, embedded, plans[0], filepath.Join(home, ".squirrel", "backup", "x", "codex")); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, path); got != "# added while setup was asking\n"+letter.Block("# the letter\n") {
@@ -1490,7 +1490,7 @@ func TestConfigSaveLeavesOnlyTheConfigFile(t *testing.T) {
 	if err := saveConfig(home, Config{Harnesses: []string{"claude"}}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := os.ReadDir(filepath.Join(home, ".jstack"))
+	entries, err := os.ReadDir(filepath.Join(home, ".squirrel"))
 	if err != nil || len(entries) != 1 || entries[0].Name() != "config.json" {
 		t.Fatalf("entries = %v, %v", entries, err)
 	}

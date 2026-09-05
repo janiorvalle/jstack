@@ -21,10 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/janiorvalle/jstack/internal/harness"
-	"github.com/janiorvalle/jstack/internal/letter"
-	"github.com/janiorvalle/jstack/internal/skills"
-	"github.com/janiorvalle/jstack/internal/tools"
+	"github.com/janiorvalle/squirrel/internal/harness"
+	"github.com/janiorvalle/squirrel/internal/letter"
+	"github.com/janiorvalle/squirrel/internal/skills"
+	"github.com/janiorvalle/squirrel/internal/tools"
 )
 
 // Shell runs one shell command, streaming its output to output. A nil error
@@ -201,23 +201,23 @@ func Run(ctx context.Context, opts Options) error {
 func loadAssets(files fs.FS) (assets, error) {
 	skillsFS, err := fs.Sub(files, "skills")
 	if err != nil {
-		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no skills folder embedded: %w; reinstall it", err)
+		return assets{}, fmt.Errorf("[SQUIRREL-EMBED] the binary has no skills folder embedded: %w; reinstall it", err)
 	}
 	scriptsFS, err := fs.Sub(files, "scripts")
 	if err != nil {
-		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no scripts folder embedded: %w; reinstall it", err)
+		return assets{}, fmt.Errorf("[SQUIRREL-EMBED] the binary has no scripts folder embedded: %w; reinstall it", err)
 	}
 	letterText, err := fs.ReadFile(files, "AGENTS.md")
 	if err != nil {
-		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no AGENTS.md embedded: %w; reinstall it", err)
+		return assets{}, fmt.Errorf("[SQUIRREL-EMBED] the binary has no AGENTS.md embedded: %w; reinstall it", err)
 	}
 	toolsText, err := fs.ReadFile(files, "tools.md")
 	if err != nil {
-		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no tools.md embedded: %w; reinstall it", err)
+		return assets{}, fmt.Errorf("[SQUIRREL-EMBED] the binary has no tools.md embedded: %w; reinstall it", err)
 	}
 	vendorText, err := fs.ReadFile(files, "vendor.json")
 	if err != nil {
-		return assets{}, fmt.Errorf("[JSTACK-EMBED] the binary has no vendor.json embedded: %w; reinstall it", err)
+		return assets{}, fmt.Errorf("[SQUIRREL-EMBED] the binary has no vendor.json embedded: %w; reinstall it", err)
 	}
 	var vendor struct {
 		Skills []struct {
@@ -225,7 +225,7 @@ func loadAssets(files fs.FS) (assets, error) {
 		} `json:"skills"`
 	}
 	if err := json.Unmarshal(vendorText, &vendor); err != nil {
-		return assets{}, fmt.Errorf("[JSTACK-EMBED] the embedded vendor.json is not valid JSON: %w; rebuild the binary from a checkout where make verify passes", err)
+		return assets{}, fmt.Errorf("[SQUIRREL-EMBED] the embedded vendor.json is not valid JSON: %w; rebuild the binary from a checkout where make verify passes", err)
 	}
 	var vendored []string
 	for _, entry := range vendor.Skills {
@@ -333,7 +333,7 @@ func planHarnesses(opts Options, embedded assets, skillSources catalog, picked [
 		path := entry.InstructionsPath()
 		existing, err := os.ReadFile(path)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("[JSTACK-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
+			return nil, fmt.Errorf("[SQUIRREL-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
 		}
 		plans = append(plans, harnessPlan{
 			harness:      entry,
@@ -424,7 +424,7 @@ func toolSkill(opts Options, folder string) (installedSkill, bool) {
 // write their skill into Claude Code's and Codex's folders, some also into
 // ~/.agents/skills, so a person who picked OpenCode or Pi would otherwise
 // never get it there and every run would find it missing and install it
-// again. The copy is the tool's, not jstack's: no source owns the folder, so
+// again. The copy is the tool's, not squirrel's: no source owns the folder, so
 // the skills plan leaves it alone as local, and a copy left behind by an
 // update is replaced and backed up like any changed skill.
 func carrySkill(opts Options, picked []harness.Harness, backupRoot, folder string) ([]harness.Harness, error) {
@@ -577,7 +577,7 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 	if keys == "" {
 		keys = "claude,codex"
 	}
-	line := "jstack setup --harness " + keys + " --yes"
+	line := "squirrel setup --harness " + keys + " --yes"
 	if opts.InstallTools {
 		line += " --install-tools"
 	}
@@ -637,7 +637,7 @@ func printRerun(out io.Writer, opts Options, picked []harness.Harness, current p
 // backed up the folder is created exclusively, so two runs started in the same
 // second never share one; otherwise the path is only named, never created.
 func reserveBackup(home, stamp string, current plan) (string, error) {
-	parent := filepath.Join(home, ".jstack", "backup")
+	parent := filepath.Join(home, ".squirrel", "backup")
 	needed := toolSkillCopyWillBeReplaced(current)
 	for _, entry := range current.harnesses {
 		if len(entry.skills.Changed) > 0 || entry.letter.Outcome == letter.Replace {
@@ -648,7 +648,7 @@ func reserveBackup(home, stamp string, current plan) (string, error) {
 		return filepath.Join(parent, stamp), nil
 	}
 	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return "", fmt.Errorf("[JSTACK-BACKUP-DIR] cannot create %q: %w; make the home folder writable and rerun", parent, err)
+		return "", fmt.Errorf("[SQUIRREL-BACKUP-DIR] cannot create %q: %w; make the home folder writable and rerun", parent, err)
 	}
 	for attempt := 1; ; attempt++ {
 		name := stamp
@@ -661,7 +661,7 @@ func reserveBackup(home, stamp string, current plan) (string, error) {
 			return root, nil
 		}
 		if !errors.Is(err, os.ErrExist) {
-			return "", fmt.Errorf("[JSTACK-BACKUP-DIR] cannot create %q: %w; make %q writable and rerun", root, err, parent)
+			return "", fmt.Errorf("[SQUIRREL-BACKUP-DIR] cannot create %q: %w; make %q writable and rerun", root, err, parent)
 		}
 	}
 }
@@ -712,7 +712,7 @@ func applyTools(ctx context.Context, opts Options, current plan, picked []harnes
 	if len(failures) == 0 {
 		return nil
 	}
-	return fmt.Errorf("[JSTACK-TOOLS] the skills and the letter are in place, but %d tool step(s) failed:\n%w", len(failures), errors.Join(failures...))
+	return fmt.Errorf("[SQUIRREL-TOOLS] the skills and the letter are in place, but %d tool step(s) failed:\n%w", len(failures), errors.Join(failures...))
 }
 
 // noteInstallFolderOffPath says that ~/.local/bin exists but is not on the
@@ -773,7 +773,7 @@ func applyLetter(opts Options, embedded assets, entry harnessPlan, backup string
 	shown := display(home, path)
 	fresh, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("[JSTACK-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-LETTER-READ] cannot read %q: %w; make it readable and rerun", path, err)
 	}
 	change := entry.letter
 	if string(fresh) != entry.instructions {
@@ -787,7 +787,7 @@ func applyLetter(opts Options, embedded assets, entry harnessPlan, backup string
 	if change.Outcome == letter.Replace {
 		saved := filepath.Join(backup, filepath.Base(path))
 		if err := copyFile(path, saved); err != nil {
-			return fmt.Errorf("[JSTACK-LETTER-BACKUP] cannot back up %q to %q: %w; the file was not changed, fix the permissions and rerun", path, saved, err)
+			return fmt.Errorf("[SQUIRREL-LETTER-BACKUP] cannot back up %q to %q: %w; the file was not changed, fix the permissions and rerun", path, saved, err)
 		}
 		fmt.Fprintf(out, "  letter   replaced %s, old file backed up to %s\n", shown, display(home, saved))
 	} else {
@@ -861,26 +861,26 @@ func runInstall(ctx context.Context, opts Options, status *toolStatus, out io.Wr
 	fmt.Fprintf(out, "  %s: %s\n", verb, command)
 	if err := opts.Shell(ctx, status.ownLine(opts, command), out); err != nil {
 		fmt.Fprintf(out, "  FAILED %s: %v\n", tool.Title, err)
-		return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun jstack setup", tool.Title, command, err)
+		return fmt.Errorf("%s: `%s` failed: %v; run it by hand, then rerun squirrel setup", tool.Title, command, err)
 	}
 	if err := opts.Shell(ctx, tool.Check, io.Discard); err != nil {
 		fmt.Fprintf(out, "  FAILED %s: %s, but its check still fails\n", tool.Title, done)
-		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; read the install output above: if the download failed, run the install line again; if it put %s in a folder that is not on PATH, add that folder to PATH in your shell profile and open a new terminal; then rerun jstack setup", tool.Title, command, tool.Check, tool.Title)
+		return fmt.Errorf("%s: `%s` ran, but the check `%s` still fails; read the install output above: if the download failed, run the install line again; if it put %s in a folder that is not on PATH, add that folder to PATH in your shell profile and open a new terminal; then rerun squirrel setup", tool.Title, command, tool.Check, tool.Title)
 	}
 	status.present = true
 	status.locate(ctx, opts)
 	status.installed = installedVersion(ctx, opts, *status)
 	if status.outdated() && status.installed == "" {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` prints no version\n", tool.Title, done, tool.Version)
-		return fmt.Errorf("%s: `%s` ran, but `%s` prints no version, so the pinned %s can't be confirmed; run it by hand and fix what it prints, then rerun jstack setup", tool.Title, command, tool.Version, tools.Display(status.latest))
+		return fmt.Errorf("%s: `%s` ran, but `%s` prints no version, so the pinned %s can't be confirmed; run it by hand and fix what it prints, then rerun squirrel setup", tool.Title, command, tool.Version, tools.Display(status.latest))
 	}
 	if status.outdated() && status.owner == byHomebrew {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
-		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the latest is %s; Homebrew's formula is behind the release, rerun jstack setup once `brew upgrade` has it", tool.Title, command, tool.Version, tools.Display(status.installed), tools.Display(status.latest))
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the latest is %s; Homebrew's formula is behind the release, rerun squirrel setup once `brew upgrade` has it", tool.Title, command, tool.Version, tools.Display(status.installed), tools.Display(status.latest))
 	}
 	if status.outdated() {
 		fmt.Fprintf(out, "  FAILED %s: %s, but `%s` still prints %s\n", tool.Title, done, tool.Version, tools.Display(status.installed))
-		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the %s is %s; another %s earlier on PATH is winning, remove it or put the new one first, then rerun jstack setup", tool.Title, command, tool.Version, tools.Display(status.installed), reference(*status), tools.Display(status.latest), tool.Title)
+		return fmt.Errorf("%s: `%s` ran, but `%s` still prints %s and the %s is %s; another %s earlier on PATH is winning, remove it or put the new one first, then rerun squirrel setup", tool.Title, command, tool.Version, tools.Display(status.installed), reference(*status), tools.Display(status.latest), tool.Title)
 	}
 	if status.installed == "" {
 		fmt.Fprintf(out, "  %s %s\n", done, tool.Title)
@@ -914,17 +914,17 @@ func writeFile(path, content string) error {
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot create %q: %w; make the parent writable and rerun", filepath.Dir(path), err)
+		return fmt.Errorf("[SQUIRREL-LETTER-WRITE] cannot create %q: %w; make the parent writable and rerun", filepath.Dir(path), err)
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".jstack-letter-*")
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".squirrel-letter-*")
 	if err != nil {
-		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot stage a new %q: %w; make its folder writable and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-LETTER-WRITE] cannot stage a new %q: %w; make its folder writable and rerun", path, err)
 	}
 	temporaryName := temporary.Name()
 	defer os.Remove(temporaryName)
 	fail := func(step string, cause error) error {
 		_ = temporary.Close()
-		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot %s for %q: %w; the file was not changed, fix the folder and rerun", step, path, cause)
+		return fmt.Errorf("[SQUIRREL-LETTER-WRITE] cannot %s for %q: %w; the file was not changed, fix the folder and rerun", step, path, cause)
 	}
 	if err := temporary.Chmod(mode); err != nil {
 		return fail("set permissions", err)
@@ -939,7 +939,7 @@ func writeFile(path, content string) error {
 		return fail("close the staged file", err)
 	}
 	if err := os.Rename(temporaryName, path); err != nil {
-		return fmt.Errorf("[JSTACK-LETTER-WRITE] cannot replace %q: %w; the file was not changed, fix the permissions and rerun", path, err)
+		return fmt.Errorf("[SQUIRREL-LETTER-WRITE] cannot replace %q: %w; the file was not changed, fix the permissions and rerun", path, err)
 	}
 	return nil
 }
@@ -966,7 +966,7 @@ func list(items []string) string {
 	return strings.Join(items, ", ")
 }
 
-// skillList names skills, each with its source when that isn't jstack.
+// skillList names skills, each with its source when that isn't squirrel.
 func skillList(items []skills.Skill) string {
 	if len(items) == 0 {
 		return "-"
@@ -974,7 +974,7 @@ func skillList(items []skills.Skill) string {
 	parts := make([]string, 0, len(items))
 	for _, skill := range items {
 		part := skill.Name
-		if skill.Source.Name != "jstack" {
+		if skill.Source.Name != "squirrel" {
 			part += " (" + skill.Source.Name + ")"
 		}
 		parts = append(parts, part)

@@ -1,10 +1,10 @@
 # Tools
 
-jstack expects a few tools on the machine. Each ships its own skill, which the tool maintains, so jstack doesn't copy those. This file names each tool, what it's for, and how to get it.
+squirrel expects a few tools on the machine. Each ships its own skill, which the tool maintains, so squirrel doesn't copy those. This file names each tool, what it's for, and how to get it.
 
-If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. The install command is this file's `Install` line, the one `jstack setup` runs, never the one inside the tool's own skill. Then read the skill the tool installed and follow it.
+If a tool is missing, run the check, show the install command, and install only when the human says yes or the session was already given permission to set things up. The install command is this file's `Install` line, the one `squirrel setup` runs, never the one inside the tool's own skill. Then read the skill the tool installed and follow it.
 
-`jstack setup` runs every check below, installs each present tool's skill, and reports each tool as missing, outdated, or current. It parses the `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines:
+`squirrel setup` runs every check below, installs each present tool's skill, and reports each tool as missing, outdated, or current. It parses the `Check`, `Version`, `Repo`, `Install`, `Skill install`, and `Skill folder` lines:
 
 - `Version` prints the installed version. The latest comes from the GitHub releases of the `Repo` line, or from npm when the install line is `npm install -g`.
 - An update runs through whoever installed the binary. `Check` is `command -v <binary>`, so setup asks the shell where the binary is and follows its links. Under node's global `node_modules` for an npm install line: that line. A link into Homebrew's Cellar: `brew upgrade <formula>`, the formula read off the path. A file in `~/.local/bin`: the `Install` line. Anything else, a file in Homebrew's bin that isn't brew's link included: shown with its path and left alone, since the install line would drop a second copy that loses on PATH.
@@ -17,7 +17,7 @@ If a tool is missing, run the check, show the install command, and install only 
 
 ## git and gh
 
-Version control and the PR host CLI. Every flow assumes both. Setup checks for them and never installs them, since the command depends on the OS and its package manager, Linux needs sudo, and `gh auth login` is yours to run. Get them by hand, then rerun `jstack setup`.
+Version control and the PR host CLI. Every flow assumes both. Setup checks for them and never installs them, since the command depends on the OS and its package manager, Linux needs sudo, and `gh auth login` is yours to run. Get them by hand, then rerun `squirrel setup`.
 
 - Check: `command -v git && command -v gh && gh auth status`
 - Check (windows): `Get-Command git, gh -ErrorAction Stop; gh auth status`
@@ -45,14 +45,14 @@ The independent code review gate. A different model than the one that wrote the 
 
 ## TruffleHog
 
-Secret scanner, run by roast over the diff before review. On macOS and Linux its official installer drops one binary into `~/.local/bin`, which the jstack installer put on your PATH, no sudo. Upstream ships no Windows installer, so jstack embeds one, `scripts/install-trufflehog.ps1`. Setup writes it to `~/.jstack/scripts` before any tool line runs, and the Windows install line runs it from there: it downloads the release tar.gz, verifies the SHA-256 against the release's checksums file, and puts `trufflehog.exe` in `%LOCALAPPDATA%\Programs\trufflehog` on your user PATH. TruffleHog ships no skill.
+Secret scanner, run by roast over the diff before review. On macOS and Linux its official installer drops one binary into `~/.local/bin`, which the squirrel installer put on your PATH, no sudo. Upstream ships no Windows installer, so squirrel embeds one, `scripts/install-trufflehog.ps1`. Setup writes it to `~/.squirrel/scripts` before any tool line runs, and the Windows install line runs it from there: it downloads the release tar.gz, verifies the SHA-256 against the release's checksums file, and puts `trufflehog.exe` in `%LOCALAPPDATA%\Programs\trufflehog` on your user PATH. TruffleHog ships no skill.
 
 - Repo: https://github.com/trufflesecurity/trufflehog
 - Check: `command -v trufflehog`
 - Check (windows): `Get-Command trufflehog`
 - Version: `trufflehog --version`
 - Install: `script=$(mktemp) && curl -fsSL -o "$script" https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh && sh "$script" -b ~/.local/bin`
-- Install (windows): `Get-Content -Raw (Join-Path $env:USERPROFILE '.jstack\scripts\install-trufflehog.ps1') | iex`
+- Install (windows): `Get-Content -Raw (Join-Path $env:USERPROFILE '.squirrel\scripts\install-trufflehog.ps1') | iex`
 
 ## bgr
 
@@ -91,7 +91,7 @@ Drives a real browser from the command line, so an agent uses a web UI the way a
 - Version: `agent-browser --version`
 - Install: `npm install -g agent-browser@0.36.0 && agent-browser install`
 - Install (windows): `npm install -g agent-browser@0.36.0; agent-browser install`
-- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json` because jstack doesn't control the tool, and `jstack setup` installs it like every other skill. It's a stub that runs `agent-browser skills get core`, so the instructions agents follow ship inside the CLI, which is why the install line pins the CLI version and `scripts/tool-bump.py` moves it through a PR.
-- The stub's `npm i -g agent-browser` is upstream text and installs whatever is newest, not the pin. Use the `Install` line above or `jstack setup --install-tools`. Setup reports any other version as outdated or ahead.
+- Its skill ships in this repo under `skills/agent-browser`, copied from upstream at the commit pinned in `vendor.json` because squirrel doesn't control the tool, and `squirrel setup` installs it like every other skill. It's a stub that runs `agent-browser skills get core`, so the instructions agents follow ship inside the CLI, which is why the install line pins the CLI version and `scripts/tool-bump.py` moves it through a PR.
+- The stub's `npm i -g agent-browser` is upstream text and installs whatever is newest, not the pin. Use the `Install` line above or `squirrel setup --install-tools`. Setup reports any other version as outdated or ahead.
 
 Codex ships its own `playwright-interactive` skill for persistent browser and Electron sessions. It's Codex's, not this stack's, and stays wherever Codex put it.

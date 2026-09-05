@@ -1,9 +1,9 @@
 ---
-name: jstack-mode
-description: "How I work. Use for /jstack-mode, \"work the jstack way\", or any multi-step coding task. One flow from claiming the task to turning it in with proof, the rules that shape decisions along the way, and the index of every skill in the stack."
+name: squirrel
+description: "How I work. Use for /squirrel, \"work the squirrel way\", or any multi-step coding task. One flow from claiming the task to turning it in with proof, the rules that shape decisions along the way, and the index of every skill in the stack."
 ---
 
-# jstack mode
+# squirrel mode
 
 A way of working, not a one-off command. Once it's on, it stays on for the conversation. Every task runs the same flow, every claim ships with proof, and a human stays in the merge seat. The short version: claim, clean workspace, understand before you touch, build the obvious thing, gates in order, prove it, turn it in, stop.
 
@@ -11,7 +11,7 @@ A way of working, not a one-off command. Once it's on, it stays on for the conve
 
 1. The letter, `AGENTS.md` at the root of this repo, is already in your context. It states every principle and ends with a table of every workflow skill and when it applies. Open a skill's full file only when it applies.
 2. Write a todo list with the flow below in it. A skipped step stays in the list with `skip: <reason>`. Silent skips are how work gets lost.
-3. Check `tools.md` for anything the flow needs that isn't installed. Say so before starting and don't route around it. Install it the way `tools.md` says, `jstack setup` for every tool setup can install, never the install command inside the tool's own skill.
+3. Check `tools.md` for anything the flow needs that isn't installed. Say so before starting and don't route around it. Install it the way `tools.md` says, `squirrel setup` for every tool setup can install, never the install command inside the tool's own skill.
 
 ## The flow
 
@@ -39,7 +39,7 @@ Execution proceeds. Scope gets confirmed. Observable questions get run instead o
 
 ## Delegation
 
-Send bulk to subagents and keep summaries in the main thread. Hand them file pointers, not pasted context. You own every subagent's result: read the diff, write your own summary. `keep-context-lean`. Nothing in this stack names a harness, so spawn subagents and search the code with whatever yours gives you. The browser is agent-browser, which `tools.md` lists and `setup-jstack` installs.
+Send bulk to subagents and keep summaries in the main thread. Hand them file pointers, not pasted context. You own every subagent's result: read the diff, write your own summary. `keep-context-lean`. Nothing in this stack names a harness, so spawn subagents and search the code with whatever yours gives you. The browser is agent-browser, which `tools.md` lists and `squirrel-setup` installs.
 
 ## Writing
 

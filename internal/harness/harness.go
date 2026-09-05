@@ -1,4 +1,4 @@
-// Package harness is the table of coding agents jstack installs into. Every
+// Package harness is the table of coding agents squirrel installs into. Every
 // harness name in the binary lives here; the skills and the letter stay
 // harness-agnostic.
 package harness
@@ -25,13 +25,13 @@ type row struct {
 	toolSkills   bool
 }
 
-const cursorLead = "---\ndescription: jstack, how the human you work for works\nalwaysApply: true\n---\n\n"
+const cursorLead = "---\ndescription: squirrel, how the human you work for works\nalwaysApply: true\n---\n\n"
 
 var table = []row{
 	{key: "claude", name: "Claude Code", homeVar: "CLAUDE_CONFIG_DIR", root: ".claude", skills: "skills", instructions: "CLAUDE.md", toolSkills: true},
 	{key: "codex", name: "Codex", homeVar: "CODEX_HOME", root: ".codex", skills: "skills", instructions: "AGENTS.md", toolSkills: true},
 	{key: "opencode", name: "OpenCode", root: ".config/opencode", skills: "skills", instructions: "AGENTS.md"},
-	{key: "cursor", name: "Cursor", root: ".cursor", skills: "skills", instructions: "rules/jstack.mdc", lead: cursorLead},
+	{key: "cursor", name: "Cursor", root: ".cursor", skills: "skills", instructions: "rules/squirrel.mdc", lead: cursorLead},
 	{key: "pi", name: "Pi", root: ".pi/agent", skills: "skills", instructions: "AGENTS.md"},
 }
 
@@ -115,7 +115,7 @@ func (t Table) Parse(spec string) ([]Harness, error) {
 		}
 	}
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("[JSTACK-HARNESS-EMPTY] --harness needs a value; expected a comma-separated list such as --harness claude,codex or --harness all; known keys: %s", strings.Join(Keys(t), ", "))
+		return nil, fmt.Errorf("[SQUIRREL-HARNESS-EMPTY] --harness needs a value; expected a comma-separated list such as --harness claude,codex or --harness all; known keys: %s", strings.Join(Keys(t), ", "))
 	}
 	return t.ByKeys(keys)
 }
@@ -125,7 +125,7 @@ func (t Table) ByKeys(keys []string) ([]Harness, error) {
 	wanted := map[string]bool{}
 	for _, key := range keys {
 		if !t.has(key) {
-			return nil, fmt.Errorf("[JSTACK-HARNESS-UNKNOWN] unknown harness %q; expected one of %s; example: --harness claude,codex", key, strings.Join(Keys(t), ", "))
+			return nil, fmt.Errorf("[SQUIRREL-HARNESS-UNKNOWN] unknown harness %q; expected one of %s; example: --harness claude,codex", key, strings.Join(Keys(t), ", "))
 		}
 		wanted[key] = true
 	}

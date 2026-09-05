@@ -1,4 +1,4 @@
-// Command jstack installs the skills, the letter, and the tools into the coding
+// Command squirrel installs the skills, the letter, and the tools into the coding
 // agents on this machine, and keeps itself current from GitHub releases.
 package main
 
@@ -18,31 +18,31 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/janiorvalle/jstack"
-	"github.com/janiorvalle/jstack/internal/setup"
-	"github.com/janiorvalle/jstack/internal/tools"
-	"github.com/janiorvalle/jstack/internal/tui"
-	"github.com/janiorvalle/jstack/internal/upgrade"
+	"github.com/janiorvalle/squirrel"
+	"github.com/janiorvalle/squirrel/internal/setup"
+	"github.com/janiorvalle/squirrel/internal/tools"
+	"github.com/janiorvalle/squirrel/internal/tui"
+	"github.com/janiorvalle/squirrel/internal/upgrade"
 )
 
 var version = "dev"
 
-const usage = `jstack puts the skills, the letter, and the tools into the coding agents on this machine.
+const usage = `squirrel puts the skills, the letter, and the tools into the coding agents on this machine.
 
-  jstack setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
+  squirrel setup [--harness claude,codex|all] [--install-tools] [--update-tools] [--keep-instructions] [--yes]
                [--skill-repo owner/name] [--forget-skill-repo owner/name] [--no-skill-repo] [--override skill=source]
                [--repos-dir folder]
-  jstack upgrade
-  jstack version
+  squirrel upgrade
+  squirrel version
 
 With a terminal, setup is a guided flow: one screen per question, arrow keys and space to
 pick, Enter to continue, Esc to go back. Saved answers come preselected, so a rerun with
 nothing changed is one Enter. The plan comes last with a confirm; no harness or repo changes before it.
 Without a terminal it prints the plan and changes nothing unless --yes is passed. Picks are
-saved in ~/.jstack/config.json. Each tool is missing, outdated, or current; the latest versions
+saved in ~/.squirrel/config.json. Each tool is missing, outdated, or current; the latest versions
 come from GitHub and npm, and an update runs through whoever installed the binary: brew for a
 Homebrew one, the tools.md line for one in ~/.local/bin, the pinned npm line for an npm one.
-A skills repo of your own is cloned with gh and its skills/ folder installs beside jstack's.
+A skills repo of your own is cloned with gh and its skills/ folder installs beside squirrel's.
 A skill named the same in two sources stops setup until --override says which one to install.
 It also asks once where your repos live, lists each repo's Tracker line, asks for the ones
 that have none, writes the line into the repo, and offers to open the PR.
@@ -99,12 +99,12 @@ func runWith(args []string, stdin io.Reader, stdout, stderr io.Writer, deps depe
 		defer stop()
 		return runUpgradeCleanup(ctx, args[1:], stderr)
 	}
-	fmt.Fprintf(stderr, "jstack: [JSTACK-CLI-COMMAND] unknown command %q; use `jstack setup`, `jstack upgrade`, or `jstack version`\n", args[0])
+	fmt.Fprintf(stderr, "squirrel: [SQUIRREL-CLI-COMMAND] unknown command %q; use `squirrel setup`, `squirrel upgrade`, or `squirrel version`\n", args[0])
 	return 2
 }
 
 func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, deps dependencies) int {
-	flags := flag.NewFlagSet("jstack setup", flag.ContinueOnError)
+	flags := flag.NewFlagSet("squirrel setup", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	harnesses := flags.String("harness", "", "harnesses to install into: a comma-separated list of claude, codex, opencode, cursor, pi, or all")
 	installTools := flags.Bool("install-tools", false, "install the missing tools without asking")
@@ -127,10 +127,10 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		reposDirs = append(reposDirs, value)
 		return nil
 	})
-	flags.Func("override", "which source a skill in more than one source comes from, skill=jstack or skill=owner/name; repeatable", func(value string) error {
+	flags.Func("override", "which source a skill in more than one source comes from, skill=squirrel or skill=owner/name; repeatable", func(value string) error {
 		name, source, ok := strings.Cut(value, "=")
 		if !ok || name == "" || source == "" {
-			return fmt.Errorf("[JSTACK-CLI-OVERRIDE] --override needs skill=source, got %q; example: --override land-pr=janiorvalle/work-skills", value)
+			return fmt.Errorf("[SQUIRREL-CLI-OVERRIDE] --override needs skill=source, got %q; example: --override land-pr=janiorvalle/work-skills", value)
 		}
 		overrides[name] = source
 		return nil
@@ -142,12 +142,12 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return 2
 	}
 	if flags.NArg() > 0 {
-		fmt.Fprintf(stderr, "jstack: [JSTACK-CLI-ARGS] setup takes flags only, got %q; example: jstack setup --harness claude,codex --yes\n", flags.Arg(0))
+		fmt.Fprintf(stderr, "squirrel: [SQUIRREL-CLI-ARGS] setup takes flags only, got %q; example: squirrel setup --harness claude,codex --yes\n", flags.Arg(0))
 		return 2
 	}
 	home, err := deps.home()
 	if err != nil {
-		fmt.Fprintf(stderr, "jstack: [JSTACK-HOME] cannot find the home directory: %v; set HOME and rerun\n", err)
+		fmt.Fprintf(stderr, "squirrel: [SQUIRREL-HOME] cannot find the home directory: %v; set HOME and rerun\n", err)
 		return 1
 	}
 	runSetup := deps.setup
@@ -155,7 +155,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		runSetup = deps.guided
 	}
 	err = runSetup(ctx, setup.Options{
-		Files:            jstack.Files,
+		Files:            squirrel.Files,
 		Home:             home,
 		Getenv:           os.Getenv,
 		Harness:          *harnesses,
@@ -179,7 +179,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return 0
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "jstack: %v\n", err)
+		fmt.Fprintf(stderr, "squirrel: %v\n", err)
 		return 1
 	}
 	return 0
@@ -187,11 +187,11 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 
 func runUpgrade(ctx context.Context, args []string, stdout, stderr io.Writer, deps dependencies) int {
 	if len(args) != 0 {
-		fmt.Fprintln(stderr, "jstack: [JSTACK-UPGRADE-ARGS] upgrade takes no arguments; use `jstack upgrade`")
+		fmt.Fprintln(stderr, "squirrel: [SQUIRREL-UPGRADE-ARGS] upgrade takes no arguments; use `squirrel upgrade`")
 		return 2
 	}
 	if err := deps.upgrade(ctx, version, stdout); err != nil {
-		fmt.Fprintf(stderr, "jstack: %v\n", err)
+		fmt.Fprintf(stderr, "squirrel: %v\n", err)
 		return 1
 	}
 	return 0
@@ -199,16 +199,16 @@ func runUpgrade(ctx context.Context, args []string, stdout, stderr io.Writer, de
 
 func runUpgradeCleanup(ctx context.Context, args []string, stderr io.Writer) int {
 	if len(args) != 2 {
-		fmt.Fprintln(stderr, "jstack: [JSTACK-UPGRADE-CLEANUP] internal cleanup expected a backup path and parent process ID; rerun `jstack upgrade`")
+		fmt.Fprintln(stderr, "squirrel: [SQUIRREL-UPGRADE-CLEANUP] internal cleanup expected a backup path and parent process ID; rerun `squirrel upgrade`")
 		return 2
 	}
 	parentProcessID, err := strconv.Atoi(args[1])
 	if err != nil {
-		fmt.Fprintf(stderr, "jstack: [JSTACK-UPGRADE-CLEANUP] parent process ID %q is invalid; expected a positive integer; rerun `jstack upgrade`\n", args[1])
+		fmt.Fprintf(stderr, "squirrel: [SQUIRREL-UPGRADE-CLEANUP] parent process ID %q is invalid; expected a positive integer; rerun `squirrel upgrade`\n", args[1])
 		return 2
 	}
 	if err := upgrade.CleanupPreviousExecutable(ctx, args[0], parentProcessID); err != nil {
-		fmt.Fprintf(stderr, "jstack: %v\n", err)
+		fmt.Fprintf(stderr, "squirrel: %v\n", err)
 		return 1
 	}
 	return 0
@@ -231,7 +231,7 @@ func runShell(ctx context.Context, command string, output io.Writer) error {
 const windowsRefreshPath = "$env:Path += ';' + [Environment]::GetEnvironmentVariable('Path', 'User')"
 
 // posixInstallFolderOnPath puts ~/.local/bin first on PATH when it is not
-// there yet. The jstack installer and every curl installer in tools.md put
+// there yet. The squirrel installer and every curl installer in tools.md put
 // their tool in that folder, and a fresh machine has it off PATH until the
 // shell profile says otherwise, so without this the check that follows an
 // install would not find the tool it just installed. A PATH that already has
