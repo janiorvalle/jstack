@@ -9,8 +9,8 @@ import (
 )
 
 // Config is what setup remembers between runs: the harnesses the human
-// picked, the ones the harness screen offered them, so one found since is
-// offered checked while one they unchecked stays unchecked, the skills
+// picked, the ones that were found when they picked, so one found since is
+// offered checked while one they left out stays out, the skills
 // repos they named, whether they were asked for one, which source each
 // colliding skill name comes from, "jstack" or "owner/name", and the
 // folders their repos live in, with whether they were asked for those.

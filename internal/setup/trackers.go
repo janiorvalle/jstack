@@ -412,13 +412,17 @@ func applyTrackers(ctx context.Context, opts Options, report reposReport, answer
 		return nil
 	}
 	byDir := map[string]trackerRepo{}
-	for _, repo := range undeclared {
+	for _, repo := range report.repos {
 		byDir[repo.dir] = repo
 	}
 	var failures []error
 	for _, answer := range answers {
 		repo, ok := byDir[answer.Dir]
 		if !ok {
+			continue
+		}
+		if repo.declared() {
+			fmt.Fprintf(out, "  %s  names its tracker since the question, %q, so the answer is left out\n", repo.name, repo.line)
 			continue
 		}
 		if answer.Skip {
@@ -449,6 +453,10 @@ func declareTracker(ctx context.Context, opts Options, repo trackerRepo, line st
 	content, err := os.ReadFile(repo.file)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("cannot read %q: %w; make it readable and rerun", repo.file, err)
+	}
+	if declared := findTrackerLine(string(content)); declared != "" {
+		fmt.Fprintf(out, "  %s  names its tracker since the question, %q, so the answer is left out\n", repo.name, declared)
+		return nil
 	}
 	if err := writeFile(repo.file, withTrackerLine(string(content), line)); err != nil {
 		return err

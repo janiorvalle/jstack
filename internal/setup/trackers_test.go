@@ -672,3 +672,29 @@ func TestATrackerAnswerAloneIsPending(t *testing.T) {
 		t.Fatalf("a line to write is not pending: err = %v", err)
 	}
 }
+
+func TestATrackerLineWrittenSinceTheQuestionIsLeftAlone(t *testing.T) {
+	home := homeWithRepos(t)
+	savedRepos(t, home)
+	opts, out := options(t, home, withRoast("1.1.0"), "")
+	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
+		write(t, filepath.Join(home, "code", "bravo", "AGENTS.md"), "# Bravo\n\nTracker: linear SR\n\nSome text.\n")
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Line: "Tracker: github-issues", OpenPR: true}, "charlie": {Skip: true}})
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  names its tracker since the question, "Tracker: linear SR", so the answer is left out`)
+	if got := read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")); got != "# Bravo\n\nTracker: linear SR\n\nSome text.\n" {
+		t.Fatalf("bravo AGENTS.md = %q", got)
+	}
+	out.Reset()
+	repo := trackerRepo{dir: filepath.Join(home, "code", "bravo"), name: "bravo", file: filepath.Join(home, "code", "bravo", "AGENTS.md")}
+	if err := declareTracker(context.Background(), opts, repo, "Tracker: github-issues", true); err != nil {
+		t.Fatal(err)
+	}
+	expectAll(t, out.String(), `bravo  names its tracker since the question, "Tracker: linear SR", so the answer is left out`)
+	if got := read(t, repo.file); got != "# Bravo\n\nTracker: linear SR\n\nSome text.\n" {
+		t.Fatalf("the write went ahead: %q", got)
+	}
+}

@@ -175,7 +175,6 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	answers := Answers{
 		Harnesses:      harness.Keys(picked),
-		HarnessesFound: session.config.HarnessesFound,
 		SkillRepos:     repoNames,
 		SkillRepoAsked: asked,
 		ReposDirs:      reposDirs,
@@ -274,6 +273,18 @@ func installedVersion(ctx context.Context, opts Options, tool tools.Tool) string
 		}
 	}
 	return versionPrinted(ctx, opts, tool.Version)
+}
+
+// runToolLine runs a line that runs the tool itself, its skill install, on
+// the person's own PATH first, so it's the binary they run that installs
+// its skill, and on the shell's when their PATH has no such tool.
+func runToolLine(ctx context.Context, opts Options, command string) error {
+	if line, ok := onPersonsPath(opts, command); ok {
+		if err := opts.Shell(ctx, line, io.Discard); err == nil {
+			return nil
+		}
+	}
+	return opts.Shell(ctx, command, io.Discard)
 }
 
 func versionPrinted(ctx context.Context, opts Options, line string) string {
@@ -825,7 +836,7 @@ func applyTool(ctx context.Context, opts Options, status toolStatus, picked []ha
 		fmt.Fprintln(out, line+", skill present")
 		return nil
 	}
-	if err := opts.Shell(ctx, status.tool.SkillInstall, io.Discard); err != nil {
+	if err := runToolLine(ctx, opts, status.tool.SkillInstall); err != nil {
 		fmt.Fprintf(out, "%s, skill install FAILED via %s: %v\n", line, status.tool.SkillInstall, err)
 		return fmt.Errorf("%s: `%s` failed: %v; run it by hand so the tool's skill is in place", status.tool.Title, status.tool.SkillInstall, err)
 	}

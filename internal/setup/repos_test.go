@@ -162,7 +162,7 @@ func TestRepoSkillsInstallBesideJstacksWithTheirSourceNamed(t *testing.T) {
 	if got := read(t, filepath.Join(home, ".claude", "skills", "voice", "SKILL.md")); got != "voice v2\n" {
 		t.Fatalf("voice = %q", got)
 	}
-	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ],\n  \"skill_repos\": [\n    \"me/work-skills\"\n  ],\n  \"skill_repos_asked\": true,\n  \"skill_overrides\": {\n    \"voice\": \"jstack\"\n  }\n}\n" {
+	if got := read(t, filepath.Join(home, ".jstack", "config.json")); got != "{\n  \"harnesses\": [\n    \"claude\"\n  ],\n  \"harnesses_found\": [\n    \"claude\"\n  ],\n  \"skill_repos\": [\n    \"me/work-skills\"\n  ],\n  \"skill_repos_asked\": true,\n  \"skill_overrides\": {\n    \"voice\": \"jstack\"\n  }\n}\n" {
 		t.Fatalf("config = %q", got)
 	}
 	clone := filepath.Join(home, ".jstack", "repos", "me", "work-skills")

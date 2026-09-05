@@ -17,7 +17,7 @@ func ownedFixture() fstest.MapFS {
 	files["tools.md"] = &fstest.MapFile{Data: []byte("# Tools\n\n" +
 		"## git\n\n- Check: `check-git`\n\n" +
 		"## TruffleHog\n\n- Repo: https://github.com/x/trufflehog\n- Check: `command -v trufflehog`\n- Check (windows): `Get-Command trufflehog`\n- Version: `trufflehog --version`\n- Install: `curl trufflehog | sh`\n\n" +
-		"## bgr\n\n- Repo: https://github.com/x/bgr\n- Check: `command -v bgr`\n- Check (windows): `Get-Command bgr`\n- Version: `bgr --version`\n- Install: `curl bgr | sh`\n\n" +
+		"## bgr\n\n- Repo: https://github.com/x/bgr\n- Check: `command -v bgr`\n- Check (windows): `Get-Command bgr`\n- Version: `bgr --version`\n- Install: `curl bgr | sh`\n- Skill install: `bgr install-skill`\n- Skill folder: `bgr`\n\n" +
 		"## browser\n\n- Repo: https://github.com/x/browser\n- Check: `command -v browser`\n- Check (windows): `Get-Command browser`\n- Version: `browser --version`\n- Install: `" + pinnedInstall + "`\n")}
 	return files
 }
@@ -225,6 +225,31 @@ func TestAStaleCopyInTheInstallersFolderOffThePersonsPathDoesNotHideBrews(t *tes
 	}
 	if strings.Count(strings.Join(shell.commands, ";"), "command -v trufflehog") != 2 {
 		t.Fatalf("looked on the shell's PATH after the person's found it: %v", shell.commands)
+	}
+}
+
+func TestTheSkillInstallRunsTheBinaryThePersonsPathRuns(t *testing.T) {
+	skipOnWindows(t)
+	home := homeWithClaude(t)
+	shell, opts := owned(t, home)
+	shell.versions[onUserPath+"trufflehog --version"] = "trufflehog 3.97.4"
+	shell.versions[onUserPath+"browser --version"] = "browser 0.36.0"
+	shell.versions[onUserPath+"bgr --version"] = "bgr 1.7.0"
+	opts.Yes = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	commands := strings.Join(shell.commands, ";")
+	if !strings.Contains(commands, onUserPath+"bgr install-skill") || strings.Contains(commands, ";bgr install-skill") {
+		t.Fatalf("the skill install did not run on the person's PATH: %v", shell.commands)
+	}
+	shell.failing = map[string]bool{onUserPath + "bgr install-skill": true}
+	shell.commands = nil
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(shell.commands, ";"), ";bgr install-skill") {
+		t.Fatalf("the shell's PATH was not the fallback: %v", shell.commands)
 	}
 }
 

@@ -23,6 +23,7 @@ type Session struct {
 	embedded assets
 	config   Config
 	rows     harness.Table
+	found    []string
 
 	gathered    catalog
 	gatheredFor string
@@ -44,7 +45,8 @@ func Start(opts Options) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Session{opts: opts, embedded: embedded, config: config, rows: harness.Resolve(opts.Home, opts.Getenv)}, nil
+	rows := harness.Resolve(opts.Home, opts.Getenv)
+	return &Session{opts: opts, embedded: embedded, config: config, rows: rows, found: harness.Keys(rows.Found())}, nil
 }
 
 // HarnessChoice is one row of the harness screen. Checked is the pick to
@@ -281,11 +283,9 @@ func (s *Session) toolStatuses(ctx context.Context) []toolStatus {
 }
 
 // Answers is everything a run decides, from the flags, the config, and the
-// screens, in the values the plan and the apply take. HarnessesFound is
-// what the harness screen offered, when it was shown.
+// screens, in the values the plan and the apply take.
 type Answers struct {
 	Harnesses      []string
-	HarnessesFound []string
 	SkillRepos     []string
 	SkillRepoAsked bool
 	ReposDirs      []string
@@ -375,7 +375,7 @@ func (s *Session) Apply(ctx context.Context, p *Plan, answers Answers) error {
 	}
 	saved := Config{
 		Harnesses:       harness.Keys(p.picked),
-		HarnessesFound:  answers.HarnessesFound,
+		HarnessesFound:  s.found,
 		SkillRepos:      answers.SkillRepos,
 		SkillReposAsked: answers.SkillRepoAsked,
 		SkillOverrides:  rememberOverrides(s.config.SkillOverrides, p.current.catalog.unreachable(), p.current.catalog.picks),
