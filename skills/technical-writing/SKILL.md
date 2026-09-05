@@ -20,7 +20,7 @@ The codebase is the word list. Write the real symbol, file, flag, or command, no
 
 One doc, one kind. Two questions pick it: does it inform action or understanding, and does it serve learning or work?
 
-- **Tutorial.** Action plus learning. You're the teacher; their success is your job. Open with what they'll build. Every step produces something they can see, and you say what they should see. Explanation is one clause and a link. Write as we, in commands.
+- **Tutorial.** Action plus learning. You're the teacher, and their success is your job. Open with what they'll build. Every step produces something they can see, and you say what they should see. Explanation is one clause and a link. Write as we, in commands.
 - **How-to.** Action plus work. Solve a problem a person has. Assume competence, skip teaching, no background. Allow forks: "if you want X, do Y". Name it by the task, "how to calibrate the array", not "array calibration".
 - **Reference.** Understanding plus work. Describe and only describe. Dry, complete, sure. Mirror the structure of the thing. Generate from code where possible so it stays true.
 - **Explanation.** Understanding plus learning. One bounded topic, readable away from the product, anchored on a real why. Context, decisions, history, alternatives. Opinion is allowed here and nowhere else.
@@ -76,7 +76,7 @@ After:
 
 > `budget.mjs` reads the committed budget from `budget.json` and counts the files that import protos. If the count exceeds the budget, CI fails. Run `budget.mjs --write` only to lower the budget.
 
-Someone does something now. Ratchet is gone; the real filename does the naming. The five-noun string is plain clauses. The hedge is deleted. The failure condition comes before the step it explains. Only sits next to its verb. If exceeded gets a subject.
+Someone does something now. Ratchet is gone. The real filename does the naming. The five-noun string is plain clauses. The hedge is deleted. The failure condition comes before the step it explains. Only sits next to its verb. If exceeded gets a subject.
 
 ## Checklist
 
