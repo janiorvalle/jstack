@@ -30,7 +30,7 @@ Run `jstack setup` again any time. It remembers the harnesses you picked. `jstac
 
 Setup asks two more questions, once each. A skills repo of your own, `owner/name` on GitHub with a `skills/` folder: it's cloned with gh under `~/.jstack/repos`, pulled on every run, and its skills go beside jstack's in every harness you picked. And where your repos live, guessed from the folders under home that hold git checkouts: `~/code`, `~/github`, `~/src`, `~/projects`, `~/dev`. Setup lists every repo there with its `Tracker:` line or `not declared` and, with a terminal, asks about each undeclared one: one of the four backends the `tracker` skill knows, or skip, same for all if you like. Then it writes the line into the repo's `AGENTS.md` and offers a one-line PR through gh.
 
-Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing:
+Without a terminal, setup prints the plan and the exact flags to apply it, and changes nothing in the harnesses (a skills repo you named is still refreshed):
 
 ```sh
 jstack setup --harness claude,codex --yes   # or --harness all
@@ -44,7 +44,7 @@ jstack setup --harness claude,codex --yes   # or --harness all
 
 ## Use it
 
-Restart your harness so the skills load. Then start any multi-step task with `/jstack-mode`, or say "work the jstack way".
+Restart your harness so the skills load. Then start any multi-step task with `/jstack-mode`, or say "work the jstack way". The letter is in your instructions file, so the mode is on in every session.
 
 ## Tools
 
@@ -60,7 +60,7 @@ Each tool ships its own skill and installs it. `tools.md` has the check, version
 
 ## What's in it
 
-- `AGENTS.md` is the letter: who's who, what we're doing, and the rules that matter first.
+- `AGENTS.md` is the letter: who's who, what we're doing, and the rules that matter first. Setup installs it into your harness's user-level instructions file so the mode is always on.
 - `skills/jstack-mode/` is the front door: the flow, the rules, and an index of every skill, generated from their description lines.
 - `skills/*/` with `kind: principle` in the frontmatter are the principles. One rule each.
 - The rest are workflows: `how`, `why`, `architect`, `arena`, `swarm`, `land-pr`, `worktree`, and so on.

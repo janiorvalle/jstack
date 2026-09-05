@@ -75,7 +75,7 @@ In a planned rewrite, don't keep every step working with throwaway compatibility
 
 ## Sequence the gates: fix first, judge last
 
-Anything that can change the code runs before anything that judges it: format and lint with autofix, typecheck, the fast tests, the review gate looped until it says well done, then the full suite once. The review gate is a different model than the one that wrote the change, and it's required: if it isn't installed or fails to run, stop and say so. If the full suite fails at the end, fix it, rerun the fast tier, and review only the fix. `verify-each-step` has the order, `land-pr` runs it.
+Anything that can change the code runs before anything that judges it: format and lint with autofix, typecheck, the fast tests, the review gate looped until it says well done, then the full suite once. The review gate is a different model than the one that wrote the change, and it's required: if it isn't installed or fails to run, stop and say so. A missing gate is a blocker, not an inconvenience. If the full suite fails at the end, fix it, rerun the fast tier, and review only the fix. `verify-each-step` has the order, `land-pr` runs it.
 
 ## Guard your context
 
@@ -83,14 +83,14 @@ Context is finite. Send bulk to subagents: long output, big files, wide searches
 
 ## Use what your harness gives you
 
-Nothing in this stack names a harness. Spawn subagents, search the code, and drive the browser with whatever yours provides. `tools.md` names the tools the flow expects and how to get them. Install them with `jstack setup`, never with the install line inside a tool's own skill, which is upstream text and pulls the newest version, not the pin. If one is missing, say so and point at it. Don't route around a gate.
+Nothing in this stack names a harness. Spawn subagents, search the code, and drive the browser with whatever yours provides. `tools.md` names the tools the flow expects and how to get them. Install them the way it says, `jstack setup` for every tool setup can install, never with the install line inside a tool's own skill, which is upstream text and pulls the newest version, not the pin. If one is missing, say so and point at it. Don't route around a gate.
 
 ## Some general rules
 
 These steer us. They aren't hard-set, but we default to following them. To ignore one, be loud about it and get our approval first.
 
 - **Names reveal intent.** If a name needs a comment to explain it, the name failed.
-- **Typesafety is leverage, never `any`.** Model the real shape, or say `unknown` and narrow it.
+- **Typesafety is leverage, never `any`.** Model the real shape. If the shape is genuinely unknown, say `unknown` and narrow it.
 - **Functions should do one thing.** Not one line, one thing, at one level of abstraction.
 - **Fewer arguments, always.** Three is suspicious. Never boolean flags.
 - **No side effects, no lies.** Do what the name says, nothing more. Do something or answer something, not both.
@@ -113,7 +113,7 @@ The skills `easy-to-read`, `strict-types`, `tests-are-code`, `safe-to-rerun`, `f
 
 ## Voice, everything
 
-Apply the `voice` skill to everything you write for us: chat replies, plans, docs, emails, commit messages, PR descriptions, artifact copy. Don't wait to be asked. The short version: no em dashes, no AI vocabulary, no bold-label-colon lists, no "not just X but Y", plain words, sentence case headings, opinions instead of neutral pro and con lists. A sentence that could appear unchanged in anyone else's document says nothing. Cut it.
+Apply the `voice` skill to everything you write for us: chat replies, plans, docs, emails, commit messages, PR descriptions, artifact copy. Don't wait to be asked. The short version: no em dashes, no AI vocabulary, no bold-label-colon lists that restate themselves, no "not just X but Y", plain words, sentence case headings, opinions instead of neutral pro and con lists. A sentence that could appear unchanged in anyone else's document says nothing. Cut it.
 
 ## The workflows
 
