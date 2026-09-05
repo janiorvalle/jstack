@@ -334,12 +334,12 @@ func TestSkipLeavesTheRepoAsItIsForThisRun(t *testing.T) {
 	shell := withRoast("1.1.0")
 	opts, out := options(t, home, shell, "")
 	err := guided(t, opts, script{trackers: func(questions []TrackerQuestion) []TrackerAnswer {
-		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}, "charlie": {Line: TrackerLine(backendNamed(t, "jira"), "SR")}})
+		return answerEach(questions, map[string]TrackerAnswer{"bravo": {Skip: true}, "charlie": {Line: TrackerLine(backendNamed(t, "linear"), "SR")}})
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectAll(t, out.String(), "bravo    skipped; not offered again without --ask-trackers-again", "bravo  skipped", `charlie  wrote "Tracker: jira SR"`)
+	expectAll(t, out.String(), "bravo    skipped; not offered again without --ask-trackers-again", "bravo  skipped", `charlie  wrote "Tracker: linear SR"`)
 	if read(t, filepath.Join(home, "code", "bravo", "AGENTS.md")) != "# Bravo\n\nSome text.\n" {
 		t.Fatal("a skipped repo changed")
 	}

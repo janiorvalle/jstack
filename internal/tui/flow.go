@@ -140,8 +140,7 @@ type roundScratch struct {
 }
 
 // perKey reports whether a backend is asked in rounds: it takes a key and
-// has no default for it, so each key is a team or project of the person's
-// own and the repos in it are its own list.
+// has no default for it, so each key is a team of the person's own and the repos in it are its own list.
 func perKey(chosen setup.Backend) bool {
 	return chosen.Argument != "" && chosen.Default == ""
 }
@@ -420,9 +419,9 @@ func (f *flow) reposDirs() ([]string, bool, error) {
 
 // trackerScreens asks about every repo that declares no tracker, one
 // backend at a time in the order the backends come, over the repos no
-// earlier screen took. Linear and Jira ask in rounds: the team or project
-// key, the repos in it, then the key again until Enter leaves it empty.
-// GitHub Issues and markdown tasks are one list each. Unchecked on every
+// earlier screen took. Linear asks in rounds: the team key, the repos in
+// that team, then the key again until Enter leaves it empty. GitHub Issues
+// and markdown tasks are one list each. Unchecked on every
 // screen means skip, and the next run remembers it. A screen with no
 // repo left to offer is not shown.
 func (f *flow) trackerScreens(entered direction) (outcome, error) {

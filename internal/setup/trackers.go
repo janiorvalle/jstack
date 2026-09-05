@@ -105,12 +105,11 @@ type backend struct {
 // gitHubIssues is the one backend an origin can suggest.
 const gitHubIssues = "github-issues"
 
-// backends in the order the screens come: the two that need a key first,
+// backends in the order the screens come: the one that needs a key first,
 // then the one the origin can guess, then the folder in the repo for the
-// rest.
+// rest. Jira is not offered; a line written by hand still reads.
 var backends = []backend{
 	{key: "linear", label: "Linear", argument: "team key", example: "SR"},
-	{key: "jira", label: "Jira", argument: "project key", example: "SR"},
 	{key: gitHubIssues, label: "GitHub Issues"},
 	{key: "markdown", label: "markdown tasks in the repo", argument: "folder", example: "tasks/", byDefault: "tasks/"},
 }

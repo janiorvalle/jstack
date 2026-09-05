@@ -228,11 +228,11 @@ With a hundred checkouts under `~/code` the tracker step was a hundred screens, 
 - The flag path is untouched: no git or gh runs there, nothing is written, and the skip list is kept as it was except that `--ask-trackers-again --yes` clears it.
 - A skipped repo is a hold, the same structure as a repo waiting on its `tracker-line` branch, so the plan lists it with its reason and the flag path's count leaves it out.
 
-## The Linear and Jira lists ask a key per team
+## The Linear list asks a key per team, and Jira leaves setup
 
 Written 2026-09-05, for issue 51.
 
-The one list per backend from issue 47 asked one Linear team key for every repo checked. A person whose repos sit in several teams got the wrong key on most of them, and the only way out was one run per team with `--ask-trackers-again`. Now Linear and Jira ask in rounds: the key first, "Linear team key, Enter for none", then the checkbox list of the repos in that team over the repos no earlier screen took, then the key again, empty, until Enter leaves it empty or the last repo is taken. Esc walks the rounds back with the keys and checks kept. Each repo gets the key of the list it was checked on, which the setup package's per-repo answer already carried, so nothing changed there. The backend leaves one line when it ends, "linear SR  5 repos, linear KC  3 repos", the same key twice counted as one.
+The one list per backend from issue 47 asked one Linear team key for every repo checked. A person whose repos sit in several teams got the wrong key on most of them, and the only way out was one run per team with `--ask-trackers-again`. Now Linear asks in rounds: the key first, "Linear team key, Enter for none", then the checkbox list of the repos in that team over the repos no earlier screen took, then the key again, empty, until Enter leaves it empty or the last repo is taken. Esc walks the rounds back with the keys and checks kept. Each repo gets the key of the list it was checked on, which the setup package's per-repo answer already carried, so nothing changed there. The backend leaves one line when it ends, "linear SR  5 repos, linear KC  3 repos", the same key twice counted as one. Jira left setup in the same change, by the human's call: setup never offers it, and a repo that writes `Tracker: jira SR` by hand still works, since the `tracker` skill keeps its Jira section and setup reads the line as written.
 
 - The key comes before the list because the list's title names the team, "Which repos track their work in Linear team SR?". Picking the repos of a named team reads better than picking repos and being asked which team afterwards.
 - A single-team person sees the same screens plus one Enter, on the empty key, and not even that when the team took every repo.
