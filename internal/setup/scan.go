@@ -45,8 +45,8 @@ func readRepoStates(ctx context.Context, opts Options, repos []trackerRepo) []re
 }
 
 // readOrigins is readOrigin for every URL, in the URLs' order.
-func readOrigins(ctx context.Context, opts Options, urls []string) []OriginFacts {
-	facts := make([]OriginFacts, len(urls))
+func readOrigins(ctx context.Context, opts Options, urls []string) []originFacts {
+	facts := make([]originFacts, len(urls))
 	forEach(ctx, len(urls), func(index int) {
 		facts[index] = readOrigin(ctx, opts, urls[index])
 	})

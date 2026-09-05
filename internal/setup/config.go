@@ -16,8 +16,8 @@ import (
 // folders their repos live in, with whether they were asked for those,
 // and the checkouts they skipped on the tracker screens, by canonical
 // path, so a skipped repo is not offered again until --ask-trackers-again,
-// and what gh said about each origin the tracker screens met, by push
-// URL, so a rerun asks gh only about origins it hasn't met.
+// and what gh said about each origin it could see, by push URL, so a
+// rerun asks gh only about origins it hasn't met.
 type Config struct {
 	Harnesses       []string               `json:"harnesses"`
 	HarnessesFound  []string               `json:"harnesses_found,omitempty"`

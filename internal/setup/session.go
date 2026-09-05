@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/janiorvalle/squirrel/internal/harness"
@@ -34,7 +35,7 @@ type Session struct {
 	scanned     []TrackerQuestion
 	scannedFor  string
 	scannedYet  bool
-	origins     map[string]OriginFacts
+	origins     map[string]originFacts
 	metOrigins  []string
 }
 
@@ -52,12 +53,16 @@ func Start(opts Options) (*Session, error) {
 	return &Session{opts: opts, embedded: embedded, config: config, rows: rows, found: harness.Keys(rows.Found()), origins: rememberedOrigins(config, opts)}, nil
 }
 
-// rememberedOrigins is what earlier runs learned from gh about origins, or
-// nothing under --ask-trackers-again, the flag that asks everything again.
-func rememberedOrigins(config Config, opts Options) map[string]OriginFacts {
-	origins := map[string]OriginFacts{}
-	if !opts.AskTrackersAgain {
-		maps.Copy(origins, config.Origins)
+// rememberedOrigins is what earlier runs learned from gh about origins,
+// every one of them seen, or nothing under --ask-trackers-again, the flag
+// that asks everything again.
+func rememberedOrigins(config Config, opts Options) map[string]originFacts {
+	origins := map[string]originFacts{}
+	if opts.AskTrackersAgain {
+		return origins
+	}
+	for url, facts := range config.Origins {
+		origins[url] = originFacts{seen: true, OriginFacts: facts}
 	}
 	return origins
 }
@@ -276,18 +281,22 @@ func (s *Session) askOrigins(ctx context.Context, states []repoState) {
 	}
 }
 
-// rememberOrigins is what the next run knows about origins: what this
-// run's scan met, from memory or from gh, so an origin whose repo has
-// named its tracker or is gone drops off. A run that scanned nothing, the
+// rememberOrigins is what the next run knows about origins: the ones this
+// run's scan met and gh could see, from memory or from gh, so an origin
+// whose repo has named its tracker or is gone drops off, and one gh
+// couldn't see is asked again next run. A run that scanned nothing, the
 // flag path, keeps what it started with: the map as it was, or nothing
 // under --ask-trackers-again.
 func (s *Session) rememberOrigins() map[string]OriginFacts {
-	if !s.scannedYet {
-		return s.origins
-	}
 	kept := map[string]OriginFacts{}
-	for _, url := range s.metOrigins {
-		kept[url] = s.origins[url]
+	met := s.metOrigins
+	if !s.scannedYet {
+		met = slices.Sorted(maps.Keys(s.origins))
+	}
+	for _, url := range met {
+		if facts := s.origins[url]; facts.seen {
+			kept[url] = facts.OriginFacts
+		}
 	}
 	return kept
 }

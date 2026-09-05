@@ -553,53 +553,57 @@ func (s repoState) prHold() string {
 }
 
 // prHold is why the PR can't carry the line: what git says, then whether
-// gh can see the origin, since gh opens the PR. What gh said is remembered
-// between runs, so the fix names the flag that asks again.
-func prHold(state repoState, origin OriginFacts) string {
+// gh can see the origin, since gh opens the PR.
+func prHold(state repoState, origin originFacts) string {
 	if hold := state.prHold(); hold != "" {
 		return hold
 	}
-	if !origin.Seen {
-		return "has an origin gh can't see, run gh auth login for that host and add --ask-trackers-again"
+	if !origin.seen {
+		return "has an origin gh can't see, run gh auth login for that host"
 	}
 	return ""
 }
 
-// OriginFacts is what gh said about an origin, and when: Seen when gh
-// could reach the repo, so it is on a GitHub host gh is logged into, and
+// OriginFacts is what gh said about an origin it could reach, and when:
 // Issues when the repo has issues enabled, the one thing an origin says
 // about which tracker the repo uses. The config keeps them by push URL, so
 // a rerun asks gh only about origins it hasn't met.
 type OriginFacts struct {
-	Seen    bool      `json:"seen"`
 	Issues  bool      `json:"issues"`
 	AskedAt time.Time `json:"asked_at"`
 }
 
+// originFacts is an origin as this run knows it: seen when gh could reach
+// the repo, so it is on a GitHub host gh is logged into. An origin gh
+// couldn't see, not logged in, a host gh doesn't know, no network, is not
+// a fact about the origin, so it is asked once per run and never saved.
+type originFacts struct {
+	seen bool
+	OriginFacts
+}
+
 // guess is the backend key the origin suggests, "" when it says nothing.
-func (o OriginFacts) guess() string {
-	if o.Seen && o.Issues {
+func (o originFacts) guess() string {
+	if o.seen && o.Issues {
 		return gitHubIssues
 	}
 	return ""
 }
 
-// readOrigin asks gh about the origin. Any failure, gh not logged in, a
-// host gh doesn't know, no network, reads as an origin gh can't see.
-func readOrigin(ctx context.Context, opts Options, url string) OriginFacts {
-	facts := OriginFacts{AskedAt: opts.Now().UTC().Truncate(time.Second)}
+// readOrigin asks gh about the origin. Any failure reads as an origin gh
+// can't see.
+func readOrigin(ctx context.Context, opts Options, url string) originFacts {
 	var out bytes.Buffer
 	if opts.Shell(ctx, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, url), &out) != nil {
-		return facts
+		return originFacts{}
 	}
 	var answer struct {
 		HasIssuesEnabled bool `json:"hasIssuesEnabled"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &answer); err != nil {
-		return facts
+		return originFacts{}
 	}
-	facts.Seen, facts.Issues = true, answer.HasIssuesEnabled
-	return facts
+	return originFacts{seen: true, OriginFacts: OriginFacts{Issues: answer.HasIssuesEnabled, AskedAt: opts.Now().UTC().Truncate(time.Second)}}
 }
 
 func readRepoState(ctx context.Context, opts Options, dir string) repoState {
@@ -626,22 +630,29 @@ func readRepoState(ctx context.Context, opts Options, dir string) repoState {
 	return state
 }
 
-// withoutCredentials is the URL with any password before the host dropped.
-// A push URL can carry a token, https://me:ghp_x@github.com/me/app, and
-// the URL names the origin in the config and in the gh calls, where only
-// the repo matters and a token must never land. The user name stays, since
-// ssh://git@github.com/me/app is a different login without it, and an
-// scp-style URL, git@github.com:me/app.git, has no scheme, so it parses as
-// nothing and stays as it is.
+// withoutCredentials is the URL with whatever stands before the host
+// dropped. A push URL over http can carry a token, as the password in
+// https://me:ghp_x@github.com/me/app or as the user in
+// https://ghp_x@github.com/me/app, and the URL names the origin in the
+// config and in the gh calls, where only the repo matters and a token must
+// never land. Over ssh the user is the login, git in
+// ssh://git@github.com/me/app, so only a password goes. An scp-style URL,
+// git@github.com:me/app.git, has no scheme, so it parses as nothing and
+// stays as it is.
 func withoutCredentials(pushURL string) string {
 	parsed, err := url.Parse(pushURL)
 	if err != nil || parsed.User == nil {
 		return pushURL
 	}
-	if _, hasPassword := parsed.User.Password(); !hasPassword {
+	_, hasPassword := parsed.User.Password()
+	switch {
+	case parsed.Scheme == "http" || parsed.Scheme == "https":
+		parsed.User = nil
+	case hasPassword:
+		parsed.User = url.User(parsed.User.Username())
+	default:
 		return pushURL
 	}
-	parsed.User = url.User(parsed.User.Username())
 	return parsed.String()
 }
 

@@ -839,7 +839,7 @@ func TestOriginIsAskedOnceAndSaysWhetherIssuesAreOn(t *testing.T) {
 		t.Fatalf("issues off: guesses = %q, holds = %q", guesses, holds)
 	}
 	shell.failing = map[string]bool{view: true}
-	hold := "has an origin gh can't see, run gh auth login for that host and add --ask-trackers-again"
+	hold := "has an origin gh can't see, run gh auth login for that host"
 	if guesses, holds, _ := ask(); guesses != ",,," || holds != strings.Repeat(hold+",", 3)+hold {
 		t.Fatalf("gh failing: guesses = %q, holds = %q", guesses, holds)
 	}
@@ -952,14 +952,15 @@ func TestOriginsAreRememberedSoARerunAsksGhOnlyAboutNewOnes(t *testing.T) {
 		t.Fatalf("gh asked %d times for 2 origins", calls)
 	}
 	config := read(t, filepath.Join(home, ".squirrel", "config.json"))
-	want := "\"origins\": {\n    \"git@github.com:me/origin-00.git\": {\n      \"seen\": true,\n      \"issues\": true,\n      \"asked_at\": \"2026-09-03T10:04:05Z\"\n    },"
+	want := "\"origins\": {\n    \"git@github.com:me/origin-00.git\": {\n      \"issues\": true,\n      \"asked_at\": \"2026-09-03T10:04:05Z\"\n    },"
 	if !strings.Contains(config, want) {
 		t.Fatalf("config = %s", config)
 	}
 
 	shell.commands = nil
 	shell.versions[in(home, "repo-01", "git remote get-url --push origin")] = "git@github.com:me/fresh.git"
-	shell.failing = map[string]bool{"gh repo view --json hasIssuesEnabled " + quote(runtime.GOOS, "git@github.com:me/fresh.git"): true}
+	view := "gh repo view --json hasIssuesEnabled " + quote(runtime.GOOS, "git@github.com:me/fresh.git")
+	shell.failing = map[string]bool{view: true}
 	opts, _ = options(t, home, shell, "")
 	if got := offers(scanAndApply(t, opts)); got != "repo-00:yes repo-01:no repo-02:yes repo-03:yes" {
 		t.Fatalf("offers = %q", got)
@@ -968,15 +969,26 @@ func TestOriginsAreRememberedSoARerunAsksGhOnlyAboutNewOnes(t *testing.T) {
 		t.Fatalf("gh asked %d times for 1 new origin", calls)
 	}
 	config = read(t, filepath.Join(home, ".squirrel", "config.json"))
-	if !strings.Contains(config, "\"git@github.com:me/fresh.git\": {\n      \"seen\": false,") || !strings.Contains(config, "origin-00.git") {
+	if strings.Contains(config, "fresh.git") || !strings.Contains(config, "origin-00.git") {
+		t.Fatalf("an origin gh couldn't see was saved, or a known one dropped: %s", config)
+	}
+
+	shell.commands = nil
+	shell.failing = nil
+	opts, _ = options(t, home, shell, "")
+	if got := offers(scanAndApply(t, opts)); got != "repo-00:yes repo-01:yes repo-02:yes repo-03:yes" {
+		t.Fatalf("gh back: offers = %q", got)
+	}
+	if calls := ghCalls(shell); calls != 1 {
+		t.Fatalf("a rerun asked gh %d times, want once for the origin it couldn't see", calls)
+	}
+	if config = read(t, filepath.Join(home, ".squirrel", "config.json")); !strings.Contains(config, "fresh.git") {
 		t.Fatalf("config = %s", config)
 	}
 
 	shell.commands = nil
 	opts, _ = options(t, home, shell, "")
-	if got := offers(scanAndApply(t, opts)); got != "repo-00:yes repo-01:no repo-02:yes repo-03:yes" {
-		t.Fatalf("a rerun forgot the origins: offers = %q", got)
-	}
+	scanAndApply(t, opts)
 	if calls := ghCalls(shell); calls != 0 {
 		t.Fatalf("a rerun asked gh %d times about known origins", calls)
 	}
@@ -1020,16 +1032,23 @@ func TestATokenInThePushURLNeverReachesTheConfigOrGh(t *testing.T) {
 		t.Fatalf("offers = %q", got)
 	}
 	commands := strings.Join(shell.commands, "\n")
-	if strings.Contains(commands, "ghp_secret") || !strings.Contains(commands, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, "https://me@github.com/me/app.git")) {
+	if strings.Contains(commands, "ghp_secret") || !strings.Contains(commands, "gh repo view --json hasIssuesEnabled "+quote(runtime.GOOS, "https://github.com/me/app.git")) {
 		t.Fatalf("commands:\n%s", commands)
 	}
 	config := read(t, filepath.Join(home, ".squirrel", "config.json"))
-	if strings.Contains(config, "ghp_secret") || !strings.Contains(config, "\"https://me@github.com/me/app.git\": {") {
+	if strings.Contains(config, "ghp_secret") || !strings.Contains(config, "\"https://github.com/me/app.git\": {") {
 		t.Fatalf("config = %s", config)
 	}
-	for _, raw := range []string{"git@github.com:me/app.git", "ssh://git@github.com/me/app.git", "/srv/git/app.git"} {
-		if got := withoutCredentials(raw); got != raw {
-			t.Fatalf("withoutCredentials(%q) = %q", raw, got)
+	for raw, want := range map[string]string{
+		"https://ghp_secret@github.com/me/app.git": "https://github.com/me/app.git",
+		"http://me:pw@git.local/app.git":           "http://git.local/app.git",
+		"ssh://git:pw@github.com/me/app.git":       "ssh://git@github.com/me/app.git",
+		"ssh://git@github.com/me/app.git":          "ssh://git@github.com/me/app.git",
+		"git@github.com:me/app.git":                "git@github.com:me/app.git",
+		"/srv/git/app.git":                         "/srv/git/app.git",
+	} {
+		if got := withoutCredentials(raw); got != want {
+			t.Fatalf("withoutCredentials(%q) = %q, want %q", raw, got, want)
 		}
 	}
 }
